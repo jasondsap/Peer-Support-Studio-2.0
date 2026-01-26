@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@aws-sdk/client-cognito-identity-provider": "^3.975.0",
     "@humeai/voice-react": "^0.2.12",
     "@neondatabase/serverless": "^0.10.4",
     "assemblyai": "^4.22.1",
