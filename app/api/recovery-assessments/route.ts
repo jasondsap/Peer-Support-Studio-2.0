@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
         const userResult = await query(
             'SELECT id FROM users WHERE cognito_sub = $1',
             [(session.user as any).sub || session.user.id]
-        );
+        ) as { id: string }[];
 
         if (userResult.length === 0) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
                 ai_analysis ? JSON.stringify(ai_analysis) : null,
                 notes,
             ]
-        );
+        ) as { id: string }[];
 
         // Log audit event
         await query(
@@ -159,7 +159,7 @@ export async function DELETE(req: NextRequest) {
         const result = await query(
             'DELETE FROM recovery_assessments WHERE id = $1 AND organization_id = $2 RETURNING id',
             [id, organizationId]
-        );
+        ) as { id: string }[];
 
         if (result.length === 0) {
             return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
