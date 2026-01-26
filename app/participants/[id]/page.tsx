@@ -9,6 +9,7 @@ import {
     Target, FileText, Activity, Plus, Edit, Loader2,
     AlertCircle, ChevronRight, Clock, Users
 } from 'lucide-react';
+import AssessmentDetailModal from '@/app/components/AssessmentDetailModal';
 
 interface Participant {
     id: string;
@@ -49,7 +50,12 @@ interface Assessment {
     id: string;
     assessment_type: string;
     total_score: number;
-    assessment_date: string;
+    domain_scores?: any;
+    responses?: any;
+    ai_analysis?: any;
+    notes?: string;
+    assessment_date?: string;
+    created_at: string;
 }
 
 export default function ParticipantDetailPage() {
@@ -65,6 +71,9 @@ export default function ParticipantDetailPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'overview' | 'goals' | 'notes' | 'assessments'>('overview');
+    
+    // Assessment detail modal
+    const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
     
     useEffect(() => {
         async function fetchData() {
@@ -102,6 +111,47 @@ export default function ParticipantDetailPage() {
         fetchData();
     }, [currentOrg?.id, params.id]);
     
+    // Analyze assessment with AI
+    const handleAnalyzeAssessment = async (assessmentId: string) => {
+        try {
+            const res = await fetch(`/api/recovery-assessments/${assessmentId}/analyze`, {
+                method: 'POST'
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Update the assessment in list with new analysis
+                setAssessments(prev => 
+                    prev.map(a => a.id === assessmentId ? { ...a, ai_analysis: data.analysis } : a)
+                );
+                // Update selected assessment if open
+                if (selectedAssessment?.id === assessmentId) {
+                    setSelectedAssessment(prev => prev ? { ...prev, ai_analysis: data.analysis } : null);
+                }
+                return data.analysis;
+            }
+        } catch (e) {
+            console.error('Analysis failed:', e);
+        }
+        return null;
+    };
+
+    // Delete assessment
+    const handleDeleteAssessment = async (assessmentId: string) => {
+        if (!confirm('Are you sure you want to delete this assessment?')) return;
+        
+        try {
+            const res = await fetch(`/api/recovery-assessments?id=${assessmentId}&organization_id=${currentOrg?.id}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) {
+                setAssessments(prev => prev.filter(a => a.id !== assessmentId));
+                setSelectedAssessment(null);
+            }
+        } catch (e) {
+            console.error('Delete failed:', e);
+        }
+    };
+    
     if (loading) {
         return (
             <div className="min-h-[60vh] flex items-center justify-center">
@@ -130,6 +180,11 @@ export default function ParticipantDetailPage() {
     const displayName = participant.preferred_name || participant.first_name;
     const fullName = `${participant.first_name} ${participant.last_name}`;
     const activeGoals = goals.filter(g => g.status === 'active');
+    
+    // Calculate days in program
+    const intakeDate = new Date(participant.intake_date);
+    const today = new Date();
+    const daysInProgram = Math.floor((today.getTime() - intakeDate.getTime()) / (1000 * 60 * 60 * 24));
     
     const getStatusBadge = (status: string) => {
         const styles: Record<string, string> = {
@@ -164,31 +219,31 @@ export default function ParticipantDetailPage() {
                 
                 <div className="flex-1 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#1A73A8] to-[#30B27A] flex items-center justify-center text-white text-2xl font-bold">
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#1A73A8] to-[#30B27A] flex items-center justify-center text-white text-xl font-bold">
                             {participant.first_name[0]}{participant.last_name[0]}
                         </div>
                         <div>
                             <h1 className="text-2xl font-bold text-[#0E2235]">{fullName}</h1>
                             {participant.preferred_name && (
-                                <p className="text-gray-600">Goes by "{participant.preferred_name}"</p>
+                                <p className="text-gray-500">Goes by "{participant.preferred_name}"</p>
                             )}
-                            <span className={`inline-block mt-1 px-2.5 py-1 rounded-full text-xs font-medium capitalize ${getStatusBadge(participant.status)}`}>
+                            <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium capitalize mt-1 ${getStatusBadge(participant.status)}`}>
                                 {participant.status}
                             </span>
                         </div>
                     </div>
                     
-                    <div className="flex gap-3">
+                    <div className="flex items-center gap-3">
                         <Link
                             href={`/participants/${params.id}/edit`}
-                            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                         >
                             <Edit className="w-4 h-4" />
                             Edit
                         </Link>
                         <Link
                             href={`/goals/new?participant_id=${params.id}`}
-                            className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090] transition-colors"
+                            className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090]"
                         >
                             <Plus className="w-4 h-4" />
                             New Goal
@@ -197,7 +252,7 @@ export default function ParticipantDetailPage() {
                 </div>
             </div>
             
-            {/* Quick Stats */}
+            {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <div className="bg-white rounded-xl p-4 border border-gray-200">
                     <div className="flex items-center gap-3">
@@ -238,9 +293,7 @@ export default function ParticipantDetailPage() {
                             <Calendar className="w-5 h-5 text-purple-600" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-[#0E2235]">
-                                {Math.floor((Date.now() - new Date(participant.intake_date).getTime()) / (1000 * 60 * 60 * 24))}
-                            </p>
+                            <p className="text-2xl font-bold text-[#0E2235]">{daysInProgram}</p>
                             <p className="text-sm text-gray-500">Days in Program</p>
                         </div>
                     </div>
@@ -249,26 +302,29 @@ export default function ParticipantDetailPage() {
             
             {/* Tabs */}
             <div className="border-b border-gray-200 mb-6">
-                <nav className="flex gap-8">
+                <nav className="flex gap-6">
                     {[
-                        { id: 'overview', label: 'Overview', icon: User },
-                        { id: 'goals', label: 'Goals', icon: Target },
-                        { id: 'notes', label: 'Session Notes', icon: FileText },
-                        { id: 'assessments', label: 'Assessments', icon: Activity },
-                    ].map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                            className={`flex items-center gap-2 pb-3 border-b-2 transition-colors ${
-                                activeTab === tab.id
-                                    ? 'border-[#1A73A8] text-[#1A73A8]'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                            }`}
-                        >
-                            <tab.icon className="w-4 h-4" />
-                            {tab.label}
-                        </button>
-                    ))}
+                        { key: 'overview', label: 'Overview', icon: User },
+                        { key: 'goals', label: 'Goals', icon: Target },
+                        { key: 'notes', label: 'Session Notes', icon: FileText },
+                        { key: 'assessments', label: 'Assessments', icon: Activity },
+                    ].map(tab => {
+                        const Icon = tab.icon;
+                        return (
+                            <button
+                                key={tab.key}
+                                onClick={() => setActiveTab(tab.key as any)}
+                                className={`flex items-center gap-2 px-1 py-3 border-b-2 font-medium transition-colors ${
+                                    activeTab === tab.key
+                                        ? 'border-[#1A73A8] text-[#1A73A8]'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                <Icon className="w-4 h-4" />
+                                {tab.label}
+                            </button>
+                        );
+                    })}
                 </nav>
             </div>
             
@@ -276,133 +332,60 @@ export default function ParticipantDetailPage() {
             {activeTab === 'overview' && (
                 <div className="grid md:grid-cols-2 gap-6">
                     {/* Contact Info */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="bg-white rounded-xl p-6 border border-gray-200">
                         <h3 className="font-semibold text-[#0E2235] mb-4">Contact Information</h3>
                         <div className="space-y-3">
-                            {participant.email && (
-                                <div className="flex items-center gap-3 text-gray-600">
-                                    <Mail className="w-5 h-5 text-gray-400" />
-                                    <a href={`mailto:${participant.email}`} className="hover:text-[#1A73A8]">
-                                        {participant.email}
-                                    </a>
-                                </div>
-                            )}
                             {participant.phone && (
                                 <div className="flex items-center gap-3 text-gray-600">
-                                    <Phone className="w-5 h-5 text-gray-400" />
-                                    <a href={`tel:${participant.phone}`} className="hover:text-[#1A73A8]">
-                                        {participant.phone}
-                                    </a>
+                                    <Phone className="w-4 h-4 text-gray-400" />
+                                    {participant.phone}
+                                </div>
+                            )}
+                            {participant.email && (
+                                <div className="flex items-center gap-3 text-gray-600">
+                                    <Mail className="w-4 h-4 text-gray-400" />
+                                    {participant.email}
                                 </div>
                             )}
                             {participant.date_of_birth && (
                                 <div className="flex items-center gap-3 text-gray-600">
-                                    <Calendar className="w-5 h-5 text-gray-400" />
-                                    DOB: {new Date(participant.date_of_birth).toLocaleDateString()}
+                                    <Calendar className="w-4 h-4 text-gray-400" />
+                                    {new Date(participant.date_of_birth).toLocaleDateString()}
                                 </div>
                             )}
                         </div>
                     </div>
                     
                     {/* Program Info */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="bg-white rounded-xl p-6 border border-gray-200">
                         <h3 className="font-semibold text-[#0E2235] mb-4">Program Information</h3>
                         <div className="space-y-3">
-                            <div className="flex items-center gap-3 text-gray-600">
-                                <Calendar className="w-5 h-5 text-gray-400" />
-                                Intake: {new Date(participant.intake_date).toLocaleDateString()}
+                            <div className="flex justify-between">
+                                <span className="text-gray-500">Intake Date</span>
+                                <span className="text-[#0E2235]">{new Date(participant.intake_date).toLocaleDateString()}</span>
                             </div>
                             {participant.referral_source && (
-                                <div className="flex items-center gap-3 text-gray-600">
-                                    <Users className="w-5 h-5 text-gray-400" />
-                                    Referral: {participant.referral_source.replace('_', ' ')}
+                                <div className="flex justify-between">
+                                    <span className="text-gray-500">Referral Source</span>
+                                    <span className="text-[#0E2235]">{participant.referral_source}</span>
                                 </div>
                             )}
                             {participant.primary_pss_name && (
-                                <div className="flex items-center gap-3 text-gray-600">
-                                    <User className="w-5 h-5 text-gray-400" />
-                                    Primary PSS: {participant.primary_pss_name}
+                                <div className="flex justify-between">
+                                    <span className="text-gray-500">Primary PSS</span>
+                                    <span className="text-[#0E2235]">{participant.primary_pss_name}</span>
                                 </div>
                             )}
                         </div>
                     </div>
                     
-                    {/* Recent Goals */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-semibold text-[#0E2235]">Active Goals</h3>
-                            <Link href={`/goals?participant_id=${params.id}`} className="text-sm text-[#1A73A8] hover:underline">
-                                View All
-                            </Link>
+                    {/* Internal Notes */}
+                    {participant.internal_notes && (
+                        <div className="md:col-span-2 bg-white rounded-xl p-6 border border-gray-200">
+                            <h3 className="font-semibold text-[#0E2235] mb-4">Internal Notes</h3>
+                            <p className="text-gray-600 whitespace-pre-wrap">{participant.internal_notes}</p>
                         </div>
-                        {activeGoals.length === 0 ? (
-                            <p className="text-gray-500 text-sm">No active goals</p>
-                        ) : (
-                            <div className="space-y-3">
-                                {activeGoals.slice(0, 3).map(goal => (
-                                    <Link
-                                        key={goal.id}
-                                        href={`/goals/${goal.id}`}
-                                        className="block p-3 rounded-lg border border-gray-100 hover:border-[#1A73A8]/30 hover:bg-blue-50/50 transition-colors"
-                                    >
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <div 
-                                                className="w-2 h-2 rounded-full"
-                                                style={{ backgroundColor: goalAreaColors[goal.goal_area] || '#1A73A8' }}
-                                            />
-                                            <span className="text-sm font-medium text-[#0E2235] truncate">{goal.smart_goal}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex-1 h-1.5 bg-gray-200 rounded-full">
-                                                <div 
-                                                    className="h-full bg-[#1A73A8] rounded-full"
-                                                    style={{ width: `${goal.progress}%` }}
-                                                />
-                                            </div>
-                                            <span className="text-xs text-gray-500">{goal.progress}%</span>
-                                        </div>
-                                    </Link>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                    
-                    {/* Recent Notes */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-semibold text-[#0E2235]">Recent Session Notes</h3>
-                            <Link href={`/session-notes?participant_id=${params.id}`} className="text-sm text-[#1A73A8] hover:underline">
-                                View All
-                            </Link>
-                        </div>
-                        {notes.length === 0 ? (
-                            <p className="text-gray-500 text-sm">No session notes yet</p>
-                        ) : (
-                            <div className="space-y-3">
-                                {notes.slice(0, 3).map(note => (
-                                    <Link
-                                        key={note.id}
-                                        href={`/session-notes/${note.id}`}
-                                        className="block p-3 rounded-lg border border-gray-100 hover:border-amber-200 hover:bg-amber-50/50 transition-colors"
-                                    >
-                                        <div className="flex items-center justify-between mb-1">
-                                            <span className="text-sm font-medium text-[#0E2235] capitalize">
-                                                {note.session_type} Session
-                                            </span>
-                                            <span className="text-xs text-gray-500">
-                                                {new Date(note.session_date).toLocaleDateString()}
-                                            </span>
-                                        </div>
-                                        {note.pss_note?.sessionOverview && (
-                                            <p className="text-sm text-gray-600 line-clamp-2">
-                                                {note.pss_note.sessionOverview}
-                                            </p>
-                                        )}
-                                    </Link>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                    )}
                 </div>
             )}
             
@@ -522,7 +505,7 @@ export default function ParticipantDetailPage() {
                 <div className="space-y-4">
                     <div className="flex justify-end">
                         <Link
-                            href={`/assessments/recovery-capital?participant_id=${params.id}`}
+                            href={`/recovery-capital?participant_id=${params.id}`}
                             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
                         >
                             <Plus className="w-4 h-4" />
@@ -536,34 +519,51 @@ export default function ParticipantDetailPage() {
                         </div>
                     ) : (
                         <div className="grid gap-4">
-                            {assessments.map(assessment => (
-                                <Link
-                                    key={assessment.id}
-                                    href={`/assessments/${assessment.id}`}
-                                    className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow"
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <span className="font-medium text-[#0E2235] uppercase">
-                                                {assessment.assessment_type}
-                                            </span>
-                                            <p className="text-sm text-gray-500">
-                                                {new Date(assessment.assessment_date).toLocaleDateString()}
-                                            </p>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="text-right">
-                                                <p className="text-2xl font-bold text-[#1A73A8]">{assessment.total_score}</p>
-                                                <p className="text-xs text-gray-500">/ 60</p>
+                            {assessments.map(assessment => {
+                                const maxScore = assessment.assessment_type === 'mirc28' ? 140 : 60;
+                                return (
+                                    <div
+                                        key={assessment.id}
+                                        onClick={() => setSelectedAssessment({
+                                            ...assessment,
+                                            participant_name: fullName,
+                                            created_at: assessment.created_at || assessment.assessment_date || new Date().toISOString()
+                                        })}
+                                        className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow cursor-pointer"
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <span className="font-medium text-[#0E2235] uppercase">
+                                                    {assessment.assessment_type}
+                                                </span>
+                                                <p className="text-sm text-gray-500">
+                                                    {new Date(assessment.assessment_date || assessment.created_at).toLocaleDateString()}
+                                                </p>
                                             </div>
-                                            <ChevronRight className="w-5 h-5 text-gray-400" />
+                                            <div className="flex items-center gap-4">
+                                                <div className="text-right">
+                                                    <p className="text-2xl font-bold text-[#1A73A8]">{assessment.total_score}</p>
+                                                    <p className="text-xs text-gray-500">/ {maxScore}</p>
+                                                </div>
+                                                <ChevronRight className="w-5 h-5 text-gray-400" />
+                                            </div>
                                         </div>
                                     </div>
-                                </Link>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
+            )}
+            
+            {/* Assessment Detail Modal */}
+            {selectedAssessment && (
+                <AssessmentDetailModal
+                    assessment={selectedAssessment}
+                    onClose={() => setSelectedAssessment(null)}
+                    onDelete={handleDeleteAssessment}
+                    onAnalyze={handleAnalyzeAssessment}
+                />
             )}
         </div>
     );
