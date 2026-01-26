@@ -46,7 +46,7 @@ function getServiceTypes(services: Array<{ f1: string; f2: string; f3: string }>
         }
     });
     
-    return [...new Set(serviceList)]; // Remove duplicates
+    return Array.from(new Set(serviceList)); // Remove duplicates
 }
 
 // Get primary service category
