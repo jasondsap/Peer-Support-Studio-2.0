@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
     ArrowLeft, User, Phone, Mail, Calendar, MapPin,
-    AlertCircle, Save, Loader2, Users, Heart, Building2
+    AlertCircle, Save, Loader2, Users, Heart, Building2,
+    ChevronRight
 } from 'lucide-react';
 
 interface Organization {
@@ -158,15 +160,27 @@ export default function AddParticipantPage() {
                         >
                             <ArrowLeft className="w-5 h-5 text-gray-600" />
                         </button>
-                        <div>
-                            <h1 className="text-xl font-bold text-[#0E2235]">Add New Participant</h1>
-                            <p className="text-sm text-gray-500">Enter information about the person you'll be supporting</p>
-                        </div>
+                        <nav className="flex items-center gap-2 text-sm">
+                            <Link href="/" className="text-[#1A73A8] hover:underline">Dashboard</Link>
+                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                            <Link href="/participants" className="text-[#1A73A8] hover:underline">Participants</Link>
+                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                            <span className="text-gray-600 font-medium">Add New Participant</span>
+                        </nav>
                     </div>
                 </div>
             </header>
 
             <main className="max-w-3xl mx-auto px-6 py-8">
+                {/* Hero Section */}
+                <div className="text-center mb-8">
+                    <div className="w-16 h-16 rounded-2xl bg-[#1A73A8] flex items-center justify-center mx-auto mb-4">
+                        <Users className="w-8 h-8 text-white" />
+                    </div>
+                    <h1 className="text-2xl font-bold text-[#0E2235] mb-2">Add New Participant</h1>
+                    <p className="text-gray-600">Enter information about the person you'll be supporting</p>
+                </div>
+
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {/* Organization Selection */}
                     {userOrganizations.length === 0 ? (
