@@ -257,10 +257,10 @@ export async function POST(request: NextRequest) {
                 const userResult = await query(
                     'SELECT id FROM users WHERE cognito_sub = $1',
                     [(session.user as any).sub || session.user.id]
-                );
+                ) as { id: string }[];
 
-                if (userResult.rows.length > 0) {
-                    const userId = userResult.rows[0].id;
+                if (userResult.length > 0) {
+                    const userId = userResult[0].id;
                     
                     const result = await query(
                         `INSERT INTO recovery_assessments (
@@ -278,9 +278,9 @@ export async function POST(request: NextRequest) {
                             JSON.stringify(answers),
                             JSON.stringify(analysis)
                         ]
-                    );
+                    ) as { id: string }[];
                     
-                    assessmentId = result.rows[0]?.id;
+                    assessmentId = result[0]?.id;
                 }
             }
 
