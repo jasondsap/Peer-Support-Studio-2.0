@@ -2,6 +2,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { sql } from "./db";
 
+// Re-export authOptions so other files can import from @/lib/auth
+export { authOptions };
+
 // Extended session type with organizations
 export interface ExtendedSession {
     user: {
