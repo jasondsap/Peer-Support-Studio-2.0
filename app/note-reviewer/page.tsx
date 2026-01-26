@@ -162,7 +162,7 @@ export default function NoteReviewerPage() {
             // Auto-expand categories that need improvement
             const needsImprovement = new Set<string>();
             Object.entries(data.scores).forEach(([key, score]) => {
-                if (score < 2) needsImprovement.add(key);
+                if ((score as number) < 2) needsImprovement.add(key);
             });
             setExpandedCategories(needsImprovement);
 
