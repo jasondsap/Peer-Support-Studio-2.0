@@ -11,7 +11,7 @@ function SignInContent() {
     const { data: session, status } = useSession();
     const [isLoading, setIsLoading] = useState(false);
     
-    const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
+    const callbackUrl = searchParams.get('callbackUrl') || '/';
     const error = searchParams.get('error');
     
     useEffect(() => {
