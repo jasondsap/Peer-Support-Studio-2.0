@@ -204,7 +204,7 @@ export default function RecoveryCapitalPage() {
         try {
             const res = await fetch(`/api/recovery-assessments?organization_id=${currentOrg.id}`);
             const data = await res.json();
-            if (data.success) setAssessmentHistory(data.assessments || []);
+            setAssessmentHistory(data.assessments || []);
         } catch (e) { console.error(e); }
         finally { setLoadingHistory(false); }
     };
@@ -333,7 +333,7 @@ export default function RecoveryCapitalPage() {
                 <div className="max-w-4xl mx-auto px-6 py-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                            <button onClick={() => router.push('/dashboard')} className="p-2 hover:bg-gray-100 rounded-lg">
+                            <button onClick={() => router.push('/')} className="p-2 hover:bg-gray-100 rounded-lg">
                                 <ArrowLeft className="w-5 h-5 text-gray-600" />
                             </button>
                             <div>
