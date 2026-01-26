@@ -93,11 +93,11 @@ export async function POST(req: NextRequest) {
             [(session.user as any).sub || session.user.id]
         );
 
-        if (userResult.rows.length === 0) {
+        if (userResult.length === 0) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
-        const userId = userResult.rows[0].id;
+        const userId = userResult[0].id;
 
         const result = await query(
             `INSERT INTO recovery_assessments (
@@ -123,13 +123,13 @@ export async function POST(req: NextRequest) {
         await query(
             `INSERT INTO audit_log (user_id, organization_id, action, resource_type, resource_id, details)
              VALUES ($1, $2, 'create', 'recovery_assessment', $3, $4)`,
-            [userId, organization_id, result.rows[0].id, JSON.stringify({ assessment_type, participant_id })]
+            [userId, organization_id, result[0].id, JSON.stringify({ assessment_type, participant_id })]
         );
 
         return NextResponse.json({ 
             success: true,
-            assessment: result.rows[0],
-            assessmentId: result.rows[0].id 
+            assessment: result[0],
+            assessmentId: result[0].id 
         });
     } catch (error) {
         console.error('Error creating assessment:', error);
@@ -161,7 +161,7 @@ export async function DELETE(req: NextRequest) {
             [id, organizationId]
         );
 
-        if (result.rows.length === 0) {
+        if (result.length === 0) {
             return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
         }
 
