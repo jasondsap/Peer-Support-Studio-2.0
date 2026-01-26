@@ -54,6 +54,7 @@ interface Assessment {
     responses?: any;
     ai_analysis?: any;
     notes?: string;
+    participant_name?: string;
     assessment_date?: string;
     created_at: string;
 }
