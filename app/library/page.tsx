@@ -536,7 +536,7 @@ function LibraryContent() {
                         </div>
 
                         <button
-                            onClick={signOut}
+                            onClick={() => signOut()}
                             className="text-sm text-gray-600 hover:text-[#1A73A8] transition-colors"
                         >
                             Sign Out
