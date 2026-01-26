@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -129,7 +129,7 @@ function CollapsibleCard({ title, icon: Icon, color, defaultOpen = false, childr
     );
 }
 
-export default function GoalGenerator() {
+function GoalGeneratorContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { data: session, status } = useSession();
@@ -928,5 +928,17 @@ export default function GoalGenerator() {
                 }
             `}</style>
         </div>
+    );
+}
+
+export default function GoalGenerator() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-[#1A73A8]" />
+            </div>
+        }>
+            <GoalGeneratorContent />
+        </Suspense>
     );
 }

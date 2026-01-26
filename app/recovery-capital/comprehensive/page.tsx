@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -94,7 +94,7 @@ interface Participant { id: string; first_name: string; last_name: string; prefe
 
 type ViewState = 'intro' | 'assessment' | 'results';
 
-export default function ComprehensiveAssessmentPage() {
+function ComprehensiveAssessmentContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { data: session, status } = useSession();
@@ -380,5 +380,17 @@ export default function ComprehensiveAssessmentPage() {
                 )}
             </main>
         </div>
+    );
+}
+
+export default function ComprehensiveAssessmentPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-[#8B5CF6]" />
+            </div>
+        }>
+            <ComprehensiveAssessmentContent />
+        </Suspense>
     );
 }
