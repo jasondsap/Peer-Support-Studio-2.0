@@ -79,8 +79,8 @@ export async function POST(request: NextRequest) {
                 assessment_type,
                 total_score,
                 domain_scores,
-                answers,
-                source
+                responses,
+                notes
             ) VALUES (
                 ${invitation.created_by},
                 ${invitation.organization_id},
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
                 ${totalScore},
                 ${JSON.stringify(domainScores)},
                 ${JSON.stringify(answers)},
-                'participant_app'
+                ${'Submitted via participant app'}
             )
             RETURNING id
         `;
@@ -108,9 +108,6 @@ export async function POST(request: NextRequest) {
                 updated_at = NOW()
             WHERE id = ${invitation.id}
         `;
-
-        // TODO: Send notification to PSS (email/push)
-        // This could be a Neon trigger, edge function, or external service
 
         return NextResponse.json({
             success: true,
