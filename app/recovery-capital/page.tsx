@@ -8,8 +8,9 @@ import {
     Sparkles, Target, TrendingUp, CheckCircle2, ChevronRight,
     Loader2, RotateCcw, Save, History, BookOpen, Trash2,
     Clock, ChevronDown, ChevronUp, Search, Share2, Send,
-    MessageSquare, Mail, QrCode, X, Copy, Check, ExternalLink
+    MessageSquare, Mail, QrCode, X, Copy, Check, ExternalLink, Download
 } from 'lucide-react';
+import AssessmentDetailModal from '@/app/components/AssessmentDetailModal';
 
 // BARC-10 Questions
 const BARC10_QUESTIONS = [
@@ -57,7 +58,9 @@ interface SavedAssessment {
     assessment_type: string;
     total_score: number;
     domain_scores: any;
+    responses?: any;
     ai_analysis?: any;
+    notes?: string;
     created_at: string;
 }
 interface Participant {
@@ -104,6 +107,9 @@ export default function RecoveryCapitalPage() {
     // History
     const [assessmentHistory, setAssessmentHistory] = useState<SavedAssessment[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
+
+    // Assessment Detail Modal
+    const [selectedAssessment, setSelectedAssessment] = useState<SavedAssessment | null>(null);
 
     // Send Assessment Modal
     const [showSendModal, setShowSendModal] = useState(false);
@@ -298,20 +304,58 @@ export default function RecoveryCapitalPage() {
     const openSmsApp = () => {
         if (!generatedInvitation?.url || !sendParticipant) return;
         const message = `Hi ${sendParticipant.preferred_name || sendParticipant.first_name}, please complete your Recovery Capital Assessment: ${generatedInvitation.url}`;
-        const smsUrl = sendParticipant.phone 
-            ? `sms:${sendParticipant.phone}?body=${encodeURIComponent(message)}`
-            : `sms:?body=${encodeURIComponent(message)}`;
-        window.open(smsUrl, '_blank');
+        window.open(`sms:${sendParticipant.phone || ''}?body=${encodeURIComponent(message)}`, '_blank');
     };
 
     const openEmailApp = () => {
         if (!generatedInvitation?.url || !sendParticipant) return;
-        const subject = 'Complete Your Recovery Capital Assessment';
+        const subject = 'Your Recovery Capital Assessment';
         const body = `Hi ${sendParticipant.preferred_name || sendParticipant.first_name},\n\nPlease complete your Recovery Capital Assessment by clicking the link below:\n\n${generatedInvitation.url}\n\nThis assessment takes about 10-15 minutes and will help us better support your recovery journey.\n\nThank you!`;
         const mailtoUrl = sendParticipant.email
             ? `mailto:${sendParticipant.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
             : `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         window.open(mailtoUrl, '_blank');
+    };
+
+    // Analyze assessment with AI
+    const handleAnalyzeAssessment = async (assessmentId: string) => {
+        try {
+            const res = await fetch(`/api/recovery-assessments/${assessmentId}/analyze`, {
+                method: 'POST'
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Update the assessment in history with new analysis
+                setAssessmentHistory(prev => 
+                    prev.map(a => a.id === assessmentId ? { ...a, ai_analysis: data.analysis } : a)
+                );
+                // Update selected assessment if open
+                if (selectedAssessment?.id === assessmentId) {
+                    setSelectedAssessment(prev => prev ? { ...prev, ai_analysis: data.analysis } : null);
+                }
+                return data.analysis;
+            }
+        } catch (e) {
+            console.error('Analysis failed:', e);
+        }
+        return null;
+    };
+
+    // Delete assessment
+    const handleDeleteAssessment = async (assessmentId: string) => {
+        if (!confirm('Are you sure you want to delete this assessment?')) return;
+        
+        try {
+            const res = await fetch(`/api/recovery-assessments?id=${assessmentId}&organization_id=${currentOrg?.id}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) {
+                setAssessmentHistory(prev => prev.filter(a => a.id !== assessmentId));
+                setSelectedAssessment(null);
+            }
+        } catch (e) {
+            console.error('Delete failed:', e);
+        }
     };
 
     const progress = (Object.keys(answers).length / BARC10_QUESTIONS.length) * 100;
@@ -601,22 +645,51 @@ export default function RecoveryCapitalPage() {
                             </div>
                             <h2 className="text-2xl font-bold text-[#0E2235] mb-2">{getScoreLevel(scores.percentage).level}</h2>
                             <p className="text-gray-600">{getScoreLevel(scores.percentage).desc}</p>
-                            {savedAssessmentId && (
-                                <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-full text-sm">
-                                    <CheckCircle2 className="w-4 h-4" />
-                                    Assessment saved
-                                </div>
-                            )}
+                            <p className="text-sm text-gray-500 mt-2">Score: {scores.total}/{scores.maxScore}</p>
+                        </div>
+
+                        {/* Domain Breakdown */}
+                        <div className="bg-white rounded-2xl p-6 shadow-sm">
+                            <h3 className="font-semibold text-[#0E2235] mb-4">Domain Breakdown</h3>
+                            <div className="space-y-4">
+                                {Object.entries(DOMAIN_INFO).map(([key, domain]) => {
+                                    const domainScore = scores.domains[key as keyof typeof scores.domains];
+                                    const maxDomain = key === 'physical' ? 6 : key === 'social' ? 12 : key === 'human' ? 30 : 12;
+                                    const domainPct = Math.round((domainScore / maxDomain) * 100);
+                                    const Icon = domain.icon;
+                                    return (
+                                        <div key={key} className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${domain.color}20` }}>
+                                                <Icon className="w-5 h-5" style={{ color: domain.color }} />
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className="flex justify-between mb-1">
+                                                    <span className="text-sm font-medium">{domain.name}</span>
+                                                    <span className="text-sm font-semibold">{domainPct}%</span>
+                                                </div>
+                                                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                                    <div className="h-full rounded-full" style={{ width: `${domainPct}%`, backgroundColor: domain.color }} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
 
                         {/* Actions */}
                         <div className="flex gap-4">
-                            <button onClick={resetAssessment} className="flex-1 py-4 border border-gray-200 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-50">
-                                <RotateCcw className="w-5 h-5" />
+                            <button
+                                onClick={resetAssessment}
+                                className="flex-1 py-3 bg-white border border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50"
+                            >
                                 New Assessment
                             </button>
-                            <button onClick={() => router.push('/dashboard')} className="flex-1 py-4 bg-purple-600 text-white rounded-xl font-semibold">
-                                Back to Dashboard
+                            <button
+                                onClick={() => { setView('history'); fetchHistory(); }}
+                                className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700"
+                            >
+                                View History
                             </button>
                         </div>
                     </div>
@@ -667,19 +740,29 @@ export default function RecoveryCapitalPage() {
                         ) : (
                             <div className="bg-white rounded-2xl shadow-sm divide-y">
                                 {assessmentHistory.map((assessment) => (
-                                    <div key={assessment.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
+                                    <div 
+                                        key={assessment.id} 
+                                        className="p-4 flex items-center justify-between hover:bg-gray-50 cursor-pointer transition-colors"
+                                        onClick={() => setSelectedAssessment(assessment)}
+                                    >
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-medium">
-                                                {assessment.participant_name?.[0] || 'A'}
+                                                {assessment.participant_name?.[0] || assessment.participant_first_name?.[0] || 'A'}
                                             </div>
                                             <div>
-                                                <p className="font-medium">{assessment.participant_name || 'Anonymous'}</p>
+                                                <p className="font-medium">
+                                                    {assessment.participant_name || 
+                                                     (assessment.participant_first_name ? `${assessment.participant_first_name} ${assessment.participant_last_name || ''}`.trim() : 'Anonymous')}
+                                                </p>
                                                 <p className="text-sm text-gray-500">{assessment.assessment_type.toUpperCase()} • {new Date(assessment.created_at).toLocaleDateString()}</p>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="font-bold text-purple-600">{assessment.total_score}/{assessment.assessment_type === 'barc10' ? 60 : 140}</p>
-                                            <p className="text-sm text-gray-500">{Math.round((assessment.total_score / (assessment.assessment_type === 'barc10' ? 60 : 140)) * 100)}%</p>
+                                        <div className="text-right flex items-center gap-4">
+                                            <div>
+                                                <p className="font-bold text-purple-600">{assessment.total_score}/{assessment.assessment_type === 'barc10' ? 60 : 140}</p>
+                                                <p className="text-sm text-gray-500">{Math.round((assessment.total_score / (assessment.assessment_type === 'barc10' ? 60 : 140)) * 100)}%</p>
+                                            </div>
+                                            <ChevronRight className="w-5 h-5 text-gray-400" />
                                         </div>
                                     </div>
                                 ))}
@@ -837,6 +920,16 @@ export default function RecoveryCapitalPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Assessment Detail Modal */}
+            {selectedAssessment && (
+                <AssessmentDetailModal
+                    assessment={selectedAssessment}
+                    onClose={() => setSelectedAssessment(null)}
+                    onDelete={handleDeleteAssessment}
+                    onAnalyze={handleAnalyzeAssessment}
+                />
             )}
         </div>
     );
