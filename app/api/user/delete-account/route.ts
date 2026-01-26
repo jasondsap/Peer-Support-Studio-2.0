@@ -33,39 +33,36 @@ export async function DELETE(request: NextRequest) {
         }
 
         // Delete user data from database in order (respecting foreign keys)
-        // This uses a transaction to ensure all-or-nothing deletion
         try {
-            await sql.begin(async (sql) => {
-                // Delete session notes
-                await sql`DELETE FROM session_notes WHERE user_id = ${userId}::uuid`;
-                
-                // Delete recovery goals
-                await sql`DELETE FROM recovery_goals WHERE user_id = ${userId}::uuid`;
-                
-                // Delete service logs
-                await sql`DELETE FROM service_logs WHERE user_id = ${userId}::uuid`;
-                
-                // Delete advisor sessions
-                await sql`DELETE FROM advisor_sessions WHERE user_id = ${userId}::uuid`;
-                
-                // Delete lessons
-                await sql`DELETE FROM lessons WHERE user_id = ${userId}::uuid`;
-                
-                // Delete supervision entries
-                await sql`DELETE FROM supervision_entries WHERE user_id = ${userId}::uuid`;
-                
-                // Delete training records
-                await sql`DELETE FROM training_records WHERE user_id = ${userId}::uuid`;
-                
-                // Delete participants (if user owns them)
-                await sql`DELETE FROM participants WHERE created_by = ${userId}::uuid`;
-                
-                // Delete organization memberships
-                await sql`DELETE FROM organization_members WHERE user_id = ${userId}::uuid`;
-                
-                // Finally, delete the user
-                await sql`DELETE FROM users WHERE id = ${userId}::uuid`;
-            });
+            // Delete session notes
+            await sql`DELETE FROM session_notes WHERE user_id = ${userId}::uuid`;
+            
+            // Delete recovery goals
+            await sql`DELETE FROM recovery_goals WHERE user_id = ${userId}::uuid`;
+            
+            // Delete service logs
+            await sql`DELETE FROM service_logs WHERE user_id = ${userId}::uuid`;
+            
+            // Delete advisor sessions
+            await sql`DELETE FROM advisor_sessions WHERE user_id = ${userId}::uuid`;
+            
+            // Delete lessons
+            await sql`DELETE FROM lessons WHERE user_id = ${userId}::uuid`;
+            
+            // Delete supervision entries
+            await sql`DELETE FROM supervision_entries WHERE user_id = ${userId}::uuid`;
+            
+            // Delete training records
+            await sql`DELETE FROM training_records WHERE user_id = ${userId}::uuid`;
+            
+            // Delete participants (if user owns them)
+            await sql`DELETE FROM participants WHERE created_by = ${userId}::uuid`;
+            
+            // Delete organization memberships
+            await sql`DELETE FROM organization_members WHERE user_id = ${userId}::uuid`;
+            
+            // Finally, delete the user
+            await sql`DELETE FROM users WHERE id = ${userId}::uuid`;
         } catch (dbError) {
             console.error('Database deletion error:', dbError);
             return NextResponse.json(
