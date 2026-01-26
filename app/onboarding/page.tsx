@@ -37,7 +37,7 @@ export default function OnboardingPage() {
                 
                 if (data.organizations && data.organizations.length > 0) {
                     // User already has an org, redirect to dashboard
-                    router.push('/dashboard');
+                    router.push('/');
                 }
             } catch (e) {
                 console.error('Error checking orgs:', e);
@@ -83,7 +83,7 @@ export default function OnboardingPage() {
                 
                 // Redirect after a moment
                 setTimeout(() => {
-                    router.push('/dashboard');
+                    router.push('/');
                 }, 2000);
             } else {
                 setError(data.error || 'Failed to create organization');
@@ -144,7 +144,7 @@ export default function OnboardingPage() {
                 setStep('complete');
                 
                 setTimeout(() => {
-                    router.push('/dashboard');
+                    router.push('/');
                 }, 2000);
             } else {
                 setError(data.error || 'Failed to join organization');
