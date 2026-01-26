@@ -1,0 +1,40 @@
+{
+  "name": "peer-support-studio",
+  "version": "2.0.0",
+  "private": true,
+  "description": "HIPAA-compliant peer support documentation platform",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:push": "echo 'Run schema.sql in Neon SQL Editor'"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@humeai/voice-react": "^0.2.12",
+    "@neondatabase/serverless": "^0.10.4",
+    "assemblyai": "^4.22.1",
+    "date-fns": "^3.0.0",
+    "hum": "^0.0.0",
+    "hume": "^0.15.11",
+    "jspdf": "^4.0.0",
+    "lucide-react": "^0.400.0",
+    "next": "^14.2.0",
+    "next-auth": "^4.24.13",
+    "openai": "^6.16.0",
+    "react": "^18",
+    "react-dom": "^18",
+    "resend": "^6.7.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5"
+  }
+}
