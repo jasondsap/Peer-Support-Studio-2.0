@@ -114,7 +114,7 @@ export default function UserButton() {
                             <button
                                 onClick={() => {
                                     signOut({ redirect: false }).then(() => {
-                                        window.location.href = '/api/auth/logout';
+                                        window.location.href = '/api/logout';
                                     });
                                 }}
                                 className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-50 w-full"
