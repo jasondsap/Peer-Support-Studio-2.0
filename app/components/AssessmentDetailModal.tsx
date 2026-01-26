@@ -32,7 +32,7 @@ interface Assessment {
     participant_last_name?: string;
     assessment_type: string;
     total_score: number;
-    domain_scores: any;
+    domain_scores?: any;
     responses?: any;
     ai_analysis?: any;
     notes?: string;
