@@ -668,7 +668,7 @@ export default function QuickNoteEditor({ onBack, onSaved }: QuickNoteEditorProp
                                                 <div className="mt-3 pt-3 border-t border-gray-100">
                                                     {(note.metadata?.tags?.length ?? 0) > 0 && (
                                                         <div className="flex flex-wrap gap-1 mb-2">
-                                                            {note.metadata.tags.map((tag: string, i: number) => (
+                                                            {note.metadata?.tags?.map((tag: string, i: number) => (
                                                                 <span
                                                                     key={i}
                                                                     className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs"
