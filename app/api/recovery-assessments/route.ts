@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 
         const result = await query(sql, params);
 
-        return NextResponse.json({ assessments: result.rows });
+        return NextResponse.json({ assessments: result });
     } catch (error) {
         console.error('Error fetching assessments:', error);
         return NextResponse.json(
