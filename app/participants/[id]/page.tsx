@@ -350,7 +350,7 @@ export default function ParticipantDetailPage() {
                                                 className="w-2 h-2 rounded-full"
                                                 style={{ backgroundColor: goalAreaColors[goal.goal_area] || '#1A73A8' }}
                                             />
-                                            <span className="text-sm font-medium text-[#0E2235] truncate">{goal.title}</span>
+                                            <span className="text-sm font-medium text-[#0E2235] truncate">{goal.smart_goal}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <div className="flex-1 h-1.5 bg-gray-200 rounded-full">
