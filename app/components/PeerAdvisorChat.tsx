@@ -3,7 +3,7 @@
 import { useVoice, VoiceProvider } from '@humeai/voice-react';
 import { 
     Phone, PhoneOff, Mic, MicOff,
-    Heart, Brain, Users, Shield, RefreshCw
+    Heart, Brain, Users, Shield, RefreshCw, AlertTriangle
 } from 'lucide-react';
 import { useEffect, useState, useRef, useCallback } from 'react';
 
@@ -21,17 +21,16 @@ interface PeerAdvisorChatProps {
 }
 
 // Hume EVI Configuration ID for Peer Support Advisor
-// TODO: Verify which config ID is correct - you have two in your codebase
 const PEER_ADVISOR_CONFIG_ID = 'b2fb313e-8ee1-4a6c-a640-d8fc8c034ad0';
 
 interface VoiceInterfaceProps {
-    accessToken: string;
+    apiKey: string;
     configId: string;
     onSessionEnd: (transcript: string, messages: Message[]) => void;
     onBack: () => void;
 }
 
-function VoiceInterface({ accessToken, configId, onSessionEnd, onBack }: VoiceInterfaceProps) {
+function VoiceInterface({ apiKey, configId, onSessionEnd, onBack }: VoiceInterfaceProps) {
     const { connect, disconnect, messages, status, isMuted, mute, unmute, micFft } = useVoice();
     const [sessionMessages, setSessionMessages] = useState<Message[]>([]);
     const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -78,13 +77,14 @@ function VoiceInterface({ accessToken, configId, onSessionEnd, onBack }: VoiceIn
     const handleConnect = async () => {
         try {
             setConnectionError(null);
-            console.log('Attempting to connect with configId:', configId);
-            console.log('Token preview:', accessToken.substring(0, 20) + '...');
+            console.log('Attempting to connect with API key auth...');
+            console.log('Config ID:', configId);
             
+            // Use API key authentication directly (bypasses token)
             await connect({
                 auth: {
-                    type: 'accessToken',
-                    value: accessToken,
+                    type: 'apiKey',
+                    value: apiKey,
                 },
                 configId: configId,
             });
@@ -292,29 +292,29 @@ function VoiceInterface({ accessToken, configId, onSessionEnd, onBack }: VoiceIn
 }
 
 export default function PeerAdvisorChat({ onSessionEnd, onBack }: PeerAdvisorChatProps) {
-    const [accessToken, setAccessToken] = useState<string | null>(null);
+    const [apiKey, setApiKey] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Function to fetch a fresh token
-    const fetchToken = useCallback(async () => {
+    // Fetch API key from server (keeps it somewhat protected)
+    const fetchApiKey = useCallback(async () => {
         try {
-            console.log('Fetching Hume access token...');
-            const tokenResponse = await fetch('/api/hume/access-token');
-            const tokenData = await tokenResponse.json();
+            console.log('Fetching Hume API key...');
+            const response = await fetch('/api/hume/api-key');
+            const data = await response.json();
 
-            if (tokenData.error) {
-                throw new Error(tokenData.error);
+            if (data.error) {
+                throw new Error(data.error);
             }
 
-            if (!tokenData.accessToken) {
-                throw new Error('Failed to get access token');
+            if (!data.apiKey) {
+                throw new Error('Failed to get API key');
             }
 
-            console.log('Access token received successfully');
-            return tokenData.accessToken;
+            console.log('API key received');
+            return data.apiKey;
         } catch (err: any) {
-            console.error('Token fetch error:', err);
+            console.error('API key fetch error:', err);
             throw err;
         }
     }, []);
@@ -322,8 +322,8 @@ export default function PeerAdvisorChat({ onSessionEnd, onBack }: PeerAdvisorCha
     useEffect(() => {
         async function initialize() {
             try {
-                const token = await fetchToken();
-                setAccessToken(token);
+                const key = await fetchApiKey();
+                setApiKey(key);
             } catch (err: any) {
                 setError(err.message);
             } finally {
@@ -332,15 +332,15 @@ export default function PeerAdvisorChat({ onSessionEnd, onBack }: PeerAdvisorCha
         }
 
         initialize();
-    }, [fetchToken]);
+    }, [fetchApiKey]);
 
     // Retry handler
     const handleRetry = async () => {
         setIsLoading(true);
         setError(null);
         try {
-            const token = await fetchToken();
-            setAccessToken(token);
+            const key = await fetchApiKey();
+            setApiKey(key);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -359,7 +359,7 @@ export default function PeerAdvisorChat({ onSessionEnd, onBack }: PeerAdvisorCha
         );
     }
 
-    if (error || !accessToken) {
+    if (error || !apiKey) {
         return (
             <div className="flex-1 flex items-center justify-center p-4">
                 <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
@@ -369,7 +369,7 @@ export default function PeerAdvisorChat({ onSessionEnd, onBack }: PeerAdvisorCha
                     <h2 className="text-2xl font-bold text-red-600 mb-4">Connection Error</h2>
                     <p className="text-gray-600 mb-6">{error || 'Failed to initialize'}</p>
                     <p className="text-sm text-gray-500 mb-6">
-                        Make sure HUME_API_KEY and HUME_SECRET_KEY are configured in your environment.
+                        Make sure HUME_API_KEY is configured in your environment.
                     </p>
                     <div className="flex gap-3">
                         <button
@@ -394,7 +394,7 @@ export default function PeerAdvisorChat({ onSessionEnd, onBack }: PeerAdvisorCha
     return (
         <VoiceProvider>
             <VoiceInterface
-                accessToken={accessToken}
+                apiKey={apiKey}
                 configId={PEER_ADVISOR_CONFIG_ID}
                 onSessionEnd={onSessionEnd}
                 onBack={onBack}
