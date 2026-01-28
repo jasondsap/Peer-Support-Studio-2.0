@@ -4,9 +4,9 @@ import { useVoice, VoiceProvider } from '@humeai/voice-react';
 import { 
     Phone, PhoneOff, Volume2, VolumeX, Mic, MicOff,
     MessageCircle, Sparkles, Heart, Brain, Users, 
-    ClipboardList, Lightbulb, Shield
+    ClipboardList, Lightbulb, Shield, RefreshCw
 } from 'lucide-react';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 
 interface Message {
     type: 'user_message' | 'assistant_message';
@@ -22,25 +22,33 @@ interface PeerAdvisorChatProps {
 }
 
 // Hume EVI Configuration ID for Peer Support Advisor
+// TODO: Verify which config ID is correct - you have two in your codebase
 const PEER_ADVISOR_CONFIG_ID = 'b2fb313e-8ee1-4a6c-a640-d8fc8c034ad0';
 
-function VoiceInterface({ accessToken, configId, onSessionEnd, onBack }: {
-    accessToken: string;
-    configId: string;
+function VoiceInterface({ onSessionEnd, onBack }: {
     onSessionEnd: (transcript: string, messages: Message[]) => void;
     onBack: () => void;
 }) {
     const { connect, disconnect, messages, status, isMuted, mute, unmute, micFft } = useVoice();
     const [sessionMessages, setSessionMessages] = useState<Message[]>([]);
+    const [connectionError, setConnectionError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const isConnected = status.value === 'connected';
     const isConnecting = status.value === 'connecting';
+    const isError = status.value === 'error';
+
+    // Monitor connection status for errors
+    useEffect(() => {
+        if (isError) {
+            console.error('Voice connection error:', status);
+            setConnectionError('Connection failed. Please try again.');
+        }
+    }, [status, isError]);
 
     // Update session messages when new messages come in
     useEffect(() => {
         if (messages.length > 0) {
-            // Filter for only user and assistant messages that have content
             const formattedMessages: Message[] = messages
                 .filter((msg): msg is typeof msg & { message: { content: string } } => 
                     (msg.type === 'user_message' || msg.type === 'assistant_message') &&
@@ -66,15 +74,11 @@ function VoiceInterface({ accessToken, configId, onSessionEnd, onBack }: {
 
     const handleConnect = async () => {
         try {
-            await connect({
-                auth: {
-                    type: 'accessToken',
-                    value: accessToken,
-                },
-                configId: configId,
-            });
-        } catch (error) {
+            setConnectionError(null);
+            await connect();
+        } catch (error: any) {
             console.error('Failed to connect:', error);
+            setConnectionError(error.message || 'Failed to connect. Please try again.');
         }
     };
 
@@ -83,7 +87,6 @@ function VoiceInterface({ accessToken, configId, onSessionEnd, onBack }: {
     };
 
     const handleEndSession = () => {
-        // Build transcript from messages
         const transcript = sessionMessages
             .filter(m => m.message?.content)
             .map(m => {
@@ -96,11 +99,23 @@ function VoiceInterface({ accessToken, configId, onSessionEnd, onBack }: {
         onSessionEnd(transcript, sessionMessages);
     };
 
-    // Calculate audio level for visualization
     const audioLevel = micFft ? Math.max(...Array.from(micFft).slice(0, 10)) / 255 : 0;
 
     return (
         <div className="flex flex-col h-full">
+            {/* Error Banner */}
+            {connectionError && (
+                <div className="bg-red-50 border-b border-red-200 p-3 flex items-center justify-between">
+                    <span className="text-red-700 text-sm">{connectionError}</span>
+                    <button 
+                        onClick={() => setConnectionError(null)}
+                        className="text-red-500 hover:text-red-700"
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {sessionMessages.length === 0 && !isConnected && (
@@ -193,8 +208,17 @@ function VoiceInterface({ accessToken, configId, onSessionEnd, onBack }: {
                             disabled={isConnecting}
                             className="px-8 py-4 bg-[#00BCD4] text-white rounded-full hover:bg-[#0097A7] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center mx-auto text-lg font-medium shadow-lg"
                         >
-                            <Phone className="w-6 h-6 mr-2" />
-                            {isConnecting ? 'Connecting...' : 'Start Conversation'}
+                            {isConnecting ? (
+                                <>
+                                    <RefreshCw className="w-6 h-6 mr-2 animate-spin" />
+                                    Connecting...
+                                </>
+                            ) : (
+                                <>
+                                    <Phone className="w-6 h-6 mr-2" />
+                                    Start Conversation
+                                </>
+                            )}
                         </button>
                         <p className="text-xs text-gray-500 mt-3">
                             Click to start a real-time empathic conversation
@@ -260,23 +284,33 @@ export default function PeerAdvisorChat({ onSessionEnd, onBack }: PeerAdvisorCha
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Function to fetch a fresh token
+    const fetchToken = useCallback(async () => {
+        try {
+            const tokenResponse = await fetch('/api/hume/access-token');
+            const tokenData = await tokenResponse.json();
+
+            if (tokenData.error) {
+                throw new Error(tokenData.error);
+            }
+
+            if (!tokenData.accessToken) {
+                throw new Error('Failed to get access token');
+            }
+
+            return tokenData.accessToken;
+        } catch (err: any) {
+            console.error('Token fetch error:', err);
+            throw err;
+        }
+    }, []);
+
     useEffect(() => {
         async function initialize() {
             try {
-                const tokenResponse = await fetch('/api/hume/access-token');
-                const tokenData = await tokenResponse.json();
-
-                if (tokenData.error) {
-                    throw new Error(tokenData.error);
-                }
-
-                if (!tokenData.accessToken) {
-                    throw new Error('Failed to get access token');
-                }
-
-                setAccessToken(tokenData.accessToken);
+                const token = await fetchToken();
+                setAccessToken(token);
             } catch (err: any) {
-                console.error('Initialization error:', err);
                 setError(err.message);
             } finally {
                 setIsLoading(false);
@@ -284,7 +318,21 @@ export default function PeerAdvisorChat({ onSessionEnd, onBack }: PeerAdvisorCha
         }
 
         initialize();
-    }, []);
+    }, [fetchToken]);
+
+    // Retry handler
+    const handleRetry = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const token = await fetchToken();
+            setAccessToken(token);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     if (isLoading) {
         return (
@@ -297,7 +345,7 @@ export default function PeerAdvisorChat({ onSessionEnd, onBack }: PeerAdvisorCha
         );
     }
 
-    if (error) {
+    if (error || !accessToken) {
         return (
             <div className="flex-1 flex items-center justify-center p-4">
                 <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
@@ -305,26 +353,41 @@ export default function PeerAdvisorChat({ onSessionEnd, onBack }: PeerAdvisorCha
                         <PhoneOff className="w-8 h-8 text-red-600" />
                     </div>
                     <h2 className="text-2xl font-bold text-red-600 mb-4">Connection Error</h2>
-                    <p className="text-gray-600 mb-6">{error}</p>
+                    <p className="text-gray-600 mb-6">{error || 'Failed to initialize'}</p>
                     <p className="text-sm text-gray-500 mb-6">
                         Make sure HUME_API_KEY and HUME_SECRET_KEY are configured in your environment.
                     </p>
-                    <button
-                        onClick={onBack}
-                        className="w-full px-4 py-2 bg-[#00BCD4] text-white rounded-lg hover:bg-[#0097A7] transition-colors"
-                    >
-                        Go Back
-                    </button>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={handleRetry}
+                            className="flex-1 px-4 py-2 bg-[#00BCD4] text-white rounded-lg hover:bg-[#0097A7] transition-colors flex items-center justify-center gap-2"
+                        >
+                            <RefreshCw className="w-4 h-4" />
+                            Retry
+                        </button>
+                        <button
+                            onClick={onBack}
+                            className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                        >
+                            Go Back
+                        </button>
+                    </div>
                 </div>
             </div>
         );
     }
 
+    // KEY FIX: Pass auth and configId to VoiceProvider
     return (
-        <VoiceProvider>
+        <VoiceProvider
+            auth={{ type: 'accessToken', value: accessToken }}
+            configId={PEER_ADVISOR_CONFIG_ID}
+            // Optional: Add handlers for connection events
+            onOpen={() => console.log('WebSocket opened')}
+            onClose={(event) => console.log('WebSocket closed:', event)}
+            onError={(error) => console.error('WebSocket error:', error)}
+        >
             <VoiceInterface
-                accessToken={accessToken!}
-                configId={PEER_ADVISOR_CONFIG_ID}
                 onSessionEnd={onSessionEnd}
                 onBack={onBack}
             />
