@@ -2,9 +2,8 @@
 
 import { useVoice, VoiceProvider } from '@humeai/voice-react';
 import { 
-    Phone, PhoneOff, Volume2, VolumeX, Mic, MicOff,
-    MessageCircle, Sparkles, Heart, Brain, Users, 
-    ClipboardList, Lightbulb, Shield, RefreshCw
+    Phone, PhoneOff, Mic, MicOff,
+    Heart, Brain, Users, Shield, RefreshCw
 } from 'lucide-react';
 import { useEffect, useState, useRef, useCallback } from 'react';
 
@@ -25,10 +24,14 @@ interface PeerAdvisorChatProps {
 // TODO: Verify which config ID is correct - you have two in your codebase
 const PEER_ADVISOR_CONFIG_ID = 'b2fb313e-8ee1-4a6c-a640-d8fc8c034ad0';
 
-function VoiceInterface({ onSessionEnd, onBack }: {
+interface VoiceInterfaceProps {
+    accessToken: string;
+    configId: string;
     onSessionEnd: (transcript: string, messages: Message[]) => void;
     onBack: () => void;
-}) {
+}
+
+function VoiceInterface({ accessToken, configId, onSessionEnd, onBack }: VoiceInterfaceProps) {
     const { connect, disconnect, messages, status, isMuted, mute, unmute, micFft } = useVoice();
     const [sessionMessages, setSessionMessages] = useState<Message[]>([]);
     const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -75,7 +78,16 @@ function VoiceInterface({ onSessionEnd, onBack }: {
     const handleConnect = async () => {
         try {
             setConnectionError(null);
-            await connect();
+            console.log('Attempting to connect with configId:', configId);
+            console.log('Token preview:', accessToken.substring(0, 20) + '...');
+            
+            await connect({
+                auth: {
+                    type: 'accessToken',
+                    value: accessToken,
+                },
+                configId: configId,
+            });
         } catch (error: any) {
             console.error('Failed to connect:', error);
             setConnectionError(error.message || 'Failed to connect. Please try again.');
@@ -157,7 +169,7 @@ function VoiceInterface({ onSessionEnd, onBack }: {
 
                             <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
                                 <p className="text-sm text-amber-800">
-                                    💡 <strong>Tip:</strong> This uses Hume AI's Empathic Voice Interface, which 
+                                    💡 <strong>Tip:</strong> This uses Hume AI&apos;s Empathic Voice Interface, which 
                                     can detect emotions in your voice and respond with warmth and understanding.
                                 </p>
                             </div>
@@ -172,7 +184,7 @@ function VoiceInterface({ onSessionEnd, onBack }: {
                                 <Mic className="w-8 h-8 text-green-600" />
                             </div>
                             <h3 className="text-xl font-semibold text-[#0E2235] mb-2">Listening...</h3>
-                            <p className="text-gray-600">Go ahead and share what's on your mind. I'm here to help.</p>
+                            <p className="text-gray-600">Go ahead and share what&apos;s on your mind. I&apos;m here to help.</p>
                         </div>
                     </div>
                 )}
@@ -287,6 +299,7 @@ export default function PeerAdvisorChat({ onSessionEnd, onBack }: PeerAdvisorCha
     // Function to fetch a fresh token
     const fetchToken = useCallback(async () => {
         try {
+            console.log('Fetching Hume access token...');
             const tokenResponse = await fetch('/api/hume/access-token');
             const tokenData = await tokenResponse.json();
 
@@ -298,6 +311,7 @@ export default function PeerAdvisorChat({ onSessionEnd, onBack }: PeerAdvisorCha
                 throw new Error('Failed to get access token');
             }
 
+            console.log('Access token received successfully');
             return tokenData.accessToken;
         } catch (err: any) {
             console.error('Token fetch error:', err);
@@ -377,17 +391,11 @@ export default function PeerAdvisorChat({ onSessionEnd, onBack }: PeerAdvisorCha
         );
     }
 
-    // KEY FIX: Pass auth and configId to VoiceProvider
     return (
-        <VoiceProvider
-            auth={{ type: 'accessToken', value: accessToken }}
-            configId={PEER_ADVISOR_CONFIG_ID}
-            // Optional: Add handlers for connection events
-            onOpen={() => console.log('WebSocket opened')}
-            onClose={(event) => console.log('WebSocket closed:', event)}
-            onError={(error) => console.error('WebSocket error:', error)}
-        >
+        <VoiceProvider>
             <VoiceInterface
+                accessToken={accessToken}
+                configId={PEER_ADVISOR_CONFIG_ID}
                 onSessionEnd={onSessionEnd}
                 onBack={onBack}
             />
