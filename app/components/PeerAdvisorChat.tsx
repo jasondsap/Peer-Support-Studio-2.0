@@ -22,7 +22,7 @@ interface PeerAdvisorChatProps {
 }
 
 // Hume EVI Configuration ID for Peer Support Advisor
-const PEER_ADVISOR_CONFIG_ID = '6271ef4a-9ca0-4d6a-8c8d-5142302b3322';
+const PEER_ADVISOR_CONFIG_ID = 'b2fb313e-8ee1-4a6c-a640-d8fc8c034ad0';
 
 function VoiceInterface({ accessToken, configId, onSessionEnd, onBack }: {
     accessToken: string;
