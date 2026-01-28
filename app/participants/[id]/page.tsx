@@ -38,12 +38,23 @@ interface Goal {
     created_at: string;
 }
 
+// Updated interface to handle multiple possible field names from API
 interface SessionNote {
     id: string;
-    session_date: string;
-    session_type: string;
-    duration_minutes: number;
+    // Date fields - API might use different names
+    session_date?: string;
+    date_of_service?: string;
+    created_at?: string;
+    // Type fields
+    session_type?: string;
+    type?: string;
+    service_type?: string;
+    // Duration fields
+    duration_minutes?: number;
+    duration?: number;
+    // Other fields
     pss_note?: { sessionOverview?: string };
+    source?: string;
 }
 
 interface Assessment {
@@ -57,6 +68,47 @@ interface Assessment {
     participant_name?: string;
     assessment_date?: string;
     created_at: string;
+}
+
+// Helper function to safely parse and format dates
+function formatSessionDate(note: SessionNote): string {
+    // Try multiple possible date field names
+    const dateValue = note.session_date || note.date_of_service || note.created_at;
+    
+    if (!dateValue) {
+        return 'Date not recorded';
+    }
+    
+    try {
+        const date = new Date(dateValue);
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+            return 'Date not recorded';
+        }
+        return date.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    } catch {
+        return 'Date not recorded';
+    }
+}
+
+// Helper function to get session type
+function getSessionType(note: SessionNote): string {
+    const type = note.session_type || note.type || note.service_type;
+    if (!type) return 'Session';
+    // Capitalize first letter
+    return type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
+}
+
+// Helper function to get duration
+function getDuration(note: SessionNote): string {
+    const duration = note.duration_minutes || note.duration;
+    if (!duration || duration === 0) return '';
+    return `${duration} min`;
 }
 
 export default function ParticipantDetailPage() {
@@ -95,6 +147,7 @@ export default function ParticipantDetailPage() {
                 // Fetch session notes
                 const nRes = await fetch(`/api/session-notes?organization_id=${currentOrg.id}&participant_id=${params.id}`);
                 const nData = await nRes.json();
+                console.log('Session notes from API:', nData.notes); // Debug log
                 setNotes(nData.notes || []);
                 
                 // Fetch assessments
@@ -164,77 +217,78 @@ export default function ParticipantDetailPage() {
     if (error || !participant) {
         return (
             <div className="max-w-3xl mx-auto px-6 py-12 text-center">
-                <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-                <h2 className="text-xl font-bold text-[#0E2235] mb-2">Participant Not Found</h2>
-                <p className="text-gray-600 mb-6">{error || 'The participant you\'re looking for doesn\'t exist.'}</p>
-                <Link
-                    href="/participants"
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090]"
+                <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Participant</h1>
+                <p className="text-gray-600 mb-6">{error || 'Participant not found'}</p>
+                <button 
+                    onClick={() => router.back()}
+                    className="px-4 py-2 bg-[#1A73A8] text-white rounded-lg"
                 >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back to Participants
-                </Link>
+                    Go Back
+                </button>
             </div>
         );
     }
     
     const displayName = participant.preferred_name || participant.first_name;
     const fullName = `${participant.first_name} ${participant.last_name}`;
-    const activeGoals = goals.filter(g => g.status === 'active');
+    const initials = `${participant.first_name[0]}${participant.last_name[0]}`.toUpperCase();
     
-    // Calculate days in program
+    // Days in program calculation
     const intakeDate = new Date(participant.intake_date);
     const today = new Date();
     const daysInProgram = Math.floor((today.getTime() - intakeDate.getTime()) / (1000 * 60 * 60 * 24));
     
-    const getStatusBadge = (status: string) => {
-        const styles: Record<string, string> = {
-            active: 'bg-green-100 text-green-700',
-            inactive: 'bg-gray-100 text-gray-600',
-            discharged: 'bg-orange-100 text-orange-700',
-        };
-        return styles[status] || styles.active;
-    };
+    // Stats
+    const activeGoals = goals.filter(g => g.status === 'active').length;
     
+    // Goal area colors
     const goalAreaColors: Record<string, string> = {
-        'substance-use': '#E74C3C',
-        'mental-health': '#9B59B6',
-        'housing': '#3498DB',
-        'employment': '#27AE60',
-        'education': '#F39C12',
-        'family': '#E91E63',
-        'legal': '#607D8B',
-        'physical-health': '#00BCD4',
+        'Physical Health': '#30B27A',
+        'Mental Health': '#1A73A8',
+        'Social Relationships': '#F59E0B',
+        'Employment': '#8B5CF6',
+        'Housing': '#EC4899',
+        'Education': '#06B6D4',
+        'Financial': '#10B981',
+        'Legal': '#EF4444',
+        'Spiritual': '#6366F1',
+        'Recovery Support': '#14B8A6'
     };
     
     return (
-        <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="max-w-5xl mx-auto px-6 py-8">
             {/* Header */}
-            <div className="flex items-start gap-4 mb-8">
-                <Link
-                    href="/participants"
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors mt-1"
+            <div className="mb-8">
+                <button 
+                    onClick={() => router.back()}
+                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
                 >
-                    <ArrowLeft className="w-5 h-5 text-gray-600" />
-                </Link>
+                    <ArrowLeft className="w-4 h-4" />
+                    Back
+                </button>
                 
-                <div className="flex-1 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#1A73A8] to-[#30B27A] flex items-center justify-center text-white text-xl font-bold">
-                            {participant.first_name[0]}{participant.last_name[0]}
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#1A73A8] to-[#30B27A] flex items-center justify-center text-white text-xl font-semibold">
+                            {initials}
                         </div>
                         <div>
                             <h1 className="text-2xl font-bold text-[#0E2235]">{fullName}</h1>
                             {participant.preferred_name && (
                                 <p className="text-gray-500">Goes by "{participant.preferred_name}"</p>
                             )}
-                            <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium capitalize mt-1 ${getStatusBadge(participant.status)}`}>
-                                {participant.status}
+                            <span className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-medium ${
+                                participant.status === 'active' ? 'bg-green-100 text-green-700' :
+                                participant.status === 'inactive' ? 'bg-gray-100 text-gray-600' :
+                                'bg-yellow-100 text-yellow-700'
+                            }`}>
+                                {participant.status.charAt(0).toUpperCase() + participant.status.slice(1)}
                             </span>
                         </div>
                     </div>
                     
-                    <div className="flex items-center gap-3">
+                    <div className="flex gap-3">
                         <Link
                             href={`/participants/${params.id}/edit`}
                             className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
@@ -244,7 +298,7 @@ export default function ParticipantDetailPage() {
                         </Link>
                         <Link
                             href={`/goals/new?participant_id=${params.id}`}
-                            className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090]"
+                            className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#15608a]"
                         >
                             <Plus className="w-4 h-4" />
                             New Goal
@@ -253,15 +307,15 @@ export default function ParticipantDetailPage() {
                 </div>
             </div>
             
-            {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            {/* Quick Stats */}
+            <div className="grid grid-cols-4 gap-4 mb-8">
                 <div className="bg-white rounded-xl p-4 border border-gray-200">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
                             <Target className="w-5 h-5 text-blue-600" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-[#0E2235]">{activeGoals.length}</p>
+                            <p className="text-2xl font-bold text-[#0E2235]">{activeGoals}</p>
                             <p className="text-sm text-gray-500">Active Goals</p>
                         </div>
                     </div>
@@ -303,87 +357,81 @@ export default function ParticipantDetailPage() {
             
             {/* Tabs */}
             <div className="border-b border-gray-200 mb-6">
-                <nav className="flex gap-6">
+                <nav className="flex gap-8">
                     {[
-                        { key: 'overview', label: 'Overview', icon: User },
-                        { key: 'goals', label: 'Goals', icon: Target },
-                        { key: 'notes', label: 'Session Notes', icon: FileText },
-                        { key: 'assessments', label: 'Assessments', icon: Activity },
-                    ].map(tab => {
-                        const Icon = tab.icon;
-                        return (
-                            <button
-                                key={tab.key}
-                                onClick={() => setActiveTab(tab.key as any)}
-                                className={`flex items-center gap-2 px-1 py-3 border-b-2 font-medium transition-colors ${
-                                    activeTab === tab.key
-                                        ? 'border-[#1A73A8] text-[#1A73A8]'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                                }`}
-                            >
-                                <Icon className="w-4 h-4" />
-                                {tab.label}
-                            </button>
-                        );
-                    })}
+                        { id: 'overview', label: 'Overview', icon: User },
+                        { id: 'goals', label: 'Goals', icon: Target },
+                        { id: 'notes', label: 'Session Notes', icon: FileText },
+                        { id: 'assessments', label: 'Assessments', icon: Activity }
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id as any)}
+                            className={`flex items-center gap-2 pb-4 border-b-2 transition-colors ${
+                                activeTab === tab.id
+                                    ? 'border-[#1A73A8] text-[#1A73A8]'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            <tab.icon className="w-4 h-4" />
+                            {tab.label}
+                        </button>
+                    ))}
                 </nav>
             </div>
             
             {/* Tab Content */}
             {activeTab === 'overview' && (
                 <div className="grid md:grid-cols-2 gap-6">
-                    {/* Contact Info */}
                     <div className="bg-white rounded-xl p-6 border border-gray-200">
-                        <h3 className="font-semibold text-[#0E2235] mb-4">Contact Information</h3>
-                        <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-[#0E2235] mb-4">Contact Information</h3>
+                        <div className="space-y-4">
                             {participant.phone && (
-                                <div className="flex items-center gap-3 text-gray-600">
-                                    <Phone className="w-4 h-4 text-gray-400" />
-                                    {participant.phone}
+                                <div className="flex items-center gap-3">
+                                    <Phone className="w-5 h-5 text-gray-400" />
+                                    <span>{participant.phone}</span>
                                 </div>
                             )}
                             {participant.email && (
-                                <div className="flex items-center gap-3 text-gray-600">
-                                    <Mail className="w-4 h-4 text-gray-400" />
-                                    {participant.email}
+                                <div className="flex items-center gap-3">
+                                    <Mail className="w-5 h-5 text-gray-400" />
+                                    <span>{participant.email}</span>
                                 </div>
                             )}
                             {participant.date_of_birth && (
-                                <div className="flex items-center gap-3 text-gray-600">
-                                    <Calendar className="w-4 h-4 text-gray-400" />
-                                    {new Date(participant.date_of_birth).toLocaleDateString()}
+                                <div className="flex items-center gap-3">
+                                    <Calendar className="w-5 h-5 text-gray-400" />
+                                    <span>DOB: {new Date(participant.date_of_birth).toLocaleDateString()}</span>
                                 </div>
                             )}
                         </div>
                     </div>
                     
-                    {/* Program Info */}
                     <div className="bg-white rounded-xl p-6 border border-gray-200">
-                        <h3 className="font-semibold text-[#0E2235] mb-4">Program Information</h3>
-                        <div className="space-y-3">
-                            <div className="flex justify-between">
-                                <span className="text-gray-500">Intake Date</span>
-                                <span className="text-[#0E2235]">{new Date(participant.intake_date).toLocaleDateString()}</span>
+                        <h3 className="text-lg font-semibold text-[#0E2235] mb-4">Program Details</h3>
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                                <Calendar className="w-5 h-5 text-gray-400" />
+                                <span>Intake: {new Date(participant.intake_date).toLocaleDateString()}</span>
                             </div>
                             {participant.referral_source && (
-                                <div className="flex justify-between">
-                                    <span className="text-gray-500">Referral Source</span>
-                                    <span className="text-[#0E2235]">{participant.referral_source}</span>
+                                <div className="flex items-center gap-3">
+                                    <Users className="w-5 h-5 text-gray-400" />
+                                    <span>Referral: {participant.referral_source}</span>
                                 </div>
                             )}
                             {participant.primary_pss_name && (
-                                <div className="flex justify-between">
-                                    <span className="text-gray-500">Primary PSS</span>
-                                    <span className="text-[#0E2235]">{participant.primary_pss_name}</span>
+                                <div className="flex items-center gap-3">
+                                    <User className="w-5 h-5 text-gray-400" />
+                                    <span>Primary PSS: {participant.primary_pss_name}</span>
                                 </div>
                             )}
                         </div>
                     </div>
                     
-                    {/* Internal Notes */}
                     {participant.internal_notes && (
                         <div className="md:col-span-2 bg-white rounded-xl p-6 border border-gray-200">
-                            <h3 className="font-semibold text-[#0E2235] mb-4">Internal Notes</h3>
+                            <h3 className="text-lg font-semibold text-[#0E2235] mb-4">Internal Notes</h3>
                             <p className="text-gray-600 whitespace-pre-wrap">{participant.internal_notes}</p>
                         </div>
                     )}
@@ -395,10 +443,10 @@ export default function ParticipantDetailPage() {
                     <div className="flex justify-end">
                         <Link
                             href={`/goals/new?participant_id=${params.id}`}
-                            className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090]"
+                            className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#15608a]"
                         >
                             <Plus className="w-4 h-4" />
-                            Create Goal
+                            New Goal
                         </Link>
                     </div>
                     {goals.length === 0 ? (
@@ -449,6 +497,7 @@ export default function ParticipantDetailPage() {
                 </div>
             )}
             
+            {/* FIXED: Session Notes Tab */}
             {activeTab === 'notes' && (
                 <div className="space-y-4">
                     <div className="flex justify-end">
@@ -467,36 +516,39 @@ export default function ParticipantDetailPage() {
                         </div>
                     ) : (
                         <div className="grid gap-4">
-                            {notes.map(note => (
-                                <Link
-                                    key={note.id}
-                                    href={`/session-notes/${note.id}`}
-                                    className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow"
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <div className="flex items-center gap-3 mb-1">
-                                                <span className="font-medium text-[#0E2235] capitalize">
-                                                    {note.session_type} Session
-                                                </span>
-                                                <span className="text-sm text-gray-500 flex items-center gap-1">
-                                                    <Clock className="w-3.5 h-3.5" />
-                                                    {note.duration_minutes} min
-                                                </span>
+                            {notes.map(note => {
+                                const sessionType = getSessionType(note);
+                                const duration = getDuration(note);
+                                const dateDisplay = formatSessionDate(note);
+                                
+                                return (
+                                    <Link
+                                        key={note.id}
+                                        href={`/session-notes/${note.id}`}
+                                        className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow"
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="flex items-center gap-3 mb-1">
+                                                    <span className="font-medium text-[#0E2235]">
+                                                        {sessionType} Session
+                                                    </span>
+                                                    {duration && (
+                                                        <span className="text-sm text-gray-500 flex items-center gap-1">
+                                                            <Clock className="w-3.5 h-3.5" />
+                                                            {duration}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm text-gray-500">
+                                                    {dateDisplay}
+                                                </p>
                                             </div>
-                                            <p className="text-sm text-gray-500">
-                                                {new Date(note.session_date).toLocaleDateString('en-US', {
-                                                    weekday: 'long',
-                                                    year: 'numeric',
-                                                    month: 'long',
-                                                    day: 'numeric'
-                                                })}
-                                            </p>
+                                            <ChevronRight className="w-5 h-5 text-gray-400" />
                                         </div>
-                                        <ChevronRight className="w-5 h-5 text-gray-400" />
-                                    </div>
-                                </Link>
-                            ))}
+                                    </Link>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
