@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -30,7 +31,7 @@ function NoOrganizationModal({ userName }: { userName: string }) {
                 <div className="bg-gradient-to-br from-[#1A73A8] via-[#156a9a] to-[#0E4D6F] px-6 py-8 text-center relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
                     <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/2" />
-                    
+
                     <div className="relative">
                         <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center mx-auto mb-4">
                             <Sparkles className="w-8 h-8 text-white" />
@@ -47,7 +48,7 @@ function NoOrganizationModal({ userName }: { userName: string }) {
                 {/* Content */}
                 <div className="p-6">
                     <p className="text-gray-600 text-center mb-6">
-                        You need to be part of an organization to use Peer Support Studio. 
+                        You need to be part of an organization to use Peer Support Studio.
                         Create your own or join an existing one.
                     </p>
 
@@ -94,7 +95,7 @@ function NoOrganizationModal({ userName }: { userName: string }) {
 export default function HomePage() {
     const router = useRouter();
     const { data: session, status } = useSession();
-    
+
     // Organization state
     const [organization, setOrganization] = useState<Organization | null>(null);
     const [orgLoading, setOrgLoading] = useState(true);
