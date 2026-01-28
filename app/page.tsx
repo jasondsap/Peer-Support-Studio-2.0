@@ -151,7 +151,7 @@ export default function HomePage() {
     // Don't render anything if unauthenticated (will redirect)
     if (status === 'unauthenticated') {
         return (
-            <div className="min-h-screen flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, #0a4d5c 0%, #0d6b7a 40%, #1a9ab8 75%, #7dd3e8 100%)' }}>
+            <div className="min-h-screen flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, #0a4d5c %, #0d6b7a 40%, #1a9ab8 75%, #7dd3e8 100%)' }}>
                 <Loader2 className="w-8 h-8 animate-spin text-white" />
             </div>
         );
@@ -248,7 +248,7 @@ export default function HomePage() {
     ];
 
     return (
-        <div className="min-h-screen" style={{ background: 'radial-gradient(ellipse at center, #0a4d5c 0%, #0d6b7a 40%, #1a9ab8 75%, #7dd3e8 100%)' }}>
+        <div className="min-h-screen" style={{ background: 'radial-gradient(ellipse at center, #1a9ab8 90%, #0d6b7a 100%, #1a9ab8 75%, #7dd3e8 100%)' }}>
             <div className="max-w-7xl mx-auto px-6 py-8">
                 {/* Show modal if user has no organization */}
                 {!hasOrganization && <NoOrganizationModal userName={userName} />}
