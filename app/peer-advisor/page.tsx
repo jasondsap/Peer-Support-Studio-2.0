@@ -215,17 +215,17 @@ export default function PeerAdvisor() {
             {view === 'welcome' && (
                 <main className="flex-1 flex items-center justify-center p-4">
                     <div className="max-w-3xl w-full">
-                        <div className="text-center mb-8">
-                            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#00BCD4] to-[#0097A7] flex items-center justify-center mx-auto mb-4 shadow-lg">
+                        <div className="flex items-start gap-4 mb-8">
+                            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#00BCD4] to-[#0097A7] flex items-center justify-center flex-shrink-0 shadow-lg">
                                 <Mic className="w-10 h-10 text-white" />
                             </div>
-                            <h1 className="text-3xl font-bold text-[#0E2235] mb-2">
-                                Peer Support Advisor
-                            </h1>
-                            <p className="text-gray-600 max-w-lg mx-auto">
-                                Your emotionally intelligent voice companion for guidance, 
-                                encouragement, and problem-solving support.
-                            </p>
+                            <div>
+                                <h1 className="text-3xl font-bold text-[#0E2235] mb-1">Peer Support Advisor</h1>
+                                <p className="text-gray-600">
+                                    Your emotionally intelligent voice companion for guidance,
+                                    encouragement, and problem-solving support.
+                                </p>
+                            </div>
                         </div>
 
                         {/* What You Can Do */}

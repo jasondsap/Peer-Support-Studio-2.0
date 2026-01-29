@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
-    Mic, Upload, MessageSquare, FileEdit, StickyNote,  // ADDED: StickyNote
+    FileText, Mic, Upload, MessageSquare, FileEdit, StickyNote,  // ADDED: StickyNote
     ArrowLeft, ChevronRight, Loader2, BookOpen,
     Clock, Users, Calendar, Building2, User
 } from 'lucide-react';
@@ -246,11 +246,17 @@ function SessionNotesContent() {
             <main className="max-w-6xl mx-auto px-4 py-8">
                 {/* Mode Selection */}
                 {mode === 'select' && (
-                    <div>
-                        <div className="text-center mb-10">
-                            <h1 className="text-3xl font-bold text-[#0E2235] mb-3">Create Session Note</h1>
-                            <p className="text-gray-600">Choose how you want to create your session documentation</p>
-                        </div>
+           
+                        <div>
+                            <div className="flex items-start gap-4 mb-10">
+                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1A73A8] to-[#30B27A] flex items-center justify-center flex-shrink-0">
+                                    <FileText className="w-8 h-8 text-white" />
+                                </div>
+                                <div>
+                                    <h1 className="text-3xl font-bold text-[#0E2235] mb-1">Create Session Note</h1>
+                                    <p className="text-gray-600">Choose how you want to create your session documentation</p>
+                                </div>
+                            </div>
 
                         {/* CHANGED: First row with 2 cards, second row with 3 cards */}
                         <div className="max-w-5xl mx-auto">

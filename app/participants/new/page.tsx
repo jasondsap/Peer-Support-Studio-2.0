@@ -173,12 +173,14 @@ export default function AddParticipantPage() {
 
             <main className="max-w-3xl mx-auto px-6 py-8">
                 {/* Hero Section */}
-                <div className="text-center mb-8">
-                    <div className="w-16 h-16 rounded-2xl bg-[#1A73A8] flex items-center justify-center mx-auto mb-4">
+                <div className="flex items-start gap-4 mb-8">
+                    <div className="w-16 h-16 rounded-2xl bg-[#1A73A8] flex items-center justify-center flex-shrink-0">
                         <Users className="w-8 h-8 text-white" />
                     </div>
-                    <h1 className="text-2xl font-bold text-[#0E2235] mb-2">Add New Participant</h1>
-                    <p className="text-gray-600">Enter information about the person you'll be supporting</p>
+                    <div>
+                        <h1 className="text-2xl font-bold text-[#0E2235] mb-1">Add New Participant</h1>
+                        <p className="text-gray-600">Enter information about the person you'll be supporting</p>
+                    </div>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">

@@ -20,7 +20,7 @@ import {
     FileText,
     Presentation,
     MessageCircle,
-    BookOpen
+    BookOpen,
 } from 'lucide-react';
 
 function LessonBuilderContent() {
@@ -254,14 +254,14 @@ function LessonBuilderContent() {
             <main className="max-w-4xl mx-auto px-6 py-8">
                 {!generatedLesson ? (
                     <>
-                        {/* Page Title */}
-                        <div className="text-center mb-8">
-                            <h1 className="text-3xl font-bold text-[#0E2235] mb-2">
-                                Create a New Lesson
-                            </h1>
-                            <p className="text-gray-600">
-                                Fill in the details below to generate an AI-powered lesson plan
-                            </p>
+                        <div className="flex items-start gap-4 mb-8">
+                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1A73A8] to-[#30B27A] flex items-center justify-center flex-shrink-0">
+                                <BookOpen className="w-8 h-8 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-bold text-[#0E2235] mb-1">Create a New Lesson</h1>
+                                <p className="text-gray-600">Fill in the details below to generate an AI-powered lesson plan</p>
+                            </div>
                         </div>
 
                         {/* Form Card */}

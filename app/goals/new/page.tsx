@@ -355,12 +355,14 @@ function GoalGeneratorContent() {
 
             <main className="max-w-4xl mx-auto px-6 py-8">
                 {/* Header */}
-                <div className="text-center mb-8">
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1A73A8] to-[#30B27A] flex items-center justify-center mx-auto mb-4">
+                <div className="flex items-start gap-4 mb-8">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1A73A8] to-[#30B27A] flex items-center justify-center flex-shrink-0">
                         <Target className="w-8 h-8 text-white" />
                     </div>
-                    <h1 className="text-3xl font-bold text-[#0E2235] mb-2">Recovery Goal Generator</h1>
-                    <p className="text-gray-600">Create comprehensive, strength-based SMART goals for recovery</p>
+                    <div>
+                        <h1 className="text-3xl font-bold text-[#0E2235] mb-1">Recovery Goal Generator</h1>
+                        <p className="text-gray-600">Create comprehensive, strength-based SMART goals for recovery</p>
+                    </div>
                 </div>
 
                 {/* Participant Selection Card */}
