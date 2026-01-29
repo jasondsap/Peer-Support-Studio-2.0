@@ -1,29 +1,23 @@
-// app/api/hume/api-key/route.ts
-// ⚠️ WARNING: This exposes your API key to the client. 
-// Use only for testing/demo. For production, use access token auth.
-
+// app/api/hume/access-token/route.ts
+import { fetchAccessToken } from 'hume';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
     try {
-        const apiKey = process.env.HUME_API_KEY;
+        const accessToken = await fetchAccessToken({
+            apiKey: process.env.HUME_API_KEY || '',
+            secretKey: process.env.HUME_SECRET_KEY || '',
+        });
 
-        if (!apiKey) {
-            return NextResponse.json(
-                { error: 'HUME_API_KEY not configured' },
-                { status: 500 }
-            );
+        if (!accessToken) {
+            throw new Error('Failed to fetch access token');
         }
 
-        // Log for debugging (remove in production)
-        console.log('Providing Hume API key for direct auth (demo mode)');
-
-        return NextResponse.json({ apiKey });
-
+        return NextResponse.json({ accessToken });
     } catch (error: any) {
-        console.error('Hume API key error:', error);
+        console.error('Hume access token error:', error);
         return NextResponse.json(
-            { error: error.message || 'Failed to get API key' },
+            { error: error.message || 'Failed to get access token' },
             { status: 500 }
         );
     }
