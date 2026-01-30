@@ -102,6 +102,34 @@ export async function GET(
             LIMIT 5
         `;
 
+        // Fetch readiness summary if reentry participant
+        let readinessSummary = null;
+        if (participant.is_reentry_participant) {
+            try {
+                const readinessItems = await sql`
+                    SELECT status FROM participant_readiness_items
+                    WHERE participant_id = ${participantId}
+                `;
+                if (readinessItems.length > 0) {
+                    const obtained = readinessItems.filter((i: any) => i.status === 'obtained').length;
+                    const notNeeded = readinessItems.filter((i: any) => i.status === 'not_needed').length;
+                    const total = readinessItems.length;
+                    const applicable = total - notNeeded;
+                    readinessSummary = {
+                        obtained_count: obtained,
+                        in_progress_count: readinessItems.filter((i: any) => i.status === 'in_progress').length,
+                        missing_count: readinessItems.filter((i: any) => i.status === 'missing').length,
+                        expired_count: readinessItems.filter((i: any) => i.status === 'expired').length,
+                        total_items: total,
+                        completion_percentage: applicable > 0 ? Math.round((obtained / applicable) * 100) : 0
+                    };
+                }
+            } catch (e) {
+                // Readiness table might not exist yet
+                console.log("Readiness query failed, skipping:", e);
+            }
+        }
+
         // Log audit event
         await logAuditEvent(
             session.internalUserId,
@@ -118,6 +146,7 @@ export async function GET(
             recentGoals,
             recentNotes,
             recentAssessments,
+            readinessSummary,
         });
     } catch (error) {
         console.error("Error fetching participant:", error);
@@ -149,7 +178,7 @@ export async function PUT(
 
         // Verify participant belongs to org
         const existing = await sql`
-            SELECT id FROM participants 
+            SELECT id, is_reentry_participant FROM participants 
             WHERE id = ${participantId} AND organization_id = ${organization_id}
         `;
 
@@ -160,14 +189,16 @@ export async function PUT(
             );
         }
 
-        // Build dynamic update
+        const wasReentryParticipant = existing[0].is_reentry_participant;
+
+        // Build dynamic update - added is_reentry_participant
         const allowedFields = [
             'first_name', 'last_name', 'preferred_name', 'date_of_birth',
             'gender', 'email', 'phone', 'address_line1', 'address_line2',
             'city', 'state', 'zip', 'emergency_contact_name',
             'emergency_contact_phone', 'emergency_contact_relationship',
             'status', 'referral_source', 'discharge_date', 'discharge_reason',
-            'primary_pss_id', 'internal_notes'
+            'primary_pss_id', 'internal_notes', 'is_reentry_participant'
         ];
 
         const setClauses: string[] = [];
@@ -198,6 +229,30 @@ export async function PUT(
         `;
 
         const result = await sql(updateQuery, values);
+
+        // If participant was just marked as reentry, initialize readiness items
+        if (updateData.is_reentry_participant === true && !wasReentryParticipant) {
+            try {
+                // Get all active readiness item definitions
+                const definitions = await sql`
+                    SELECT item_key FROM readiness_item_definitions WHERE is_active = true
+                `;
+                
+                // Insert readiness items for this participant
+                for (const def of definitions) {
+                    await sql`
+                        INSERT INTO participant_readiness_items 
+                            (participant_id, organization_id, item_key, status, updated_by)
+                        VALUES 
+                            (${participantId}, ${organization_id}, ${def.item_key}, 'missing', ${session.internalUserId})
+                        ON CONFLICT (participant_id, item_key) DO NOTHING
+                    `;
+                }
+            } catch (e) {
+                // Readiness tables might not exist yet - that's ok
+                console.log("Could not initialize readiness items:", e);
+            }
+        }
 
         // Log audit event
         await logAuditEvent(

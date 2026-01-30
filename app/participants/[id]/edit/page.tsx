@@ -1,40 +1,59 @@
 'use client';
 
 // ============================================================================
-// Peer Support Studio - Add New Participant Page (Updated)
-// File: /app/participants/new/page.tsx
+// Peer Support Studio - Edit Participant Page
+// File: /app/participants/[id]/edit/page.tsx
 // ============================================================================
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
     ArrowLeft, User, Phone, Mail, Calendar, MapPin,
-    AlertCircle, Save, Loader2, Users, Heart, Building2,
-    ChevronRight, Scale, CheckCircle
+    AlertCircle, Save, Loader2, Heart, Building2,
+    ChevronRight, Trash2, UserCheck
 } from 'lucide-react';
 
-interface Organization {
+interface Participant {
     id: string;
-    name: string;
-    slug: string;
+    first_name: string;
+    last_name: string;
+    preferred_name?: string;
+    date_of_birth?: string;
+    gender?: string;
+    email?: string;
+    phone?: string;
+    address_line1?: string;
+    address_line2?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    emergency_contact_name?: string;
+    emergency_contact_phone?: string;
+    emergency_contact_relationship?: string;
+    status: string;
+    intake_date: string;
+    referral_source?: string;
+    internal_notes?: string;
+    is_reentry_participant?: boolean;
+    primary_pss_id?: string;
 }
 
-export default function AddParticipantPage() {
+export default function EditParticipantPage() {
     const router = useRouter();
-    const { data: session, status } = useSession();
+    const params = useParams();
+    const { data: session, status: authStatus } = useSession();
+    const currentOrg = (session as any)?.currentOrganization;
 
-    const sessionOrg = (session as any)?.currentOrganization;
-
-    const [selectedOrg, setSelectedOrg] = useState<Organization | null>(sessionOrg || null);
-    const [userOrganizations, setUserOrganizations] = useState<Organization[]>([]);
-    const [loadingOrgs, setLoadingOrgs] = useState(true);
+    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<Participant>({
+        id: '',
         first_name: '',
         last_name: '',
         preferred_name: '',
@@ -50,6 +69,8 @@ export default function AddParticipantPage() {
         emergency_contact_name: '',
         emergency_contact_phone: '',
         emergency_contact_relationship: '',
+        status: 'active',
+        intake_date: '',
         referral_source: '',
         internal_notes: '',
         is_reentry_participant: false,
@@ -57,43 +78,50 @@ export default function AddParticipantPage() {
 
     // Redirect if not authenticated
     useEffect(() => {
-        if (status === 'unauthenticated') {
+        if (authStatus === 'unauthenticated') {
             router.push('/auth/signin');
         }
-    }, [status, router]);
+    }, [authStatus, router]);
 
-    // Fetch user's organizations
+    // Fetch participant data
     useEffect(() => {
-        async function fetchOrganizations() {
-            if (!session?.user) return;
+        async function fetchParticipant() {
+            if (!currentOrg?.id || !params.id) return;
 
             try {
-                const res = await fetch('/api/user/organizations');
+                const res = await fetch(
+                    `/api/participants/${params.id}?organization_id=${currentOrg.id}`
+                );
                 const data = await res.json();
 
-                if (data.organizations && data.organizations.length > 0) {
-                    setUserOrganizations(data.organizations);
-                    if (!selectedOrg) {
-                        setSelectedOrg(data.organizations[0]);
+                if (data.error) {
+                    setError(data.error);
+                    return;
+                }
+
+                if (data.participant) {
+                    // Format date for input field
+                    const participant = data.participant;
+                    if (participant.date_of_birth) {
+                        participant.date_of_birth = participant.date_of_birth.split('T')[0];
                     }
-                } else {
-                    setError('You need to be part of an organization to add participants.');
+                    if (participant.intake_date) {
+                        participant.intake_date = participant.intake_date.split('T')[0];
+                    }
+                    setFormData(participant);
                 }
             } catch (e) {
-                console.error('Failed to fetch organizations:', e);
-                if (sessionOrg) {
-                    setUserOrganizations([sessionOrg]);
-                    setSelectedOrg(sessionOrg);
-                }
+                console.error('Error fetching participant:', e);
+                setError('Failed to load participant data');
             } finally {
-                setLoadingOrgs(false);
+                setLoading(false);
             }
         }
 
-        if (status === 'authenticated') {
-            fetchOrganizations();
+        if (authStatus === 'authenticated' && currentOrg?.id) {
+            fetchParticipant();
         }
-    }, [session, status, sessionOrg, selectedOrg]);
+    }, [authStatus, currentOrg?.id, params.id]);
 
     const handleChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -110,11 +138,6 @@ export default function AddParticipantPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!selectedOrg) {
-            setError('Please select an organization');
-            return;
-        }
-
         if (!formData.first_name || !formData.last_name) {
             setError('First name and last name are required');
             return;
@@ -122,48 +145,81 @@ export default function AddParticipantPage() {
 
         setSaving(true);
         setError(null);
+        setSuccess(false);
 
         try {
-            const res = await fetch('/api/participants', {
-                method: 'POST',
+            const res = await fetch(`/api/participants/${params.id}`, {
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...formData,
-                    organization_id: selectedOrg.id,
+                    organization_id: currentOrg.id,
                 }),
             });
 
             const data = await res.json();
 
-            if (data.success || data.participant) {
+            // API returns { participant: ... } on success
+            if (data.participant) {
                 setSuccess(true);
-                // If reentry participant, redirect to their page to show readiness
-                const participantId = data.participant?.id;
+                // Short delay to show success message, then redirect
                 setTimeout(() => {
-                    if (formData.is_reentry_participant && participantId) {
-                        router.push(`/participants/${participantId}?tab=readiness`);
-                    } else {
-                        router.push('/participants');
-                    }
-                }, 1500);
+                    router.push(`/participants/${params.id}`);
+                }, 800);
             } else {
-                setError(data.error || 'Failed to create participant');
+                setError(data.error || 'Failed to update participant');
             }
         } catch (e) {
-            console.error('Error creating participant:', e);
-            setError('Failed to create participant. Please try again.');
+            console.error('Error updating participant:', e);
+            setError('Failed to update participant. Please try again.');
         } finally {
             setSaving(false);
         }
     };
 
-    if (status === 'loading' || loadingOrgs) {
+    const handleDelete = async () => {
+        try {
+            const res = await fetch(
+                `/api/participants/${params.id}?organization_id=${currentOrg.id}`,
+                { method: 'DELETE' }
+            );
+
+            if (res.ok) {
+                router.push('/participants');
+            }
+        } catch (e) {
+            console.error('Error deleting participant:', e);
+            setError('Failed to delete participant');
+        }
+    };
+
+    if (authStatus === 'loading' || loading) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                <Loader2 className="w-8 h-8 animate-spin text-[#1A73A8]" />
             </div>
         );
     }
+
+    if (error && !formData.id) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+                <div className="text-center">
+                    <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                    <h1 className="text-xl font-bold text-gray-900 mb-2">Error Loading Participant</h1>
+                    <p className="text-gray-600 mb-4">{error}</p>
+                    <button
+                        onClick={() => router.back()}
+                        className="px-4 py-2 bg-[#1A73A8] text-white rounded-lg"
+                    >
+                        Go Back
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    const displayName = formData.preferred_name || formData.first_name;
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -182,7 +238,11 @@ export default function AddParticipantPage() {
                             <ChevronRight className="w-4 h-4 text-gray-400" />
                             <Link href="/participants" className="text-[#1A73A8] hover:underline">Participants</Link>
                             <ChevronRight className="w-4 h-4 text-gray-400" />
-                            <span className="text-gray-600 font-medium">Add New Participant</span>
+                            <Link href={`/participants/${params.id}`} className="text-[#1A73A8] hover:underline">
+                                {displayName}
+                            </Link>
+                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                            <span className="text-gray-600 font-medium">Edit</span>
                         </nav>
                     </div>
                 </div>
@@ -192,15 +252,19 @@ export default function AddParticipantPage() {
             <main className="max-w-3xl mx-auto px-6 py-8">
                 {/* Page Title */}
                 <div className="mb-8">
-                    <h1 className="text-2xl font-bold text-[#0E2235]">Add New Participant</h1>
-                    <p className="text-gray-600">Enter the participant's information to add them to your program</p>
+                    <h1 className="text-2xl font-bold text-[#0E2235]">
+                        Edit {formData.first_name} {formData.last_name}
+                    </h1>
+                    <p className="text-gray-600">
+                        Update participant information
+                    </p>
                 </div>
 
                 {/* Success Message */}
                 {success && (
                     <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                        <p className="text-green-700">Participant created successfully! Redirecting...</p>
+                        <UserCheck className="w-5 h-5 text-green-600" />
+                        <p className="text-green-700">Participant updated successfully! Redirecting...</p>
                     </div>
                 )}
 
@@ -213,58 +277,66 @@ export default function AddParticipantPage() {
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Organization Selector */}
-                    {userOrganizations.length > 1 && (
-                        <div className="bg-white rounded-xl border border-gray-200 p-6">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center">
-                                    <Building2 className="w-5 h-5 text-indigo-600" />
-                                </div>
-                                <div>
-                                    <h2 className="font-semibold text-[#0E2235]">Organization</h2>
-                                    <p className="text-sm text-gray-500">Select which organization this participant belongs to</p>
-                                </div>
+                    {/* Status Section */}
+                    <div className="bg-white rounded-xl border border-gray-200 p-6">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                                <UserCheck className="w-5 h-5 text-gray-600" />
                             </div>
-                            <select
-                                value={selectedOrg?.id || ''}
-                                onChange={(e) => {
-                                    const org = userOrganizations.find(o => o.id === e.target.value);
-                                    setSelectedOrg(org || null);
-                                }}
-                                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            >
-                                {userOrganizations.map(org => (
-                                    <option key={org.id} value={org.id}>{org.name}</option>
-                                ))}
-                            </select>
+                            <div>
+                                <h2 className="font-semibold text-[#0E2235]">Participant Status</h2>
+                                <p className="text-sm text-gray-500">Current program status and settings</p>
+                            </div>
                         </div>
-                    )}
 
-                    {/* Reentry Participant Option */}
-                    <div className="bg-amber-50 rounded-xl border border-amber-200 p-6">
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-                                <Scale className="w-5 h-5 text-amber-600" />
-                            </div>
-                            <div className="flex-1">
-                                <label className="flex items-center gap-3 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        name="is_reentry_participant"
-                                        checked={formData.is_reentry_participant}
-                                        onChange={handleChange}
-                                        className="w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
-                                    />
-                                    <div>
-                                        <span className="font-semibold text-[#0E2235]">Reentry Participant</span>
-                                        <p className="text-sm text-gray-600 mt-1">
-                                            Enable document readiness tracking to help this person obtain essential IDs,
-                                            benefits, and resources for successful reentry. A checklist will be created
-                                            automatically.
-                                        </p>
-                                    </div>
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Status *
                                 </label>
+                                <select
+                                    name="status"
+                                    value={formData.status}
+                                    onChange={handleChange}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                    <option value="discharged">Discharged</option>
+                                    <option value="waitlist">Waitlist</option>
+                                </select>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Intake Date
+                                </label>
+                                <input
+                                    type="date"
+                                    name="intake_date"
+                                    value={formData.intake_date || ''}
+                                    onChange={handleChange}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Reentry Participant Toggle */}
+                        <div className="mt-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="is_reentry_participant"
+                                    checked={formData.is_reentry_participant || false}
+                                    onChange={handleChange}
+                                    className="w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                                />
+                                <div>
+                                    <span className="font-medium text-[#0E2235]">Reentry Participant</span>
+                                    <p className="text-sm text-gray-600">
+                                        Enable document readiness tracking for justice-involved individuals
+                                    </p>
+                                </div>
+                            </label>
                         </div>
                     </div>
 
@@ -283,7 +355,7 @@ export default function AddParticipantPage() {
                         <div className="grid md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    First Name <span className="text-red-500">*</span>
+                                    First Name *
                                 </label>
                                 <input
                                     type="text"
@@ -292,12 +364,11 @@ export default function AddParticipantPage() {
                                     onChange={handleChange}
                                     required
                                     className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    placeholder="First name"
                                 />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Last Name <span className="text-red-500">*</span>
+                                    Last Name *
                                 </label>
                                 <input
                                     type="text"
@@ -306,7 +377,6 @@ export default function AddParticipantPage() {
                                     onChange={handleChange}
                                     required
                                     className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    placeholder="Last name"
                                 />
                             </div>
                             <div>
@@ -316,10 +386,10 @@ export default function AddParticipantPage() {
                                 <input
                                     type="text"
                                     name="preferred_name"
-                                    value={formData.preferred_name}
+                                    value={formData.preferred_name || ''}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="What do they like to be called?"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
                             <div>
@@ -329,7 +399,7 @@ export default function AddParticipantPage() {
                                 <input
                                     type="date"
                                     name="date_of_birth"
-                                    value={formData.date_of_birth}
+                                    value={formData.date_of_birth || ''}
                                     onChange={handleChange}
                                     className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
@@ -340,7 +410,7 @@ export default function AddParticipantPage() {
                                 </label>
                                 <select
                                     name="gender"
-                                    value={formData.gender}
+                                    value={formData.gender || ''}
                                     onChange={handleChange}
                                     className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 >
@@ -375,10 +445,10 @@ export default function AddParticipantPage() {
                                 <input
                                     type="tel"
                                     name="phone"
-                                    value={formData.phone}
+                                    value={formData.phone || ''}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="(555) 123-4567"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
                             <div>
@@ -388,61 +458,80 @@ export default function AddParticipantPage() {
                                 <input
                                     type="email"
                                     name="email"
-                                    value={formData.email}
+                                    value={formData.email || ''}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="email@example.com"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
                         </div>
 
                         {/* Address Fields */}
                         <div className="space-y-4">
-                            <input
-                                type="text"
-                                name="address_line1"
-                                value={formData.address_line1}
-                                onChange={handleChange}
-                                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="Street address"
-                            />
-                            <input
-                                type="text"
-                                name="address_line2"
-                                value={formData.address_line2}
-                                onChange={handleChange}
-                                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="Apt, suite, unit, etc. (optional)"
-                            />
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Address Line 1
+                                </label>
+                                <input
+                                    type="text"
+                                    name="address_line1"
+                                    value={formData.address_line1 || ''}
+                                    onChange={handleChange}
+                                    placeholder="Street address"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Address Line 2
+                                </label>
+                                <input
+                                    type="text"
+                                    name="address_line2"
+                                    value={formData.address_line2 || ''}
+                                    onChange={handleChange}
+                                    placeholder="Apt, suite, unit, etc. (optional)"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </div>
                             <div className="grid grid-cols-4 gap-4">
                                 <div className="col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        City
+                                    </label>
                                     <input
                                         type="text"
                                         name="city"
-                                        value={formData.city}
+                                        value={formData.city || ''}
                                         onChange={handleChange}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         placeholder="City"
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     />
                                 </div>
                                 <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        State
+                                    </label>
                                     <input
                                         type="text"
                                         name="state"
-                                        value={formData.state}
+                                        value={formData.state || ''}
                                         onChange={handleChange}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         placeholder="State"
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     />
                                 </div>
                                 <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        ZIP
+                                    </label>
                                     <input
                                         type="text"
                                         name="zip"
-                                        value={formData.zip}
+                                        value={formData.zip || ''}
                                         onChange={handleChange}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         placeholder="ZIP"
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     />
                                 </div>
                             </div>
@@ -463,36 +552,42 @@ export default function AddParticipantPage() {
 
                         <div className="grid md:grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Name
+                                </label>
                                 <input
                                     type="text"
                                     name="emergency_contact_name"
-                                    value={formData.emergency_contact_name}
+                                    value={formData.emergency_contact_name || ''}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="Contact name"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Phone
+                                </label>
                                 <input
                                     type="tel"
                                     name="emergency_contact_phone"
-                                    value={formData.emergency_contact_phone}
+                                    value={formData.emergency_contact_phone || ''}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="(555) 123-4567"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Relationship</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Relationship
+                                </label>
                                 <input
                                     type="text"
                                     name="emergency_contact_relationship"
-                                    value={formData.emergency_contact_relationship}
+                                    value={formData.emergency_contact_relationship || ''}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="e.g., Spouse, Parent"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
                         </div>
@@ -502,7 +597,7 @@ export default function AddParticipantPage() {
                     <div className="bg-white rounded-xl border border-gray-200 p-6">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                                <Users className="w-5 h-5 text-purple-600" />
+                                <Building2 className="w-5 h-5 text-purple-600" />
                             </div>
                             <div>
                                 <h2 className="font-semibold text-[#0E2235]">Additional Information</h2>
@@ -518,10 +613,10 @@ export default function AddParticipantPage() {
                                 <input
                                     type="text"
                                     name="referral_source"
-                                    value={formData.referral_source}
+                                    value={formData.referral_source || ''}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="How did they find your services?"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
                             <div>
@@ -530,18 +625,18 @@ export default function AddParticipantPage() {
                                 </label>
                                 <textarea
                                     name="internal_notes"
-                                    value={formData.internal_notes}
+                                    value={formData.internal_notes || ''}
                                     onChange={handleChange}
-                                    rows={3}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    rows={4}
                                     placeholder="Any additional notes (not shared with participant)"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
                         </div>
                     </div>
 
-                    {/* Submit Buttons */}
-                    <div className="flex gap-4">
+                    {/* Actions */}
+                    <div className="flex flex-col md:flex-row gap-4">
                         <button
                             type="button"
                             onClick={() => router.back()}
@@ -551,7 +646,7 @@ export default function AddParticipantPage() {
                         </button>
                         <button
                             type="submit"
-                            disabled={saving || !selectedOrg || userOrganizations.length === 0}
+                            disabled={saving}
                             className="flex-1 py-4 bg-[#1A73A8] text-white rounded-xl font-semibold hover:bg-[#15608a] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
                         >
                             {saving ? (
@@ -562,10 +657,46 @@ export default function AddParticipantPage() {
                             ) : (
                                 <>
                                     <Save className="w-5 h-5" />
-                                    Save Participant
+                                    Save Changes
                                 </>
                             )}
                         </button>
+                    </div>
+
+                    {/* Danger Zone */}
+                    <div className="bg-red-50 rounded-xl border border-red-200 p-6">
+                        <h3 className="text-lg font-semibold text-red-800 mb-2">Danger Zone</h3>
+                        <p className="text-sm text-red-600 mb-4">
+                            Discharging a participant will change their status but preserve their records.
+                        </p>
+                        {!showDeleteConfirm ? (
+                            <button
+                                type="button"
+                                onClick={() => setShowDeleteConfirm(true)}
+                                className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-100 transition-colors"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                                Discharge Participant
+                            </button>
+                        ) : (
+                            <div className="flex items-center gap-4">
+                                <span className="text-sm text-red-700">Are you sure?</span>
+                                <button
+                                    type="button"
+                                    onClick={handleDelete}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                >
+                                    Yes, Discharge
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDeleteConfirm(false)}
+                                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </form>
             </main>
