@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // For App Router (Next.js 13+), increase the body size limit
 export const runtime = 'nodejs';
-export const maxDuration = 120; // Allow up to 120 seconds for processing large files
+export const maxDuration = 300; // Allow up to 5 minutes for processing large files
 
 export async function POST(req: NextRequest) {
     try {
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
         // Step 3: Poll for completion
         let transcript = null;
         let attempts = 0;
-        const maxAttempts = 60; // Max 5 minutes (60 * 5 seconds)
+        const maxAttempts = 120; // Max 10 minutes (120 * 5 seconds)
 
         while (attempts < maxAttempts) {
             const statusResponse = await fetch(
@@ -137,6 +137,11 @@ export async function POST(req: NextRequest) {
                 );
             }
 
+            // Log progress every 6 attempts (30 seconds)
+            if (attempts % 6 === 0) {
+                console.log(`Transcription status: ${statusData.status} (${Math.round(attempts * 5 / 60)} min elapsed)`);
+            }
+
             // Wait 5 seconds before polling again
             await new Promise(resolve => setTimeout(resolve, 5000));
             attempts++;
@@ -144,7 +149,7 @@ export async function POST(req: NextRequest) {
 
         if (!transcript) {
             return NextResponse.json(
-                { error: 'Transcription timed out' },
+                { error: 'Transcription is taking longer than expected. Please try again in a few minutes - your audio was uploaded successfully.' },
                 { status: 504 }
             );
         }

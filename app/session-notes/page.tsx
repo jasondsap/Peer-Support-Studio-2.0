@@ -399,7 +399,7 @@ function SessionNotesContent() {
                 {/* Upload Mode - Using SessionDebrief but could be separate component */}
                 {mode === 'upload' && (
                     <SessionDebrief
-                        mode="dictate"
+                        mode="upload"
                         metadata={metadata}
                         onMetadataChange={handleMetadataChange}
                         onComplete={handleTranscriptComplete}

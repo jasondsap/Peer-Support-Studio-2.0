@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
     Mic, MicOff, Square, ArrowLeft, Loader2,
     Calendar, Clock, Users, User, Building2,
-    Sparkles, AlertCircle, Volume2, UserCircle
+    Sparkles, AlertCircle, Volume2, UserCircle, Upload, FileAudio, X
 } from 'lucide-react';
 
 interface SessionMetadata {
@@ -24,7 +24,7 @@ interface Participant {
 }
 
 interface SessionDebriefProps {
-    mode: 'record' | 'dictate';
+    mode: 'record' | 'dictate' | 'upload';
     metadata: SessionMetadata;
     onMetadataChange: (metadata: SessionMetadata) => void;
     onComplete: (transcript: string) => void;
@@ -76,6 +76,12 @@ export default function SessionDebrief({
     const [isSupported, setIsSupported] = useState(true);
     const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
     const [recordingTime, setRecordingTime] = useState(0);
+    
+    // Upload mode state
+    const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+    const [isTranscribing, setIsTranscribing] = useState(false);
+    const [transcriptionProgress, setTranscriptionProgress] = useState(0);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     
     const recognitionRef = useRef<any>(null);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -217,6 +223,102 @@ export default function SessionDebrief({
         setTranscript('');
         setInterimTranscript('');
         setRecordingTime(0);
+        setUploadedFile(null);
+        setTranscriptionProgress(0);
+    };
+
+    // File upload handlers
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            // Validate file type
+            const validTypes = ['audio/mp3', 'audio/mpeg', 'audio/wav', 'audio/m4a', 'audio/mp4', 'audio/webm', 'audio/ogg'];
+            if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|mp4|webm|ogg)$/i)) {
+                setError('Please upload an audio file (MP3, WAV, M4A, etc.)');
+                return;
+            }
+            // Validate file size (max 50MB for AssemblyAI)
+            if (file.size > 50 * 1024 * 1024) {
+                setError('File is too large. Maximum size is 50MB.');
+                return;
+            }
+            setUploadedFile(file);
+            setError(null);
+        }
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files?.[0];
+        if (file) {
+            const validTypes = ['audio/mp3', 'audio/mpeg', 'audio/wav', 'audio/m4a', 'audio/mp4', 'audio/webm', 'audio/ogg'];
+            if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|mp4|webm|ogg)$/i)) {
+                setError('Please upload an audio file (MP3, WAV, M4A, etc.)');
+                return;
+            }
+            if (file.size > 50 * 1024 * 1024) {
+                setError('File is too large. Maximum size is 50MB.');
+                return;
+            }
+            setUploadedFile(file);
+            setError(null);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+    };
+
+    const removeFile = () => {
+        setUploadedFile(null);
+        setTranscript('');
+        setTranscriptionProgress(0);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    const transcribeAudio = async () => {
+        if (!uploadedFile) return;
+
+        setIsTranscribing(true);
+        setError(null);
+        setTranscriptionProgress(10);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', uploadedFile);  // Use 'file' to match existing API
+            formData.append('speakerDetection', 'false');
+
+            setTranscriptionProgress(30);
+
+            const response = await fetch('/api/session-notes/transcribe', {
+                method: 'POST',
+                body: formData,
+            });
+
+            setTranscriptionProgress(70);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to transcribe audio');
+            }
+
+            const data = await response.json();
+            setTranscriptionProgress(100);
+            setTranscript(data.transcript);
+        } catch (err) {
+            console.error('Transcription error:', err);
+            setError(err instanceof Error ? err.message : 'Failed to transcribe audio. Please try again.');
+        } finally {
+            setIsTranscribing(false);
+        }
+    };
+
+    const formatFileSize = (bytes: number): string => {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     };
 
     // Show loading state
@@ -340,7 +442,152 @@ export default function SessionDebrief({
                 </div>
             </div>
 
-            {/* Main Dictation Interface */}
+            {/* Main Interface - Upload Mode */}
+            {mode === 'upload' && (
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                    <div className="bg-gradient-to-r from-[#F59E0B] to-[#D97706] px-6 py-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h2 className="text-xl font-bold text-white">Upload Audio</h2>
+                                <p className="text-amber-100 text-sm">
+                                    Upload a recording to transcribe and generate notes
+                                </p>
+                            </div>
+                            {isTranscribing && (
+                                <div className="flex items-center gap-2 bg-white/20 px-3 py-1 rounded-full">
+                                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                                    <span className="text-white text-sm">Transcribing...</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* File Upload Area */}
+                    <div className="p-6">
+                        {!uploadedFile ? (
+                            <div
+                                onDrop={handleDrop}
+                                onDragOver={handleDragOver}
+                                className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-[#F59E0B] transition-colors cursor-pointer"
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="audio/*,.mp3,.wav,.m4a,.mp4,.webm,.ogg"
+                                    onChange={handleFileSelect}
+                                    className="hidden"
+                                />
+                                <Upload className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                                <p className="text-gray-600 font-medium mb-2">
+                                    Drop your audio file here or click to browse
+                                </p>
+                                <p className="text-sm text-gray-400">
+                                    Supports MP3, WAV, M4A, and other audio formats (max 50MB)
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {/* File Info */}
+                                <div className="flex items-center justify-between p-4 bg-amber-50 rounded-xl">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center">
+                                            <FileAudio className="w-6 h-6 text-amber-600" />
+                                        </div>
+                                        <div>
+                                            <p className="font-medium text-gray-900">{uploadedFile.name}</p>
+                                            <p className="text-sm text-gray-500">{formatFileSize(uploadedFile.size)}</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={removeFile}
+                                        className="p-2 hover:bg-amber-100 rounded-lg transition-colors"
+                                    >
+                                        <X className="w-5 h-5 text-gray-500" />
+                                    </button>
+                                </div>
+
+                                {/* Progress Bar */}
+                                {isTranscribing && (
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-600">Transcribing audio...</span>
+                                            <span className="text-amber-600 font-medium">{transcriptionProgress}%</span>
+                                        </div>
+                                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                            <div 
+                                                className="h-full bg-gradient-to-r from-[#F59E0B] to-[#D97706] transition-all duration-300"
+                                                style={{ width: `${transcriptionProgress}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Transcript Display */}
+                                {transcript && (
+                                    <div className="p-4 bg-gray-50 rounded-xl max-h-[300px] overflow-y-auto">
+                                        <p className="text-sm font-medium text-gray-700 mb-2">Transcript:</p>
+                                        <p className="text-gray-600 whitespace-pre-wrap">{transcript}</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Error Display */}
+                    {error && (
+                        <div className="px-6 py-3 bg-red-50 border-t border-red-100">
+                            <p className="text-sm text-red-700 flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4" />
+                                {error}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Controls */}
+                    <div className="bg-white border-t border-gray-200 p-6">
+                        <div className="flex items-center justify-center gap-4">
+                            {uploadedFile && !transcript && !isTranscribing && (
+                                <button
+                                    onClick={transcribeAudio}
+                                    className="px-8 py-4 bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-white rounded-full hover:opacity-90 transition-all flex items-center text-lg font-medium shadow-lg"
+                                >
+                                    <Sparkles className="w-6 h-6 mr-2" />
+                                    Transcribe Audio
+                                </button>
+                            )}
+                            
+                            {transcript && (
+                                <button
+                                    onClick={handleComplete}
+                                    className="px-8 py-4 bg-[#30B27A] text-white rounded-full hover:bg-[#28995c] transition-all flex items-center text-lg font-medium shadow-lg"
+                                >
+                                    <Sparkles className="w-6 h-6 mr-2" />
+                                    Generate Notes
+                                </button>
+                            )}
+                        </div>
+
+                        {(uploadedFile || transcript) && (
+                            <div className="mt-4 text-center">
+                                <button
+                                    onClick={handleReset}
+                                    className="text-sm text-gray-500 hover:text-gray-700"
+                                >
+                                    Clear and start over
+                                </button>
+                            </div>
+                        )}
+
+                        <p className="text-xs text-gray-500 text-center mt-4">
+                            Your audio will be transcribed using AI and then used to generate professional session notes
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* Main Dictation Interface - Record/Dictate Modes */}
+            {(mode === 'record' || mode === 'dictate') && (
             <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
                 <div className="bg-gradient-to-r from-[#F59E0B] to-[#D97706] px-6 py-4">
                     <div className="flex items-center justify-between">
@@ -490,6 +737,7 @@ export default function SessionDebrief({
                     </p>
                 </div>
             </div>
+            )}
 
             {/* Word count indicator */}
             {transcript && (
