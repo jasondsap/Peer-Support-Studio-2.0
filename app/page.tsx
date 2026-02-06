@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -10,7 +9,9 @@ import {
     ArrowRight, Loader2, Sparkles,
     BookOpen, ClipboardList, MessageSquare,
     Building2, ClipboardCheck, Search,
+    TrendingUp, Mail, Plus,
 } from 'lucide-react';
+import AllyIntelligenceChat from './components/AllyIntelligenceChat';
 
 interface Organization {
     id: string;
@@ -48,7 +49,7 @@ function NoOrganizationModal({ userName }: { userName: string }) {
                 {/* Content */}
                 <div className="p-6">
                     <p className="text-gray-600 text-center mb-6">
-                        You need to be part of an organization to use Peer Support Studio.
+                        You need to be part of an organization to use Continuum Care Studio.
                         Create your own or join an existing one.
                     </p>
 
@@ -88,6 +89,16 @@ function NoOrganizationModal({ userName }: { userName: string }) {
                     </p>
                 </div>
             </div>
+        </div>
+    );
+}
+
+// Section Header Component
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+    return (
+        <div className="mb-4">
+            <h2 className="text-lg font-semibold text-gray-800">{title}</h2>
+            {subtitle && <p className="text-sm text-gray-500">{subtitle}</p>}
         </div>
     );
 }
@@ -143,8 +154,8 @@ export default function HomePage() {
     // Show loading while checking auth and org
     if (status === 'loading' || orgLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, #0a4d5c 0%, #0d6b7a 40%, #1a9ab8 75%, #7dd3e8 100%)' }}>
-                <Loader2 className="w-8 h-8 animate-spin text-white" />
+            <div className="min-h-screen flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, #F2F0EF 90%, #F5F5F5 100%)' }}>
+                <Loader2 className="w-8 h-8 animate-spin text-[#1A73A8]" />
             </div>
         );
     }
@@ -152,71 +163,55 @@ export default function HomePage() {
     // Don't render anything if unauthenticated (will redirect)
     if (status === 'unauthenticated') {
         return (
-            <div className="min-h-screen flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, #0a4d5c %, #0d6b7a 40%, #1a9ab8 75%, #7dd3e8 100%)' }}>
-                <Loader2 className="w-8 h-8 animate-spin text-white" />
+            <div className="min-h-screen flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, #F2F0EF 90%, #F5F5F5 100%)' }}>
+                <Loader2 className="w-8 h-8 animate-spin text-[#1A73A8]" />
             </div>
         );
     }
 
-    const quickActions = [
+    // Hero cards - Primary actions
+    const heroCards = [
         {
-            title: 'Add Participant',
-            description: 'Register a new person',
+            title: 'Participants',
+            description: 'View and manage all participants in your care',
             icon: Users,
-            href: '/participants/new',
-            color: 'bg-blue-500',
+            href: '/participants',
+            gradient: 'from-[#1A73A8] to-[#2B8FBF]',
+            stat: null, // Could add "12 active" etc.
+            action: {
+                label: 'Add New',
+                href: '/participants/new',
+                icon: Plus,
+            },
         },
         {
-            title: 'Create Goal',
-            description: 'AI-powered goal generator',
-            icon: Target,
-            href: '/goals/new',
-            color: 'bg-green-500',
-        },
-        {
-            title: 'Session Note',
-            description: 'Document a session',
-            icon: FileText,
-            href: '/session-notes',
-            color: 'bg-amber-500',
-        },
-        {
-            title: 'Recovery Capital',
-            description: 'Recovery Capital (MMIRC-28)',
-            icon: Activity,
-            href: '/recovery-capital',
-            color: 'bg-purple-500',
+            title: 'Journey Tracker',
+            description: 'Track recovery progress across life domains',
+            icon: TrendingUp,
+            href: '/journey-tracker',
+            gradient: 'from-[#30B27A] to-[#4AC490]',
+            stat: null,
+            action: null,
         },
     ];
 
-    const tools = [
-        {
-            title: 'Goal Generator',
-            description: 'Create SMART recovery goals with AI assistance',
-            icon: Sparkles,
-            href: '/goals/new',
-            badge: 'AI Powered',
-        },
+    // Documentation & Compliance tools
+    const documentationTools = [
         {
             title: 'Session Notes',
             description: 'Document sessions from audio or text',
             icon: FileText,
             href: '/session-notes',
             badge: null,
+            color: 'bg-amber-500',
         },
         {
             title: 'Note Reviewer',
             description: 'Check if notes meet billing requirements',
             icon: ClipboardCheck,
             href: '/note-reviewer',
-            badge: 'AI Powered',
-        },
-        {
-            title: 'Lesson Builder',
-            description: 'Create educational content for groups',
-            icon: BookOpen,
-            href: '/lesson-builder',
-            badge: 'AI Powered',
+            badge: 'AI',
+            color: 'bg-amber-400',
         },
         {
             title: 'Service Planner',
@@ -224,117 +219,208 @@ export default function HomePage() {
             icon: ClipboardList,
             href: '/service-log',
             badge: null,
+            color: 'bg-amber-600',
         },
-        {
-            title: 'Peer Advisor',
-            description: 'AI coaching and guidance',
-            icon: MessageSquare,
-            href: '/peer-advisor',
-            badge: 'AI Powered',
-        },
+    ];
+
+    // Assessment & Goals tools
+    const assessmentTools = [
         {
             title: 'Recovery Capital',
             description: 'BARC-10 & MIRC-28 assessments',
             icon: Activity,
             href: '/recovery-capital',
             badge: null,
+            color: 'bg-purple-500',
         },
         {
-            title: 'Treatment Locator',
-            description: 'SAMHSA verified Treatment Locator',
-            icon: Search,
-            href: '/resource-navigator',
-            badge: null,
+            title: 'Goal Generator',
+            description: 'Create SMART recovery goals',
+            icon: Target,
+            href: '/goals/new',
+            badge: 'AI',
+            color: 'bg-green-500',
         },
     ];
 
+    // Connect & Support tools
+    const connectTools = [
+        {
+            title: 'Messages',
+            description: 'Communicate with participants',
+            icon: Mail,
+            href: '/messages',
+            badge: null,
+            color: 'bg-blue-500',
+        },
+        {
+            title: 'Peer Advisor',
+            description: 'AI coaching and guidance',
+            icon: MessageSquare,
+            href: '/peer-advisor',
+            badge: 'AI',
+            color: 'bg-blue-400',
+        },
+        {
+            title: 'Treatment Locator',
+            description: 'SAMHSA verified resources',
+            icon: Search,
+            href: '/resource-navigator',
+            badge: null,
+            color: 'bg-teal-500',
+        },
+        {
+            title: 'Lesson Builder',
+            description: 'Create educational content',
+            icon: BookOpen,
+            href: '/lesson-builder',
+            badge: 'AI',
+            color: 'bg-indigo-500',
+        },
+    ];
+
+    // Tool Card Component
+    const ToolCard = ({ tool }: { tool: typeof documentationTools[0] }) => (
+        <Link
+            href={tool.href}
+            className="group bg-white rounded-xl p-4 border border-gray-200 hover:shadow-lg hover:border-gray-300 hover:scale-[1.02] transition-all"
+        >
+            <div className="flex items-start gap-3">
+                <div className={`w-10 h-10 rounded-lg ${tool.color} flex items-center justify-center flex-shrink-0`}>
+                    <tool.icon className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-gray-900 group-hover:text-[#1A73A8] transition-colors truncate">
+                            {tool.title}
+                        </h3>
+                        {tool.badge && (
+                            <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded font-medium flex-shrink-0">
+                                {tool.badge}
+                            </span>
+                        )}
+                    </div>
+                    <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{tool.description}</p>
+                </div>
+            </div>
+        </Link>
+    );
+
     return (
-        <div className="min-h-screen" style={{ background: 'radial-gradient(ellipse at center, #1a9ab8 90%, #0d6b7a 100%, #1a9ab8 75%, #7dd3e8 100%)' }}>
-            <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="min-h-screen" style={{ background: 'radial-gradient(ellipse at center, #F2F0EF 90%, #F5F5F5 100%)' }}>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
                 {/* Show modal if user has no organization */}
                 {!hasOrganization && <NoOrganizationModal userName={userName} />}
 
                 {/* Welcome Header */}
-                <div className="mb-8">
-                    <h1 className="text-2xl font-bold text-white">
+                <div className="mb-6">
+                    <h1 className="text-2xl font-bold text-gray-900">
                         Welcome back, {userName}!
                     </h1>
-                    <p className="text-white/70">
+                    <p className="text-gray-600">
                         {organization ? organization.name : 'Here\'s your dashboard overview'}
                     </p>
                 </div>
 
-                {/* Quick Actions */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                    {quickActions.map((action) => (
+                {/* Hero Cards - Primary Actions */}
+                <div className="grid md:grid-cols-2 gap-4 mb-8">
+                    {heroCards.map((card) => (
                         <Link
-                            key={action.title}
-                            href={action.href}
-                            className="group bg-white/95 backdrop-blur rounded-xl p-4 border border-white/20 hover:shadow-lg hover:bg-white hover:scale-[1.02] transition-all"
+                            key={card.title}
+                            href={card.href}
+                            className="group relative bg-white rounded-2xl p-6 border border-gray-200 hover:shadow-xl hover:scale-[1.01] transition-all overflow-hidden"
                         >
-                            <div className={`w-10 h-10 rounded-lg ${action.color} flex items-center justify-center mb-3`}>
-                                <action.icon className="w-5 h-5 text-white" />
+                            {/* Gradient accent bar */}
+                            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${card.gradient}`} />
+                            
+                            <div className="flex items-start justify-between">
+                                <div className="flex items-start gap-4">
+                                    <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center flex-shrink-0 shadow-lg`}>
+                                        <card.icon className="w-7 h-7 text-white" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-bold text-gray-900 group-hover:text-[#1A73A8] transition-colors">
+                                            {card.title}
+                                        </h3>
+                                        <p className="text-gray-500 mt-1">{card.description}</p>
+                                        {card.stat && (
+                                            <p className="text-sm font-medium text-[#1A73A8] mt-2">{card.stat}</p>
+                                        )}
+                                    </div>
+                                </div>
+                                <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-[#1A73A8] group-hover:translate-x-1 transition-all flex-shrink-0" />
                             </div>
-                            <h3 className="font-semibold text-[#0E2235] group-hover:text-[#1A73A8] transition-colors">
-                                {action.title}
-                            </h3>
-                            <p className="text-sm text-gray-500">{action.description}</p>
+
+                            {/* Quick action button */}
+                            {card.action && (
+                                <div className="mt-4 pt-4 border-t border-gray-100">
+                                    <button
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            router.push(card.action!.href);
+                                        }}
+                                        className="flex items-center gap-2 text-sm font-medium text-[#1A73A8] hover:text-[#156a9a] transition-colors"
+                                    >
+                                        <card.action.icon className="w-4 h-4" />
+                                        {card.action.label}
+                                    </button>
+                                </div>
+                            )}
                         </Link>
                     ))}
                 </div>
 
-                {/* Tools Section */}
+                {/* Documentation & Compliance */}
                 <div className="mb-8">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-bold text-white">Tools</h2>
-                    </div>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {tools.map((tool) => (
-                            <Link
-                                key={tool.title}
-                                href={tool.href}
-                                className="group bg-white/95 backdrop-blur rounded-xl p-4 border border-white/20 hover:shadow-md hover:bg-white hover:scale-[1.02] transition-all"
-                            >
-                                <div className="flex items-start gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-gray-100 group-hover:bg-[#1A73A8]/10 flex items-center justify-center transition-colors">
-                                        <tool.icon className="w-5 h-5 text-gray-600 group-hover:text-[#1A73A8] transition-colors" />
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="font-semibold text-[#0E2235] group-hover:text-[#1A73A8] transition-colors">
-                                                {tool.title}
-                                            </h3>
-                                            {tool.badge && (
-                                                <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full font-medium">
-                                                    {tool.badge}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <p className="text-sm text-gray-500 mt-0.5">{tool.description}</p>
-                                    </div>
-                                </div>
-                            </Link>
+                    <SectionHeader 
+                        title="Documentation & Compliance" 
+                        subtitle="Daily documentation and billing tools"
+                    />
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {documentationTools.map((tool) => (
+                            <ToolCard key={tool.title} tool={tool} />
                         ))}
                     </div>
                 </div>
 
-                {/* View All Participants Link */}
-                <Link
-                    href="/participants"
-                    className="flex items-center justify-center gap-2 w-full py-3 bg-white/10 hover:bg-white/20 backdrop-blur rounded-xl text-white/90 hover:text-white transition-colors border border-white/20"
-                >
-                    <Users className="w-4 h-4" />
-                    View All Participants
-                    <ArrowRight className="w-4 h-4" />
-                </Link>
+                {/* Assessment & Goals */}
+                <div className="mb-8">
+                    <SectionHeader 
+                        title="Assessment & Goals" 
+                        subtitle="Measure progress and set objectives"
+                    />
+                    <div className="grid sm:grid-cols-2 gap-4">
+                        {assessmentTools.map((tool) => (
+                            <ToolCard key={tool.title} tool={tool} />
+                        ))}
+                    </div>
+                </div>
+
+                {/* Connect & Support */}
+                <div className="mb-8">
+                    <SectionHeader 
+                        title="Connect & Support" 
+                        subtitle="Communication and resources"
+                    />
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {connectTools.map((tool) => (
+                            <ToolCard key={tool.title} tool={tool} />
+                        ))}
+                    </div>
+                </div>
 
                 {/* Footer */}
                 <div className="mt-12 text-center">
-                    <p className="text-white/50 text-sm">
-                        Peer Support Studio by MADe180 • Louisville, KY
+                    <p className="text-gray-400 text-sm">
+                        Journey Care Studio by MADe180 • Louisville, KY
                     </p>
                 </div>
             </div>
+
+            {/* Ally Intelligence Chat - Floating Assistant */}
+            {organization?.id && (
+                <AllyIntelligenceChat organizationId={organization.id} />
+            )}
         </div>
     );
 }

@@ -5,6 +5,7 @@
 // File: /app/participants/[id]/page.tsx
 // ============================================================================
 
+import PortalAccessCard from '@/app/components/PortalAccessCard';
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
@@ -13,10 +14,11 @@ import {
     ArrowLeft, User, Phone, Mail, Calendar, MapPin,
     Target, FileText, Activity, Plus, Edit, Loader2,
     AlertCircle, ChevronRight, Clock, Users, Heart,
-    Home, Scale, Shield
+    Home, Scale, Shield, Sparkles  // ADDED: Sparkles icon
 } from 'lucide-react';
 import AssessmentDetailModal from '@/app/components/AssessmentDetailModal';
 import ReadinessChecklist from '@/app/components/ReadinessChecklist';
+import ParticipantSnapshotModal from '@/app/components/ParticipantSnapshotModal';  // ADDED: Snapshot modal
 
 // ============================================================================
 // Types
@@ -163,6 +165,7 @@ export default function ParticipantDetailPage() {
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<TabType>('overview');
     const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
+    const [showSnapshotModal, setShowSnapshotModal] = useState(false);  // ADDED: Snapshot modal state
 
     // ========================================================================
     // Data Fetching
@@ -350,7 +353,15 @@ export default function ParticipantDetailPage() {
                         </div>
                     </div>
 
+                    {/* UPDATED: Added Snapshot button */}
                     <div className="flex gap-3">
+                        <button
+                            onClick={() => setShowSnapshotModal(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
+                        >
+                            <Sparkles className="w-4 h-4" />
+                            Snapshot
+                        </button>
                         <Link
                             href={`/participants/${params.id}/edit`}
                             className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
@@ -448,26 +459,34 @@ export default function ParticipantDetailPage() {
                         <div className="space-y-4">
                             {participant.phone && (
                                 <div className="flex items-center gap-3">
-                                    <Phone className="w-5 h-5 text-gray-400" />
-                                    <span>{participant.phone}</span>
+                                    <Phone className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-700">{participant.phone}</span>
                                 </div>
                             )}
                             {participant.email && (
                                 <div className="flex items-center gap-3">
-                                    <Mail className="w-5 h-5 text-gray-400" />
-                                    <span>{participant.email}</span>
+                                    <Mail className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-700">{participant.email}</span>
                                 </div>
                             )}
                             {participant.date_of_birth && (
                                 <div className="flex items-center gap-3">
-                                    <Calendar className="w-5 h-5 text-gray-400" />
-                                    <span>DOB: {new Date(participant.date_of_birth).toLocaleDateString()}</span>
+                                    <Calendar className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-700">
+                                        DOB: {new Date(participant.date_of_birth).toLocaleDateString()}
+                                    </span>
                                 </div>
                             )}
                             {participant.gender && (
                                 <div className="flex items-center gap-3">
-                                    <User className="w-5 h-5 text-gray-400" />
-                                    <span>Gender: {formatGender(participant.gender)}</span>
+                                    <User className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-700">Gender: {formatGender(participant.gender)}</span>
+                                </div>
+                            )}
+                            {address && (
+                                <div className="flex items-start gap-3">
+                                    <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
+                                    <span className="text-gray-700">{address}</span>
                                 </div>
                             )}
                         </div>
@@ -478,61 +497,41 @@ export default function ParticipantDetailPage() {
                         <h3 className="text-lg font-semibold text-[#0E2235] mb-4">Program Details</h3>
                         <div className="space-y-4">
                             <div className="flex items-center gap-3">
-                                <Calendar className="w-5 h-5 text-gray-400" />
-                                <span>Intake: {new Date(participant.intake_date).toLocaleDateString()}</span>
+                                <Calendar className="w-4 h-4 text-gray-400" />
+                                <span className="text-gray-700">
+                                    Intake: {intakeDate.toLocaleDateString()}
+                                </span>
                             </div>
                             {participant.referral_source && (
                                 <div className="flex items-center gap-3">
-                                    <Users className="w-5 h-5 text-gray-400" />
-                                    <span>Referral: {participant.referral_source}</span>
+                                    <Users className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-700">Referral: {participant.referral_source}</span>
                                 </div>
                             )}
                             {participant.primary_pss_name && (
                                 <div className="flex items-center gap-3">
-                                    <User className="w-5 h-5 text-gray-400" />
-                                    <span>Primary PSS: {participant.primary_pss_name}</span>
+                                    <User className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-700">Primary PSS: {participant.primary_pss_name}</span>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Address */}
-                    {address && (
-                        <div className="bg-white rounded-xl p-6 border border-gray-200">
-                            <h3 className="text-lg font-semibold text-[#0E2235] mb-4">Address</h3>
-                            <div className="flex items-start gap-3">
-                                <MapPin className="w-5 h-5 text-gray-400 mt-0.5" />
-                                <div>
-                                    {participant.address_line1 && <p>{participant.address_line1}</p>}
-                                    {participant.address_line2 && <p>{participant.address_line2}</p>}
-                                    <p>
-                                        {participant.city && `${participant.city}, `}
-                                        {participant.state && `${participant.state} `}
-                                        {participant.zip}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                     {/* Emergency Contact */}
-                    {participant.emergency_contact_name && (
+                    {(participant.emergency_contact_name || participant.emergency_contact_phone) && (
                         <div className="bg-white rounded-xl p-6 border border-gray-200">
                             <h3 className="text-lg font-semibold text-[#0E2235] mb-4">Emergency Contact</h3>
-                            <div className="space-y-3">
-                                <div className="flex items-center gap-3">
-                                    <Heart className="w-5 h-5 text-red-400" />
-                                    <span className="font-medium">{participant.emergency_contact_name}</span>
-                                    {participant.emergency_contact_relationship && (
-                                        <span className="text-gray-500">
-                                            ({participant.emergency_contact_relationship})
-                                        </span>
-                                    )}
-                                </div>
+                            <div className="space-y-2">
+                                {participant.emergency_contact_name && (
+                                    <p className="text-gray-700 font-medium">{participant.emergency_contact_name}</p>
+                                )}
+                                {participant.emergency_contact_relationship && (
+                                    <p className="text-gray-500 text-sm">{participant.emergency_contact_relationship}</p>
+                                )}
                                 {participant.emergency_contact_phone && (
-                                    <div className="flex items-center gap-3 ml-8">
+                                    <div className="flex items-center gap-2 text-gray-700">
                                         <Phone className="w-4 h-4 text-gray-400" />
-                                        <span>{participant.emergency_contact_phone}</span>
+                                        {participant.emergency_contact_phone}
                                     </div>
                                 )}
                             </div>
@@ -541,38 +540,17 @@ export default function ParticipantDetailPage() {
 
                     {/* Internal Notes */}
                     {participant.internal_notes && (
-                        <div className="md:col-span-2 bg-white rounded-xl p-6 border border-gray-200">
+                        <div className="bg-white rounded-xl p-6 border border-gray-200">
                             <h3 className="text-lg font-semibold text-[#0E2235] mb-4">Internal Notes</h3>
-                            <p className="text-gray-600 whitespace-pre-wrap">{participant.internal_notes}</p>
+                            <p className="text-gray-700 whitespace-pre-wrap">{participant.internal_notes}</p>
                         </div>
                     )}
 
-                    {/* Reentry CTA (if not already enabled) */}
-                    {!participant.is_reentry_participant && (
-                        <div className="md:col-span-2 bg-amber-50 rounded-xl p-6 border border-amber-200">
-                            <div className="flex items-start gap-4">
-                                <div className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center">
-                                    <Scale className="w-6 h-6 text-amber-600" />
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="text-lg font-semibold text-[#0E2235] mb-1">
-                                        Reentry Support Available
-                                    </h3>
-                                    <p className="text-gray-600 mb-4">
-                                        Enable document readiness tracking to help {displayName} obtain essential IDs,
-                                        benefits, and resources for successful reentry.
-                                    </p>
-                                    <Link
-                                        href={`/participants/${params.id}/edit`}
-                                        className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
-                                    >
-                                        <Shield className="w-4 h-4" />
-                                        Enable Reentry Tracking
-                                    </Link>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    {/* Portal Access Card */}
+                    <PortalAccessCard
+                        participantId={participant.id}
+                        participantName={displayName}
+                    />
                 </div>
             )}
 
@@ -768,6 +746,16 @@ export default function ParticipantDetailPage() {
                     onClose={() => setSelectedAssessment(null)}
                     onDelete={handleDeleteAssessment}
                     onAnalyze={handleAnalyzeAssessment}
+                />
+            )}
+
+            {/* ADDED: Participant Snapshot Modal */}
+            {showSnapshotModal && (
+                <ParticipantSnapshotModal
+                    participantId={participant.id}
+                    participantName={displayName}
+                    organizationId={currentOrg?.id}
+                    onClose={() => setShowSnapshotModal(false)}
                 />
             )}
         </div>
