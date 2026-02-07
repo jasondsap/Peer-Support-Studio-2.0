@@ -550,6 +550,7 @@ export default function ParticipantDetailPage() {
                     <PortalAccessCard
                         participantId={participant.id}
                         participantName={displayName}
+                        organizationId={organizationId}
                     />
                 </div>
             )}
