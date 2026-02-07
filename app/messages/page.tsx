@@ -6,7 +6,7 @@
 // MyChart-inspired messaging interface
 // ============================================================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -53,7 +53,7 @@ interface Conversation {
 // Main Component
 // ============================================================================
 
-export default function MessageCenterPage() {
+function MessageCenterContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { data: session } = useSession();
@@ -366,5 +366,18 @@ export default function MessageCenterPage() {
                 />
             )}
         </div>
+    );
+}
+
+// Wrapper with Suspense for useSearchParams
+export default function MessageCenterPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <Loader2 className="w-8 h-8 animate-spin text-[#367588]" />
+            </div>
+        }>
+            <MessageCenterContent />
+        </Suspense>
     );
 }
