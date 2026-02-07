@@ -175,7 +175,7 @@ function detectRiskClusters(entries: JourneyEntry[], domains: Domain[]): RiskClu
                     entries: allEntries,
                     startDate: allEntries.reduce((min, e) => e.entry_date < min ? e.entry_date : min, allEntries[0].entry_date),
                     endDate: allEntries.reduce((max, e) => e.entry_date > max ? e.entry_date : max, allEntries[0].entry_date),
-                    domains: [...new Set(allEntries.map(e => e.domain_id))],
+                    domains: Array.from(new Set(allEntries.map(e => e.domain_id))),
                 });
             }
         }
