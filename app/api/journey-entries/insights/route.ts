@@ -248,7 +248,7 @@ export async function GET(request: NextRequest) {
         // ================================================================
         // INSIGHT 5: Longest streak of improvement
         // ================================================================
-        const allDates = [...new Set(entries.map((e: any) => e.entry_date))].sort();
+        const allDates = Array.from(new Set(entries.map((e: any) => e.entry_date))).sort();
         if (allDates.length >= 2) {
             const firstDate = allDates[0];
             const lastDate = allDates[allDates.length - 1];
