@@ -1,146 +1,147 @@
 'use client';
 
-import { useSession } from 'next-auth/react';
+import { useSession, signIn, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { 
-    Building2, 
-    Users, 
-    Target, 
-    FileText, 
-    LayoutDashboard,
-    ChevronDown,
-    Settings,
-    Plus
+    Menu, X, User, LogOut, Settings, 
+    LayoutDashboard, Users, Sparkles 
 } from 'lucide-react';
-import UserButton from './UserButton';
 
 export default function Header() {
     const { data: session, status } = useSession();
-    const [orgMenuOpen, setOrgMenuOpen] = useState(false);
-    
-    const organizations = (session as any)?.organizations || [];
-    const currentOrg = (session as any)?.currentOrganization;
-    
-    if (status === 'loading') {
-        return (
-            <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-                <div className="max-w-7xl mx-auto px-6 py-3">
-                    <div className="h-10 w-40 bg-gray-200 animate-pulse rounded" />
-                </div>
-            </header>
-        );
-    }
-    
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+    const isLoading = status === 'loading';
+
     return (
         <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-            <div className="max-w-7xl mx-auto px-6 py-3">
-                <div className="flex items-center justify-between">
-                    {/* Logo & Org Switcher */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6">
+                <div className="flex justify-between items-center h-16">
+                    {/* Logo */}
+                    <Link href="/" className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                            <Sparkles className="w-5 h-5 text-white" />
+                        </div>
+                        <span className="font-bold text-gray-900 hidden sm:block">
+                            Continuum Care Studio
+                        </span>
+                    </Link>
+
+                    {/* Desktop Navigation */}
+                    {session && (
+                        <nav className="hidden md:flex items-center gap-6">
+                            <Link 
+                                href="/dashboard" 
+                                className="text-gray-600 hover:text-gray-900 flex items-center gap-1"
+                            >
+                                <LayoutDashboard className="w-4 h-4" />
+                                Dashboard
+                            </Link>
+                            <Link 
+                                href="/participants" 
+                                className="text-gray-600 hover:text-gray-900 flex items-center gap-1"
+                            >
+                                <Users className="w-4 h-4" />
+                                Participants
+                            </Link>
+                        </nav>
+                    )}
+
+                    {/* Right side */}
                     <div className="flex items-center gap-4">
-                        <Link href="/" className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1A73A8] to-[#30B27A] flex items-center justify-center">
-                                <span className="text-white font-bold text-lg">PS</span>
-                            </div>
-                            <div className="hidden sm:block">
-                                <h1 className="font-bold text-[#0E2235]">Peer Support Studio</h1>
-                                {currentOrg && (
-                                    <p className="text-xs text-gray-500">{currentOrg.name}</p>
-                                )}
-                            </div>
-                        </Link>
-                        
-                        {/* Organization Switcher */}
-                        {session && organizations.length > 0 && (
-                            <div className="relative ml-4">
+                        {isLoading ? (
+                            <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />
+                        ) : session ? (
+                            <div className="relative">
                                 <button
-                                    onClick={() => setOrgMenuOpen(!orgMenuOpen)}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 transition-colors"
+                                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                                    className="flex items-center gap-2 p-1 rounded-lg hover:bg-gray-100"
                                 >
-                                    <Building2 className="w-4 h-4 text-gray-500" />
-                                    <span className="hidden md:inline text-gray-700 max-w-[150px] truncate">
-                                        {currentOrg?.name || 'Select Organization'}
+                                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                                        <User className="w-4 h-4 text-purple-600" />
+                                    </div>
+                                    <span className="hidden sm:block text-sm text-gray-700">
+                                        {session.user?.name || session.user?.email?.split('@')[0]}
                                     </span>
-                                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${orgMenuOpen ? 'rotate-180' : ''}`} />
                                 </button>
-                                
-                                {orgMenuOpen && (
-                                    <>
-                                        <div 
-                                            className="fixed inset-0 z-40" 
-                                            onClick={() => setOrgMenuOpen(false)}
-                                        />
-                                        <div className="absolute left-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
-                                            <div className="px-3 py-2 text-xs font-medium text-gray-500 uppercase">
-                                                Your Organizations
-                                            </div>
-                                            {organizations.map((org: any) => (
-                                                <button
-                                                    key={org.id}
-                                                    onClick={() => {
-                                                        // TODO: Switch organization context
-                                                        setOrgMenuOpen(false);
-                                                    }}
-                                                    className={`w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-3 ${
-                                                        currentOrg?.id === org.id ? 'bg-blue-50' : ''
-                                                    }`}
-                                                >
-                                                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#1A73A8] to-[#30B27A] flex items-center justify-center text-white text-xs font-bold">
-                                                        {org.name.slice(0, 2).toUpperCase()}
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-medium text-[#0E2235] truncate">{org.name}</p>
-                                                        <p className="text-xs text-gray-500 capitalize">{org.role}</p>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                            <div className="border-t border-gray-100 mt-2 pt-2">
-                                                <Link
-                                                    href="/organizations/new"
-                                                    onClick={() => setOrgMenuOpen(false)}
-                                                    className="flex items-center gap-3 px-3 py-2 text-[#1A73A8] hover:bg-blue-50"
-                                                >
-                                                    <Plus className="w-4 h-4" />
-                                                    <span className="text-sm font-medium">Create Organization</span>
-                                                </Link>
-                                            </div>
+
+                                {/* User dropdown */}
+                                {userMenuOpen && (
+                                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                                        <div className="px-4 py-2 border-b border-gray-100">
+                                            <p className="text-sm font-medium text-gray-900">
+                                                {session.user?.name || 'User'}
+                                            </p>
+                                            <p className="text-xs text-gray-500 truncate">
+                                                {session.user?.email}
+                                            </p>
                                         </div>
-                                    </>
+                                        <Link
+                                            href="/settings"
+                                            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                            onClick={() => setUserMenuOpen(false)}
+                                        >
+                                            <Settings className="w-4 h-4" />
+                                            Settings
+                                        </Link>
+                                        <button
+                                            onClick={() => signOut({ callbackUrl: '/' })}
+                                            className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                                        >
+                                            <LogOut className="w-4 h-4" />
+                                            Sign Out
+                                        </button>
+                                    </div>
                                 )}
                             </div>
+                        ) : (
+                            <button
+                                onClick={() => signIn('cognito')}
+                                className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700"
+                            >
+                                Sign In
+                            </button>
                         )}
+
+                        {/* Mobile menu button */}
+                        <button
+                            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                            className="md:hidden p-2 rounded-lg hover:bg-gray-100"
+                        >
+                            {mobileMenuOpen ? (
+                                <X className="w-5 h-5" />
+                            ) : (
+                                <Menu className="w-5 h-5" />
+                            )}
+                        </button>
                     </div>
-                    
-                    {/* Navigation */}
-                    {session && currentOrg && (
-                        <nav className="hidden md:flex items-center gap-1">
+                </div>
+
+                {/* Mobile Navigation */}
+                {mobileMenuOpen && session && (
+                    <div className="md:hidden py-4 border-t border-gray-200">
+                        <nav className="flex flex-col gap-2">
                             <Link
-                                href="/"
-                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-[#1A73A8] hover:bg-gray-100 rounded-lg transition-colors"
+                                href="/dashboard"
+                                className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg"
+                                onClick={() => setMobileMenuOpen(false)}
                             >
                                 <LayoutDashboard className="w-4 h-4" />
                                 Dashboard
                             </Link>
                             <Link
                                 href="/participants"
-                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-[#1A73A8] hover:bg-gray-100 rounded-lg transition-colors"
+                                className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg"
+                                onClick={() => setMobileMenuOpen(false)}
                             >
                                 <Users className="w-4 h-4" />
                                 Participants
-                            </Link>                      
-                            <Link
-                                href="/help"
-                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-[#1A73A8] hover:bg-gray-100 rounded-lg transition-colors"
-                            >
-                                <FileText className="w-4 h-4" />
-                                Help
                             </Link>
                         </nav>
-                    )}
-                    
-                    {/* User Menu */}
-                    <UserButton />
-                </div>
+                    </div>
+                )}
             </div>
         </header>
     );
