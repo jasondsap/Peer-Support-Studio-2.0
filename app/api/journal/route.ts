@@ -1,22 +1,15 @@
 // app/api/journal/route.ts
-// Journal Entries API for Participant Portal
-// Uses next-auth session (same auth pattern as sessions, goals, messages APIs)
+// Journal Entries API
+// Portal: participant CRUD on own entries (requireAuth)
+// Studio: PSS reads shared entries (via query params)
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { sql } from '@/lib/db';
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
+import { sql } from "@/lib/db";
 
-// GET /api/journal - List journal entries
-// Portal: participant views own entries (all)
-// Studio: PSS views shared entries for a participant (shared_with_pss only)
+// GET /api/journal
 export async function GET(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
         const { searchParams } = new URL(req.url);
         const countOnly = searchParams.get('count_only');
 
@@ -25,7 +18,6 @@ export async function GET(req: NextRequest) {
         const queryOrgId = searchParams.get('organization_id');
 
         if (queryParticipantId && queryOrgId) {
-            // Unread count for badge
             if (countOnly === 'true') {
                 const unreadOnly = searchParams.get('unread_only');
                 if (unreadOnly === 'true') {
@@ -46,7 +38,6 @@ export async function GET(req: NextRequest) {
                 return NextResponse.json({ count: parseInt(result[0].count) });
             }
 
-            // Full list of shared entries for Studio
             const entries = await sql`
                 SELECT id, entry_text, mood, shared_with_pss, pss_viewed, created_at, updated_at
                 FROM journal_entries
@@ -59,19 +50,18 @@ export async function GET(req: NextRequest) {
         }
 
         // Portal access — participant viewing own entries
-        if (!(session as any).participantId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const session = await requireAuth();
+        const participantId = session.participantId;
 
-        const participantId = (session as any).participantId;
-        const organizationId = (session as any).organizationId;
+        if (!participantId) {
+            return NextResponse.json({ error: "Participant not found" }, { status: 400 });
+        }
 
         if (countOnly === 'true') {
             const result = await sql`
                 SELECT COUNT(*) as count
                 FROM journal_entries
                 WHERE participant_id = ${participantId}
-                AND organization_id = ${organizationId}
             `;
             return NextResponse.json({ count: parseInt(result[0].count) });
         }
@@ -80,27 +70,29 @@ export async function GET(req: NextRequest) {
             SELECT id, entry_text, mood, shared_with_pss, created_at, updated_at
             FROM journal_entries
             WHERE participant_id = ${participantId}
-            AND organization_id = ${organizationId}
             ORDER BY created_at DESC
         `;
 
         return NextResponse.json({ entries });
     } catch (error) {
-        console.error('Error fetching journal entries:', error);
-        return NextResponse.json({ error: 'Failed to fetch journal entries' }, { status: 500 });
+        console.error("Error fetching journal entries:", error);
+        const message = error instanceof Error ? error.message : "Failed to fetch journal entries";
+        if (message === "Unauthorized") {
+            return NextResponse.json({ error: message }, { status: 401 });
+        }
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
 
 // POST /api/journal - Create a new journal entry
 export async function POST(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!(session as any)?.participantId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const session = await requireAuth();
+        const participantId = session.participantId;
 
-        const participantId = (session as any).participantId;
-        const organizationId = (session as any).organizationId;
+        if (!participantId) {
+            return NextResponse.json({ error: "Participant not found" }, { status: 400 });
+        }
 
         const body = await req.json();
         const { entry_text, mood, shared_with_pss } = body;
@@ -108,6 +100,17 @@ export async function POST(req: NextRequest) {
         if (!entry_text?.trim()) {
             return NextResponse.json({ error: 'Entry text is required' }, { status: 400 });
         }
+
+        // Get organization_id from participant record
+        const participant = await sql`
+            SELECT organization_id FROM participants WHERE id = ${participantId}
+        `;
+
+        if (participant.length === 0) {
+            return NextResponse.json({ error: "Participant not found" }, { status: 404 });
+        }
+
+        const organizationId = participant[0].organization_id;
 
         const result = await sql`
             INSERT INTO journal_entries (
@@ -124,21 +127,24 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ entry: result[0] });
     } catch (error) {
-        console.error('Error creating journal entry:', error);
-        return NextResponse.json({ error: 'Failed to create journal entry' }, { status: 500 });
+        console.error("Error creating journal entry:", error);
+        const message = error instanceof Error ? error.message : "Failed to create journal entry";
+        if (message === "Unauthorized") {
+            return NextResponse.json({ error: message }, { status: 401 });
+        }
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
 
 // PUT /api/journal - Update a journal entry
 export async function PUT(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!(session as any)?.participantId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const session = await requireAuth();
+        const participantId = session.participantId;
 
-        const participantId = (session as any).participantId;
-        const organizationId = (session as any).organizationId;
+        if (!participantId) {
+            return NextResponse.json({ error: "Participant not found" }, { status: 400 });
+        }
 
         const body = await req.json();
         const { id } = body;
@@ -160,7 +166,6 @@ export async function PUT(req: NextRequest) {
                 updated_at = NOW()
             WHERE id = ${id}
             AND participant_id = ${participantId}
-            AND organization_id = ${organizationId}
             RETURNING *
         `;
 
@@ -170,21 +175,24 @@ export async function PUT(req: NextRequest) {
 
         return NextResponse.json({ entry: result[0] });
     } catch (error) {
-        console.error('Error updating journal entry:', error);
-        return NextResponse.json({ error: 'Failed to update journal entry' }, { status: 500 });
+        console.error("Error updating journal entry:", error);
+        const message = error instanceof Error ? error.message : "Failed to update journal entry";
+        if (message === "Unauthorized") {
+            return NextResponse.json({ error: message }, { status: 401 });
+        }
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
 
 // DELETE /api/journal - Delete a journal entry
 export async function DELETE(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!(session as any)?.participantId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const session = await requireAuth();
+        const participantId = session.participantId;
 
-        const participantId = (session as any).participantId;
-        const organizationId = (session as any).organizationId;
+        if (!participantId) {
+            return NextResponse.json({ error: "Participant not found" }, { status: 400 });
+        }
 
         const { searchParams } = new URL(req.url);
         const id = searchParams.get('id');
@@ -197,7 +205,6 @@ export async function DELETE(req: NextRequest) {
             DELETE FROM journal_entries
             WHERE id = ${id}
             AND participant_id = ${participantId}
-            AND organization_id = ${organizationId}
             RETURNING id
         `;
 
@@ -207,7 +214,11 @@ export async function DELETE(req: NextRequest) {
 
         return NextResponse.json({ success: true, deleted_id: id });
     } catch (error) {
-        console.error('Error deleting journal entry:', error);
-        return NextResponse.json({ error: 'Failed to delete journal entry' }, { status: 500 });
+        console.error("Error deleting journal entry:", error);
+        const message = error instanceof Error ? error.message : "Failed to delete journal entry";
+        if (message === "Unauthorized") {
+            return NextResponse.json({ error: message }, { status: 401 });
+        }
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
