@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
 
         // Portal access — participant viewing own entries
         const session = await requireAuth();
-        const participantId = session.participantId;
+        const participantId = (session as any).participantId;
 
         if (!participantId) {
             return NextResponse.json({ error: "Participant not found" }, { status: 400 });
@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const session = await requireAuth();
-        const participantId = session.participantId;
+        const participantId = (session as any).participantId;
 
         if (!participantId) {
             return NextResponse.json({ error: "Participant not found" }, { status: 400 });
@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
     try {
         const session = await requireAuth();
-        const participantId = session.participantId;
+        const participantId = (session as any).participantId;
 
         if (!participantId) {
             return NextResponse.json({ error: "Participant not found" }, { status: 400 });
@@ -188,7 +188,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
     try {
         const session = await requireAuth();
-        const participantId = session.participantId;
+        const participantId = (session as any).participantId;
 
         if (!participantId) {
             return NextResponse.json({ error: "Participant not found" }, { status: 400 });
