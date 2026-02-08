@@ -68,6 +68,7 @@ export default function PlanServicePage() {
     // Form state
     const [serviceType, setServiceType] = useState<'individual' | 'group'>('individual');
     const [plannedDate, setPlannedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [plannedTime, setPlannedTime] = useState('');
     const [plannedDuration, setPlannedDuration] = useState(60);
     const [setting, setSetting] = useState('outpatient');
     const [serviceCode, setServiceCode] = useState('');
@@ -202,6 +203,7 @@ export default function PlanServicePage() {
                     action: 'create',
                     serviceType,
                     plannedDate,
+                    plannedTime: plannedTime || null,
                     plannedDuration,
                     setting,
                     serviceCode: serviceCode || null,
@@ -321,8 +323,8 @@ export default function PlanServicePage() {
                         </div>
                     </div>
 
-                    {/* Date and Duration */}
-                    <div className="grid grid-cols-2 gap-4 mb-6">
+                    {/* Date, Time, and Duration */}
+                    <div className="grid grid-cols-3 gap-4 mb-6">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                 <Calendar className="w-4 h-4 inline mr-1" />
@@ -332,6 +334,18 @@ export default function PlanServicePage() {
                                 type="date"
                                 value={plannedDate}
                                 onChange={(e) => setPlannedDate(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A73A8] focus:border-transparent"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <Clock className="w-4 h-4 inline mr-1" />
+                                Time <span className="text-gray-400 font-normal">(optional)</span>
+                            </label>
+                            <input
+                                type="time"
+                                value={plannedTime}
+                                onChange={(e) => setPlannedTime(e.target.value)}
                                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A73A8] focus:border-transparent"
                             />
                         </div>

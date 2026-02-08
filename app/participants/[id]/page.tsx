@@ -14,7 +14,7 @@ import {
     ArrowLeft, User, Phone, Mail, Calendar, MapPin,
     Target, FileText, Activity, Plus, Edit, Loader2,
     AlertCircle, ChevronRight, Clock, Users, Heart,
-    Home, Scale, Shield, Sparkles  // ADDED: Sparkles icon
+    Home, Scale, Shield, Sparkles, BookHeart, Eye, Lock, X
 } from 'lucide-react';
 import AssessmentDetailModal from '@/app/components/AssessmentDetailModal';
 import ReadinessChecklist from '@/app/components/ReadinessChecklist';
@@ -87,6 +87,16 @@ interface Assessment {
     created_at: string;
 }
 
+interface JournalEntry {
+    id: string;
+    entry_text: string;
+    mood: string | null;
+    shared_with_pss: boolean;
+    pss_viewed: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
 type TabType = 'overview' | 'goals' | 'notes' | 'assessments' | 'readiness';
 
 // ============================================================================
@@ -147,6 +157,18 @@ function formatGender(gender?: string): string {
     return genderMap[gender] || gender;
 }
 
+// Journal mood display helpers
+const moodMap: Record<string, { emoji: string; label: string }> = {
+    great: { emoji: '😊', label: 'Great' },
+    good: { emoji: '🙂', label: 'Good' },
+    okay: { emoji: '😐', label: 'Okay' },
+    down: { emoji: '😔', label: 'Down' },
+    frustrated: { emoji: '😤', label: 'Frustrated' },
+    anxious: { emoji: '😰', label: 'Anxious' },
+    grateful: { emoji: '🙏', label: 'Grateful' },
+    strong: { emoji: '💪', label: 'Strong' },
+};
+
 // ============================================================================
 // Main Component
 // ============================================================================
@@ -165,7 +187,9 @@ export default function ParticipantDetailPage() {
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<TabType>('overview');
     const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
-    const [showSnapshotModal, setShowSnapshotModal] = useState(false);  // ADDED: Snapshot modal state
+    const [showSnapshotModal, setShowSnapshotModal] = useState(false);
+    const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+    const [showJournalModal, setShowJournalModal] = useState(false);
 
     // ========================================================================
     // Data Fetching
@@ -196,6 +220,11 @@ export default function ParticipantDetailPage() {
                 const aRes = await fetch(`/api/recovery-assessments?organization_id=${currentOrg.id}&participant_id=${params.id}`);
                 const aData = await aRes.json();
                 setAssessments(aData.assessments || []);
+
+                // Fetch shared journal entries
+                const jRes = await fetch(`/api/journal?participant_id=${params.id}&organization_id=${currentOrg.id}`);
+                const jData = await jRes.json();
+                setJournalEntries(jData.entries || []);
 
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Failed to load participant');
@@ -546,6 +575,51 @@ export default function ParticipantDetailPage() {
                         </div>
                     )}
 
+                    {/* Shared Journal Entries */}
+                    {journalEntries.length > 0 && (
+                        <div className="bg-white rounded-xl p-6 border border-gray-200">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-[#0E2235] flex items-center gap-2">
+                                    <BookHeart className="w-5 h-5 text-amber-500" />
+                                    Shared Journal
+                                </h3>
+                                {journalEntries.filter(e => !e.pss_viewed).length > 0 && (
+                                    <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">
+                                        {journalEntries.filter(e => !e.pss_viewed).length} new
+                                    </span>
+                                )}
+                            </div>
+                            <div className="space-y-3">
+                                {journalEntries.slice(0, 3).map(entry => (
+                                    <div key={entry.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                                        {entry.mood && moodMap[entry.mood] && (
+                                            <span className="text-xl mt-0.5" title={moodMap[entry.mood].label}>
+                                                {moodMap[entry.mood].emoji}
+                                            </span>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm text-gray-700 line-clamp-2">{entry.entry_text}</p>
+                                            <p className="text-xs text-gray-400 mt-1">
+                                                {new Date(entry.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                {entry.mood && moodMap[entry.mood] && ` · Feeling ${moodMap[entry.mood].label.toLowerCase()}`}
+                                            </p>
+                                        </div>
+                                        {!entry.pss_viewed && (
+                                            <div className="w-2 h-2 bg-amber-500 rounded-full mt-2 flex-shrink-0" title="Not yet viewed" />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            <button
+                                onClick={() => setShowJournalModal(true)}
+                                className="w-full mt-4 py-2.5 text-sm font-medium text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Eye className="w-4 h-4" />
+                                View All {journalEntries.length} {journalEntries.length === 1 ? 'Entry' : 'Entries'}
+                            </button>
+                        </div>
+                    )}
+
                     {/* Portal Access Card */}
                     <PortalAccessCard
                         participantId={participant.id}
@@ -758,6 +832,98 @@ export default function ParticipantDetailPage() {
                     organizationId={currentOrg?.id}
                     onClose={() => setShowSnapshotModal(false)}
                 />
+            )}
+
+            {/* Shared Journal Entries Modal */}
+            {showJournalModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+                        {/* Modal Header */}
+                        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                                    <BookHeart className="w-5 h-5 text-amber-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-bold text-[#0E2235]">
+                                        {displayName}'s Shared Journal
+                                    </h2>
+                                    <p className="text-sm text-gray-500">
+                                        {journalEntries.length} {journalEntries.length === 1 ? 'entry' : 'entries'} shared with you
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowJournalModal(false)}
+                                className="p-2 hover:bg-gray-100 rounded-lg"
+                            >
+                                <X className="w-5 h-5 text-gray-400" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="overflow-y-auto flex-1 px-6 py-4">
+                            <div className="space-y-4">
+                                {journalEntries.map((entry) => {
+                                    const mood = entry.mood ? moodMap[entry.mood] : null;
+                                    return (
+                                        <div
+                                            key={entry.id}
+                                            className={`p-4 rounded-xl border ${
+                                                !entry.pss_viewed
+                                                    ? 'border-amber-200 bg-amber-50/50'
+                                                    : 'border-gray-200 bg-white'
+                                            }`}
+                                        >
+                                            {/* Entry Header */}
+                                            <div className="flex items-center justify-between mb-3">
+                                                <div className="flex items-center gap-2">
+                                                    {mood && (
+                                                        <span className="text-xl" title={mood.label}>{mood.emoji}</span>
+                                                    )}
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-900">
+                                                            {new Date(entry.created_at).toLocaleDateString('en-US', {
+                                                                weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+                                                            })}
+                                                        </p>
+                                                        <p className="text-xs text-gray-500">
+                                                            {new Date(entry.created_at).toLocaleTimeString('en-US', {
+                                                                hour: 'numeric', minute: '2-digit'
+                                                            })}
+                                                            {mood && ` · Feeling ${mood.label.toLowerCase()}`}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {!entry.pss_viewed && (
+                                                    <span className="px-2 py-0.5 bg-amber-200 text-amber-800 text-xs font-medium rounded-full">
+                                                        New
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {/* Entry Text */}
+                                            <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
+                                                {entry.entry_text}
+                                            </p>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="px-6 py-3 border-t border-gray-200 flex-shrink-0">
+                            <div className="flex items-start gap-2">
+                                <Lock className="w-4 h-4 text-gray-400 mt-0.5" />
+                                <p className="text-xs text-gray-500">
+                                    These entries were voluntarily shared by {displayName}. They chose to let you see this.
+                                    Please use this context to support their journey.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

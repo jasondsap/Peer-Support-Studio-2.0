@@ -21,6 +21,27 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
         }
 
+        // Single goal fetch by ID
+        const id = searchParams.get('id');
+        if (id) {
+            const result = await sql`
+                SELECT 
+                    sg.*,
+                    p.first_name as participant_first_name,
+                    p.last_name as participant_last_name,
+                    p.preferred_name as participant_preferred_name
+                FROM saved_goals sg
+                LEFT JOIN participants p ON sg.participant_id = p.id
+                WHERE sg.id = ${id} AND sg.organization_id = ${organizationId}
+            `;
+
+            if (result.length === 0) {
+                return NextResponse.json({ error: 'Goal not found' }, { status: 404 });
+            }
+
+            return NextResponse.json({ goal: result[0] });
+        }
+
         let goals;
 
         if (participantId && status === 'all') {
@@ -167,38 +188,28 @@ export async function PUT(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { id, organization_id, status, progress } = body;
+        const { id, organization_id } = body;
 
         if (!id || !organization_id) {
             return NextResponse.json({ error: 'id and organization_id required' }, { status: 400 });
         }
 
-        let result;
-
-        if (status === 'completed') {
-            result = await sql`
-                UPDATE saved_goals 
-                SET status = ${status}, progress = ${progress || 100}, completed_at = NOW(), updated_at = NOW()
-                WHERE id = ${id} AND organization_id = ${organization_id}
-                RETURNING *
-            `;
-        } else if (status) {
-            result = await sql`
-                UPDATE saved_goals 
-                SET status = ${status}, updated_at = NOW()
-                WHERE id = ${id} AND organization_id = ${organization_id}
-                RETURNING *
-            `;
-        } else if (progress !== undefined) {
-            result = await sql`
-                UPDATE saved_goals 
-                SET progress = ${progress}, updated_at = NOW()
-                WHERE id = ${id} AND organization_id = ${organization_id}
-                RETURNING *
-            `;
-        } else {
-            return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
-        }
+        const result = await sql`
+            UPDATE saved_goals 
+            SET 
+                status = COALESCE(${body.status || null}, status),
+                progress = COALESCE(${body.progress !== undefined ? body.progress : null}, progress),
+                smart_goal = COALESCE(${body.smart_goal || null}, smart_goal),
+                timeframe = COALESCE(${body.timeframe || null}, timeframe),
+                goal_data = COALESCE(${body.goal_data || null}, goal_data),
+                completed_at = CASE 
+                    WHEN ${body.status || null} = 'completed' THEN NOW() 
+                    ELSE completed_at 
+                END,
+                updated_at = NOW()
+            WHERE id = ${id} AND organization_id = ${organization_id}
+            RETURNING *
+        `;
 
         if (result.length === 0) {
             return NextResponse.json({ error: 'Goal not found' }, { status: 404 });

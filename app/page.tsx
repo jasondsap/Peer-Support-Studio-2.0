@@ -412,7 +412,7 @@ export default function HomePage() {
                 {/* Footer */}
                 <div className="mt-12 text-center">
                     <p className="text-gray-400 text-sm">
-                        Journey Care Studio by MADe180 • Louisville, KY
+                        Peer Support Studio by MADE180 2026
                     </p>
                 </div>
             </div>

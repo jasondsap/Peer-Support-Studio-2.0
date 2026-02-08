@@ -9,7 +9,7 @@ import {
     CheckCircle, Circle, AlertCircle, Shield,
     Loader2, Edit3, Trash2, MessageSquare,
     Check, X, ChevronRight, ExternalLink,
-    ClipboardList, History
+    ClipboardList, History, CalendarPlus, ChevronDown
 } from 'lucide-react';
 
 interface ServicePlan {
@@ -18,6 +18,7 @@ interface ServicePlan {
     organization_id: string;
     service_type: 'individual' | 'group';
     planned_date: string;
+    planned_time?: string;
     planned_duration: number;
     setting: string;
     service_code?: string;
@@ -53,6 +54,13 @@ interface ServicePlan {
     }>;
 }
 
+// Helper to format time from HH:MM or HH:MM:SS to 2:00 PM
+function formatTime(timeStr: string): string {
+    const [h, m] = timeStr.split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${period}`;
+}
+
 // Status badge component
 function StatusBadge({ status, large = false }: { status: string; large?: boolean }) {
     const config: Record<string, { bg: string; text: string; label: string; icon: any }> = {
@@ -70,6 +78,154 @@ function StatusBadge({ status, large = false }: { status: string; large?: boolea
             <Icon className={large ? 'w-4 h-4' : 'w-3 h-3'} />
             {label}
         </span>
+    );
+}
+
+// Add to Calendar dropdown component
+function AddToCalendarButton({ service }: { service: ServicePlan }) {
+    const [open, setOpen] = useState(false);
+
+    const participantName = service.participant_preferred_name ||
+        `${service.participant_first_name || ''} ${service.participant_last_name || ''}`.trim() || '';
+
+    const title = `${service.service_type.charAt(0).toUpperCase() + service.service_type.slice(1)} Session${participantName ? ` - ${participantName}` : ''}`;
+    const description = [
+        `${service.planned_duration} min ${service.setting} session`,
+        participantName && `Participant: ${participantName}`,
+        service.notes && `Notes: ${service.notes}`,
+    ].filter(Boolean).join('\n');
+
+    const settingLabels: Record<string, string> = {
+        outpatient: 'Outpatient Office', inpatient: 'Inpatient Facility',
+        telehealth: 'Telehealth (Virtual)', community: 'Community Setting',
+        home: 'Home Visit', office: 'Office',
+    };
+    const location = settingLabels[service.setting] || service.setting;
+
+    // Build start/end datetimes
+    const datePart = service.planned_date.split('T')[0]; // YYYY-MM-DD
+    let startHour = 9, startMin = 0;
+    if (service.planned_time) {
+        const [h, m] = service.planned_time.split(':').map(Number);
+        startHour = h;
+        startMin = m;
+    }
+    const startDate = new Date(`${datePart}T${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}:00`);
+    const endDate = new Date(startDate.getTime() + service.planned_duration * 60000);
+
+    // Google Calendar format: 20260309T143000
+    const toGoogleDate = (d: Date) =>
+        d.getFullYear().toString() +
+        (d.getMonth() + 1).toString().padStart(2, '0') +
+        d.getDate().toString().padStart(2, '0') + 'T' +
+        d.getHours().toString().padStart(2, '0') +
+        d.getMinutes().toString().padStart(2, '0') + '00';
+
+    const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE` +
+        `&text=${encodeURIComponent(title)}` +
+        `&dates=${toGoogleDate(startDate)}/${toGoogleDate(endDate)}` +
+        `&details=${encodeURIComponent(description)}` +
+        `&location=${encodeURIComponent(location)}`;
+
+    // Outlook format: 2026-03-09T14:30:00
+    const toOutlookDate = (d: Date) =>
+        `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}T${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:00`;
+
+    const outlookUrl = `https://outlook.live.com/calendar/0/action/compose?` +
+        `subject=${encodeURIComponent(title)}` +
+        `&startdt=${toOutlookDate(startDate)}` +
+        `&enddt=${toOutlookDate(endDate)}` +
+        `&body=${encodeURIComponent(description)}` +
+        `&location=${encodeURIComponent(location)}`;
+
+    // .ics file download
+    const downloadIcs = () => {
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        const toIcsDate = (d: Date) =>
+            `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+
+        const ics = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//Peer Support Studio//Service Planner//EN',
+            'BEGIN:VEVENT',
+            `DTSTART:${toIcsDate(startDate)}`,
+            `DTEND:${toIcsDate(endDate)}`,
+            `SUMMARY:${title}`,
+            `DESCRIPTION:${description.replace(/\n/g, '\\n')}`,
+            `LOCATION:${location}`,
+            'END:VEVENT',
+            'END:VCALENDAR'
+        ].join('\r\n');
+
+        const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `session-${datePart}.ics`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setOpen(false);
+    };
+
+    return (
+        <div className="relative">
+            <button
+                onClick={() => setOpen(!open)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[#1A73A8] bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200"
+            >
+                <CalendarPlus className="w-4 h-4" />
+                <span className="hidden sm:inline">Add to Calendar</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+
+            {open && (
+                <>
+                    <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+                    <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50">
+                        <a
+                            href={googleUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => setOpen(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
+                                <rect x="2" y="4" width="20" height="18" rx="2" stroke="#4285F4" strokeWidth="1.5" fill="none" />
+                                <path d="M2 10h20" stroke="#4285F4" strokeWidth="1.5" />
+                                <path d="M8 2v4M16 2v4" stroke="#4285F4" strokeWidth="1.5" strokeLinecap="round" />
+                                <circle cx="12" cy="16" r="2" fill="#34A853" />
+                            </svg>
+                            Google Calendar
+                        </a>
+                        <a
+                            href={outlookUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => setOpen(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
+                                <rect x="2" y="4" width="20" height="18" rx="2" stroke="#0078D4" strokeWidth="1.5" fill="none" />
+                                <path d="M2 10h20" stroke="#0078D4" strokeWidth="1.5" />
+                                <path d="M8 2v4M16 2v4" stroke="#0078D4" strokeWidth="1.5" strokeLinecap="round" />
+                                <rect x="6" y="13" width="4" height="3" rx="0.5" fill="#0078D4" />
+                            </svg>
+                            Outlook
+                        </a>
+                        <div className="border-t border-gray-100 my-1" />
+                        <button
+                            onClick={downloadIcs}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                            <Calendar className="w-5 h-5 text-gray-500" />
+                            Download .ics File
+                            <span className="ml-auto text-xs text-gray-400">Apple / Other</span>
+                        </button>
+                    </div>
+                </>
+            )}
+        </div>
     );
 }
 
@@ -221,9 +377,9 @@ export default function ServiceDetailPage() {
     // Helper to get participant display name
     const getParticipantName = () => {
         if (!service?.participant_id) return null;
-        return service.participant_preferred_name || 
-               `${service.participant_first_name || ''} ${service.participant_last_name || ''}`.trim() ||
-               'Unknown Participant';
+        return service.participant_preferred_name ||
+            `${service.participant_first_name || ''} ${service.participant_last_name || ''}`.trim() ||
+            'Unknown Participant';
     };
 
     if (authStatus === 'loading' || isLoading) {
@@ -293,10 +449,16 @@ export default function ServiceDetailPage() {
                                         month: 'long',
                                         day: 'numeric'
                                     })}
+                                    {service.planned_time && ` at ${formatTime(service.planned_time)}`}
                                 </p>
                             </div>
                         </div>
-                        <StatusBadge status={service.status} large />
+                        <div className="flex items-center gap-3">
+                            {['draft', 'planned', 'approved'].includes(service.status) && (
+                                <AddToCalendarButton service={service} />
+                            )}
+                            <StatusBadge status={service.status} large />
+                        </div>
                     </div>
                 </div>
             </header>
@@ -309,7 +471,7 @@ export default function ServiceDetailPage() {
                         <div>
                             <h3 className="font-medium text-red-800">Service Overdue</h3>
                             <p className="text-sm text-red-700">
-                                This service was planned for {new Date(service.planned_date).toLocaleDateString()} 
+                                This service was planned for {new Date(service.planned_date).toLocaleDateString()}
                                 but hasn't been marked as completed.
                             </p>
                         </div>
@@ -339,6 +501,7 @@ export default function ServiceDetailPage() {
                                 <div className="text-xs text-gray-500">Planned Date</div>
                                 <div className="font-medium text-[#0E2235]">
                                     {new Date(service.planned_date).toLocaleDateString()}
+                                    {service.planned_time && ` at ${formatTime(service.planned_time)}`}
                                 </div>
                             </div>
                         </div>
@@ -475,12 +638,11 @@ export default function ServiceDetailPage() {
 
                         {service.approvals?.map(approval => (
                             <div key={approval.id} className="flex items-start gap-3 text-sm">
-                                <div className={`w-2 h-2 rounded-full mt-1.5 ${
-                                    approval.action === 'approved' ? 'bg-green-500' :
-                                    approval.action === 'verified' ? 'bg-emerald-500' :
-                                    approval.action === 'change_requested' ? 'bg-amber-500' :
-                                    'bg-blue-500'
-                                }`}></div>
+                                <div className={`w-2 h-2 rounded-full mt-1.5 ${approval.action === 'approved' ? 'bg-green-500' :
+                                        approval.action === 'verified' ? 'bg-emerald-500' :
+                                            approval.action === 'change_requested' ? 'bg-amber-500' :
+                                                'bg-blue-500'
+                                    }`}></div>
                                 <div>
                                     <div className="text-gray-700 capitalize">
                                         {approval.action.replace('_', ' ')}
@@ -644,21 +806,19 @@ export default function ServiceDetailPage() {
                                 <div className="flex gap-3">
                                     <button
                                         onClick={() => setDeliveredAsPlanned(true)}
-                                        className={`flex-1 py-2 rounded-lg border-2 transition-colors ${
-                                            deliveredAsPlanned 
-                                                ? 'border-green-500 bg-green-50 text-green-700' 
+                                        className={`flex-1 py-2 rounded-lg border-2 transition-colors ${deliveredAsPlanned
+                                                ? 'border-green-500 bg-green-50 text-green-700'
                                                 : 'border-gray-200 text-gray-600'
-                                        }`}
+                                            }`}
                                     >
                                         Yes
                                     </button>
                                     <button
                                         onClick={() => setDeliveredAsPlanned(false)}
-                                        className={`flex-1 py-2 rounded-lg border-2 transition-colors ${
-                                            !deliveredAsPlanned 
-                                                ? 'border-amber-500 bg-amber-50 text-amber-700' 
+                                        className={`flex-1 py-2 rounded-lg border-2 transition-colors ${!deliveredAsPlanned
+                                                ? 'border-amber-500 bg-amber-50 text-amber-700'
                                                 : 'border-gray-200 text-gray-600'
-                                        }`}
+                                            }`}
                                     >
                                         No
                                     </button>
@@ -709,7 +869,7 @@ export default function ServiceDetailPage() {
                             {service?.status === 'planned' ? 'Cancel Planned Service?' : 'Delete Draft?'}
                         </h2>
                         <p className="text-gray-600 mb-6">
-                            {service?.status === 'planned' 
+                            {service?.status === 'planned'
                                 ? 'This will cancel the planned service and remove it from your log. This cannot be undone.'
                                 : 'This will permanently delete this draft service plan. This cannot be undone.'
                             }

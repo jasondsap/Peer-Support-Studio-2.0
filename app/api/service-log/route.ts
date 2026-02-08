@@ -198,6 +198,7 @@ export async function POST(request: NextRequest) {
                         organization_id,
                         service_type,
                         planned_date,
+                        planned_time,
                         planned_duration,
                         setting,
                         service_code,
@@ -211,6 +212,7 @@ export async function POST(request: NextRequest) {
                         ${organizationId},
                         ${data.serviceType},
                         ${data.plannedDate},
+                        ${data.plannedTime || null},
                         ${data.plannedDuration},
                         ${data.setting},
                         ${data.serviceCode || null},
@@ -235,6 +237,7 @@ export async function POST(request: NextRequest) {
                     SET 
                         service_type = COALESCE(${updateData.serviceType || null}, service_type),
                         planned_date = COALESCE(${updateData.plannedDate || null}, planned_date),
+                        planned_time = COALESCE(${updateData.plannedTime || null}, planned_time),
                         planned_duration = COALESCE(${updateData.plannedDuration || null}, planned_duration),
                         setting = COALESCE(${updateData.setting || null}, setting),
                         service_code = COALESCE(${updateData.serviceCode}, service_code),

@@ -18,6 +18,7 @@ interface ServicePlan {
     organization_id: string;
     service_type: 'individual' | 'group';
     planned_date: string;
+    planned_time?: string;
     planned_duration: number;
     setting: string;
     service_code?: string;
@@ -58,6 +59,13 @@ interface Stats {
 }
 
 type ViewFilter = 'upcoming' | 'completed' | 'all';
+
+// Helper to format time from HH:MM or HH:MM:SS to 2:00 PM
+function formatTime(timeStr: string): string {
+    const [h, m] = timeStr.split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${period}`;
+}
 
 // Status badge component
 function StatusBadge({ status }: { status: string }) {
@@ -132,6 +140,9 @@ function ServiceCard({
                         month: 'short',
                         day: 'numeric'
                     })}
+                    {service.planned_time && (
+                        <span className="ml-1">at {formatTime(service.planned_time)}</span>
+                    )}
                 </span>
                 <span className="flex items-center gap-1">
                     <Clock className="w-4 h-4" />
@@ -266,8 +277,8 @@ export default function ServiceLogPage() {
                                 <ArrowLeft className="w-5 h-5 text-gray-600" />
                             </button>
                             <div>
-                                <h1 className="text-xl font-bold text-[#0E2235]">Peer Service Log</h1>
-                                <p className="text-sm text-gray-500">Plan, verify, and document services</p>
+                                <h1 className="text-xl font-bold text-[#0E2235]">Service Planner</h1>
+                                <p className="text-sm text-gray-500">Schedule, Plan, verify, and document services</p>
                             </div>
                         </div>
                         <button
