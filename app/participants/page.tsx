@@ -214,7 +214,7 @@ export default function ParticipantsPage() {
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-[#0E2235]">
-                                {participants.reduce((sum, p) => sum + (p.goals_count || 0), 0)}
+                                {participants.reduce((sum, p) => sum + Number(p.goals_count || 0), 0)}
                             </p>
                             <p className="text-sm text-gray-500">Active Goals</p>
                         </div>
@@ -227,7 +227,7 @@ export default function ParticipantsPage() {
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-[#0E2235]">
-                                {participants.reduce((sum, p) => sum + (p.notes_count || 0), 0)}
+                                {participants.reduce((sum, p) => sum + Number(p.notes_count || 0), 0)}
                             </p>
                             <p className="text-sm text-gray-500">Session Notes</p>
                         </div>
