@@ -7,7 +7,7 @@ import Link from 'next/link';
 import {
     Users, Plus, Search, Filter, Loader2,
     User, Phone, Mail, Calendar, Target,
-    FileText, ChevronRight, AlertCircle
+    FileText, ChevronRight, AlertCircle, UserCheck
 } from 'lucide-react';
 
 interface Participant {
@@ -25,6 +25,13 @@ interface Participant {
     last_assessment?: string;
 }
 
+interface OrgMember {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+}
+
 export default function ParticipantsPage() {
     const router = useRouter();
     const { data: session, status } = useSession();
@@ -34,6 +41,8 @@ export default function ParticipantsPage() {
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('active');
+    const [pssFilter, setPssFilter] = useState('all');
+    const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
     
     const currentOrg = (session as any)?.currentOrganization;
     
@@ -43,6 +52,26 @@ export default function ParticipantsPage() {
             router.push('/auth/signin');
         }
     }, [status, router]);
+
+    // Fetch org members for PSS filter dropdown
+    useEffect(() => {
+        async function fetchOrgMembers() {
+            if (!currentOrg?.id) return;
+            try {
+                const res = await fetch(`/api/organizations/members?organization_id=${currentOrg.id}`);
+                const data = await res.json();
+                if (data.members) {
+                    setOrgMembers(data.members);
+                }
+            } catch (e) {
+                console.error('Error fetching org members:', e);
+            }
+        }
+
+        if (status === 'authenticated' && currentOrg?.id) {
+            fetchOrgMembers();
+        }
+    }, [status, currentOrg?.id]);
     
     // Fetch participants
     useEffect(() => {
@@ -54,6 +83,7 @@ export default function ParticipantsPage() {
                 const params = new URLSearchParams({
                     organization_id: currentOrg.id,
                     status: statusFilter,
+                    pss_filter: pssFilter,
                 });
                 if (searchTerm) {
                     params.append('search', searchTerm);
@@ -73,7 +103,7 @@ export default function ParticipantsPage() {
         
         const debounce = setTimeout(fetchParticipants, 300);
         return () => clearTimeout(debounce);
-    }, [currentOrg?.id, statusFilter, searchTerm]);
+    }, [currentOrg?.id, statusFilter, searchTerm, pssFilter]);
     
     if (status === 'loading' || !currentOrg) {
         return (
@@ -123,18 +153,41 @@ export default function ParticipantsPage() {
                             className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A73A8]/20 focus:border-[#1A73A8]"
                         />
                     </div>
-                    <div className="flex items-center gap-2">
-                        <Filter className="w-5 h-5 text-gray-400" />
-                        <select
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                            className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A73A8]/20 focus:border-[#1A73A8]"
-                        >
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                            <option value="discharged">Discharged</option>
-                            <option value="all">All Statuses</option>
-                        </select>
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            <Filter className="w-5 h-5 text-gray-400" />
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A73A8]/20 focus:border-[#1A73A8]"
+                            >
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="discharged">Discharged</option>
+                                <option value="all">All Statuses</option>
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <UserCheck className="w-5 h-5 text-gray-400" />
+                            <select
+                                value={pssFilter}
+                                onChange={(e) => setPssFilter(e.target.value)}
+                                className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A73A8]/20 focus:border-[#1A73A8]"
+                            >
+                                <option value="all">All PSS</option>
+                                <option value="mine">My Participants</option>
+                                <option value="unassigned">Unassigned</option>
+                                {orgMembers.length > 1 && (
+                                    <optgroup label="Filter by PSS">
+                                        {orgMembers.map(member => (
+                                            <option key={member.id} value={member.id}>
+                                                {member.name}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                )}
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -217,16 +270,16 @@ export default function ParticipantsPage() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
                     <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                     <h2 className="text-xl font-bold text-[#0E2235] mb-2">
-                        {searchTerm || statusFilter !== 'active' 
+                        {searchTerm || statusFilter !== 'active' || pssFilter !== 'all'
                             ? 'No matching participants' 
                             : 'No participants yet'}
                     </h2>
                     <p className="text-gray-500 mb-6">
-                        {searchTerm || statusFilter !== 'active'
-                            ? 'Try adjusting your search or filter'
+                        {searchTerm || statusFilter !== 'active' || pssFilter !== 'all'
+                            ? 'Try adjusting your search or filters'
                             : 'Add your first participant to get started'}
                     </p>
-                    {!searchTerm && statusFilter === 'active' && (
+                    {!searchTerm && statusFilter === 'active' && pssFilter === 'all' && (
                         <Link
                             href="/participants/new"
                             className="inline-flex items-center gap-2 px-6 py-3 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090] transition-colors"
