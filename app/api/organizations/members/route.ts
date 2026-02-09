@@ -5,16 +5,12 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { getSessionWithUserId, requireOrgAccess } from '@/lib/auth';
 import { sql } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const session = await getSessionWithUserId();
 
         const { searchParams } = new URL(request.url);
         const organizationId = searchParams.get('organization_id');
@@ -22,6 +18,9 @@ export async function GET(request: NextRequest) {
         if (!organizationId) {
             return NextResponse.json({ error: 'organization_id is required' }, { status: 400 });
         }
+
+        // Verify org access
+        await requireOrgAccess(organizationId);
 
         // Fetch org members with user details
         const members = await sql`
