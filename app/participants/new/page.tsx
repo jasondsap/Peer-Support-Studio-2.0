@@ -21,6 +21,13 @@ interface Organization {
     slug: string;
 }
 
+interface OrgMember {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+}
+
 export default function AddParticipantPage() {
     const router = useRouter();
     const { data: session, status } = useSession();
@@ -30,6 +37,7 @@ export default function AddParticipantPage() {
     const [selectedOrg, setSelectedOrg] = useState<Organization | null>(sessionOrg || null);
     const [userOrganizations, setUserOrganizations] = useState<Organization[]>([]);
     const [loadingOrgs, setLoadingOrgs] = useState(true);
+    const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
@@ -53,6 +61,7 @@ export default function AddParticipantPage() {
         referral_source: '',
         internal_notes: '',
         is_reentry_participant: false,
+        primary_pss_id: '',
     });
 
     // Redirect if not authenticated
@@ -94,6 +103,36 @@ export default function AddParticipantPage() {
             fetchOrganizations();
         }
     }, [session, status, sessionOrg, selectedOrg]);
+
+    // Fetch organization members for PSS assignment
+    useEffect(() => {
+        async function fetchOrgMembers() {
+            const orgId = selectedOrg?.id;
+            if (!orgId) return;
+            try {
+                const res = await fetch(`/api/organizations/members?organization_id=${orgId}`);
+                const data = await res.json();
+                if (data.members) {
+                    setOrgMembers(data.members);
+                    // Default to current user if no PSS selected yet
+                    if (!formData.primary_pss_id && session?.user?.email) {
+                        const currentUser = data.members.find(
+                            (m: OrgMember) => m.email === session.user?.email
+                        );
+                        if (currentUser) {
+                            setFormData(prev => ({ ...prev, primary_pss_id: currentUser.id }));
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Error fetching org members:', e);
+            }
+        }
+
+        if (status === 'authenticated' && selectedOrg?.id) {
+            fetchOrgMembers();
+        }
+    }, [status, selectedOrg?.id]);
 
     const handleChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -511,6 +550,27 @@ export default function AddParticipantPage() {
                         </div>
 
                         <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Assigned Peer Support Specialist
+                                </label>
+                                <select
+                                    name="primary_pss_id"
+                                    value={formData.primary_pss_id}
+                                    onChange={handleChange}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                    <option value="">Unassigned</option>
+                                    {orgMembers.map(member => (
+                                        <option key={member.id} value={member.id}>
+                                            {member.name}{member.role === 'admin' ? ' (Admin)' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="mt-1 text-xs text-gray-500">
+                                    Defaults to you. Select a different team member if needed.
+                                </p>
+                            </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Referral Source

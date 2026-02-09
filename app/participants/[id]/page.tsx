@@ -398,13 +398,7 @@ export default function ParticipantDetailPage() {
                             <Edit className="w-4 h-4" />
                             Edit
                         </Link>
-                        <Link
-                            href={`/goals/new?participant_id=${params.id}`}
-                            className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#15608a]"
-                        >
-                            <Plus className="w-4 h-4" />
-                            New Goal
-                        </Link>
+                        
                     </div>
                 </div>
             </div>
