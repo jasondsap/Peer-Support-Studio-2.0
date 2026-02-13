@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
                 ${challenges || null},
                 ${timeframe || null},
                 ${smart_goal || null},
-                ${goal_data ? JSON.stringify(goal_data) : null},
+                ${goal_data || null},
                 'active'
             )
             RETURNING *

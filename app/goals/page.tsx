@@ -26,7 +26,8 @@ import {
     Plus,
     Filter,
     Grid,
-    List
+    List,
+    ListChecks,
 } from 'lucide-react';
 
 const goalAreas = [
@@ -59,6 +60,30 @@ interface SavedGoal {
     progress: number;
     created_at: string;
     goal_data: string;
+}
+
+interface MilestoneInfo {
+    total: number;
+    completed: number;
+}
+
+function getMilestoneCount(goalDataStr: string): MilestoneInfo | null {
+    try {
+        let data = typeof goalDataStr === 'string' ? JSON.parse(goalDataStr) : goalDataStr;
+        // Handle legacy double-stringified data
+        if (typeof data === 'string') {
+            data = JSON.parse(data);
+        }
+        if (data?.milestones && Array.isArray(data.milestones)) {
+            return {
+                total: data.milestones.length,
+                completed: data.milestones.filter((m: any) => m.completed).length,
+            };
+        }
+    } catch {
+        // ignore parse errors
+    }
+    return null;
 }
 
 export default function GoalLibrary() {
@@ -279,6 +304,7 @@ export default function GoalLibrary() {
                         {filteredGoals.map((goal) => {
                             const areaInfo = getAreaInfo(goal.goal_area);
                             const AreaIcon = areaInfo.icon;
+                            const msInfo = goal.goal_data ? getMilestoneCount(goal.goal_data) : null;
                             return (
                                 <div key={goal.id} className="bg-white rounded-xl shadow-sm border border-[#E7E9EC] overflow-hidden hover:shadow-md transition-shadow">
                                     <div className="p-4 border-b border-gray-100" style={{ backgroundColor: `${areaInfo.color}10` }}>
@@ -298,11 +324,20 @@ export default function GoalLibrary() {
                                         {goal.status === 'active' && (
                                             <div className="mb-4">
                                                 <div className="flex items-center justify-between text-sm mb-1">
-                                                    <span className="text-gray-500">Progress</span>
+                                                    <span className="text-gray-500 flex items-center gap-1">
+                                                        {msInfo ? (
+                                                            <>
+                                                                <ListChecks className="w-3.5 h-3.5" />
+                                                                {msInfo.completed}/{msInfo.total} milestones
+                                                            </>
+                                                        ) : (
+                                                            'Progress'
+                                                        )}
+                                                    </span>
                                                     <span className="font-medium text-[#1A73A8]">{goal.progress || 0}%</span>
                                                 </div>
                                                 <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-gradient-to-r from-[#1A73A8] to-[#30B27A] rounded-full" style={{ width: `${goal.progress || 0}%` }} />
+                                                    <div className="h-full bg-gradient-to-r from-[#1A73A8] to-[#30B27A] rounded-full transition-all" style={{ width: `${goal.progress || 0}%` }} />
                                                 </div>
                                             </div>
                                         )}
@@ -348,6 +383,7 @@ export default function GoalLibrary() {
                                 {filteredGoals.map((goal) => {
                                     const areaInfo = getAreaInfo(goal.goal_area);
                                     const AreaIcon = areaInfo.icon;
+                                    const msInfo = goal.goal_data ? getMilestoneCount(goal.goal_data) : null;
                                     return (
                                         <tr key={goal.id} className="border-b border-[#E7E9EC] hover:bg-gray-50">
                                             <td className="px-4 py-3"><span className="font-medium text-[#0E2235]">{getParticipantDisplay(goal)}</span></td>
@@ -363,7 +399,9 @@ export default function GoalLibrary() {
                                                     <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
                                                         <div className="h-full bg-[#1A73A8] rounded-full" style={{ width: `${goal.progress || 0}%` }} />
                                                     </div>
-                                                    <span className="text-sm text-gray-600">{goal.progress || 0}%</span>
+                                                    <span className="text-sm text-gray-600 whitespace-nowrap">
+                                                        {msInfo ? `${msInfo.completed}/${msInfo.total}` : `${goal.progress || 0}%`}
+                                                    </span>
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${getStatusBadge(goal.status)}`}>{goal.status}</span></td>

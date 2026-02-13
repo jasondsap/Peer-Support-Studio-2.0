@@ -1,6 +1,7 @@
 // app/goals/new/page.tsx
 // Goal Creation Hub - Selection screen with AI Generator and Quick Goal options
 // Pattern mirrors Session Notes (record/dictate/upload/manual/quick-note)
+// UPDATED: AI goals now generate milestones from phased plan on save
 
 'use client';
 
@@ -47,6 +48,7 @@ import {
     X,
     MapPin,
 } from 'lucide-react';
+import { generateMilestonesFromPlan } from '@/app/lib/milestoneUtils';
 
 // ─── Shared Constants ─────────────────────────────────────────────────────────
 
@@ -415,7 +417,6 @@ function QuickGoalForm({
 }
 
 // ─── AI Goal Generator (existing wizard, extracted) ───────────────────────────
-// This is the existing 5-step wizard, kept as-is but wrapped in a component
 
 function AIGoalGenerator({
     onBack,
@@ -541,11 +542,20 @@ function AIGoalGenerator({
         return `${areaLabel}: ${shortOutcome}`;
     };
 
+    // UPDATED: Now generates milestones from phased plan before saving
     const handleSaveGoal = async () => {
         if (!generatedGoal || !currentOrg?.id) return;
         setIsSaving(true);
         try {
             const goalName = generateGoalName();
+
+            // Generate milestones from the phased action plan
+            let goalDataToSave: Record<string, any> = { ...generatedGoal };
+            if (generatedGoal.phasedPlan) {
+                const milestones = generateMilestonesFromPlan(generatedGoal.phasedPlan);
+                goalDataToSave = { ...generatedGoal, milestones };
+            }
+
             const response = await fetch('/api/saved-goals', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -560,7 +570,7 @@ function AIGoalGenerator({
                     challenges: selectedChallenges,
                     timeframe,
                     smart_goal: generatedGoal.smartGoal,
-                    goal_data: JSON.stringify(generatedGoal),
+                    goal_data: JSON.stringify(goalDataToSave),
                 }),
             });
             const data = await response.json();
