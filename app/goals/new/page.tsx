@@ -168,6 +168,29 @@ function QuickGoalForm({
     const [timeframe, setTimeframe] = useState('30');
     const [isSaving, setIsSaving] = useState(false);
 
+    // Milestones (up to 4 manual entries)
+    const [milestoneInputs, setMilestoneInputs] = useState<string[]>(['']);
+
+    const addMilestoneInput = () => {
+        if (milestoneInputs.length < 4) {
+            setMilestoneInputs([...milestoneInputs, '']);
+        }
+    };
+
+    const updateMilestoneInput = (index: number, value: string) => {
+        const updated = [...milestoneInputs];
+        updated[index] = value;
+        setMilestoneInputs(updated);
+    };
+
+    const removeMilestoneInput = (index: number) => {
+        if (milestoneInputs.length > 1) {
+            setMilestoneInputs(milestoneInputs.filter((_, i) => i !== index));
+        } else {
+            setMilestoneInputs(['']);
+        }
+    };
+
     // Participant search
     const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
     const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(preselectedParticipant);
@@ -205,6 +228,19 @@ function QuickGoalForm({
                 return `${areaLabel}: ${shortDesc}${goalDescription.trim().split(' ').length > 6 ? '...' : ''}`;
             })();
 
+            // Build milestones from manual entries
+            const filledMilestones = milestoneInputs.filter(m => m.trim().length > 0);
+            const milestones = filledMilestones.map((title, idx) => ({
+                id: 'ms_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 9) + '_' + idx,
+                phase: 'action' as const,
+                title: title.trim(),
+                completed: false,
+                completed_at: null,
+                completed_by: null,
+                notes: '',
+                order: idx,
+            }));
+
             const response = await fetch('/api/saved-goals', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -219,7 +255,11 @@ function QuickGoalForm({
                     challenges: [],
                     timeframe,
                     smart_goal: goalDescription,
-                    goal_data: JSON.stringify({ type: 'quick-goal', description: goalDescription }),
+                    goal_data: JSON.stringify({
+                        type: 'quick-goal',
+                        description: goalDescription,
+                        milestones: milestones.length > 0 ? milestones : undefined,
+                    }),
                 }),
             });
 
@@ -385,6 +425,48 @@ function QuickGoalForm({
                             </button>
                         ))}
                     </div>
+                </div>
+
+                {/* Milestones */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Milestones (optional)</label>
+                    <p className="text-xs text-gray-500 mb-3">Add up to 4 key steps to track progress toward this goal.</p>
+                    <div className="space-y-2">
+                        {milestoneInputs.map((ms, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                                <div className="flex items-center justify-center w-6 h-6 rounded-md border-2 border-gray-300 flex-shrink-0">
+                                    <span className="text-xs font-medium text-gray-400">{idx + 1}</span>
+                                </div>
+                                <input
+                                    type="text"
+                                    value={ms}
+                                    onChange={(e) => updateMilestoneInput(idx, e.target.value)}
+                                    placeholder={
+                                        idx === 0 ? 'e.g., Research programs and options' :
+                                        idx === 1 ? 'e.g., Complete enrollment or application' :
+                                        idx === 2 ? 'e.g., Attend first session or class' :
+                                        'e.g., Reach goal target or completion'
+                                    }
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1A73A8] focus:border-transparent"
+                                />
+                                <button
+                                    onClick={() => removeMilestoneInput(idx)}
+                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Remove"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                    {milestoneInputs.length < 4 && (
+                        <button
+                            onClick={addMilestoneInput}
+                            className="mt-2 flex items-center gap-1.5 text-sm text-[#1A73A8] hover:text-[#156090] font-medium transition-colors"
+                        >
+                            <ListChecks className="w-4 h-4" />Add milestone
+                        </button>
+                    )}
                 </div>
 
                 {/* Actions */}

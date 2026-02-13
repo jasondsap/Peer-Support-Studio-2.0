@@ -273,24 +273,30 @@ function MilestoneChecklist({
                     const config = phaseConfig[phase];
                     // Get phase description from phasedPlan if available
                     const phaseData = phasedPlan?.[phase];
+                    // Hide phase header for quick goals (no phasedPlan, single phase group)
+                    const showPhaseHeader = phasedPlan || stats.phases.length > 1;
 
                     return (
                         <div key={phase} className="relative">
-                            {/* Phase header */}
-                            <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-2">
-                                    <div className={`w-2.5 h-2.5 rounded-full ${config.dotColor}`} />
-                                    <h4 className="font-semibold text-[#0E2235] text-sm">{phaseData?.title || config.label}</h4>
-                                </div>
-                                <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{
-                                    backgroundColor: completed === total && total > 0 ? '#DCFCE7' : '#F3F4F6',
-                                    color: completed === total && total > 0 ? '#16A34A' : '#6B7280',
-                                }}>
-                                    {completed}/{total}
-                                </span>
-                            </div>
-                            {phaseData?.description && (
-                                <p className="text-xs text-gray-500 mb-2 ml-5">{phaseData.description}</p>
+                            {/* Phase header — hidden for quick goals with a single phase */}
+                            {showPhaseHeader && (
+                                <>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-2.5 h-2.5 rounded-full ${config.dotColor}`} />
+                                            <h4 className="font-semibold text-[#0E2235] text-sm">{phaseData?.title || config.label}</h4>
+                                        </div>
+                                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{
+                                            backgroundColor: completed === total && total > 0 ? '#DCFCE7' : '#F3F4F6',
+                                            color: completed === total && total > 0 ? '#16A34A' : '#6B7280',
+                                        }}>
+                                            {completed}/{total}
+                                        </span>
+                                    </div>
+                                    {phaseData?.description && (
+                                        <p className="text-xs text-gray-500 mb-2 ml-5">{phaseData.description}</p>
+                                    )}
+                                </>
                             )}
 
                             {/* Milestone items */}
@@ -1022,32 +1028,36 @@ export default function GoalDetailPage() {
                     )}
                 </div>
 
-                {/* ─── Milestones Section ──────────────────────────────────────── */}
+                {/* ─── Milestones Section (shows for both quick and AI goals) ──── */}
+
+                {hasMilestones && (
+                    <CollapsibleCard
+                        title="Milestones"
+                        icon={ListChecks}
+                        color="#1A73A8"
+                        defaultOpen={true}
+                        badge={`${milestones.filter(m => m.completed).length}/${milestones.length}`}
+                    >
+                        <MilestoneChecklist
+                            milestones={milestones}
+                            phasedPlan={goalData?.phasedPlan}
+                            isEditing={isEditing}
+                            onToggle={handleToggleMilestone}
+                            onUpdateTitle={handleUpdateMilestoneTitle}
+                            onUpdateNotes={handleUpdateMilestoneNotes}
+                            onAdd={handleAddMilestone}
+                            onRemove={handleRemoveMilestone}
+                        />
+                    </CollapsibleCard>
+                )}
+
+                {/* ─── AI Goal Sections ────────────────────────────────────────── */}
 
                 {isAIGoal && goalData && (
                     <div className="space-y-4">
 
-                        {/* Milestone Checklist — the core interactive section */}
-                        {hasMilestones ? (
-                            <CollapsibleCard
-                                title="Milestones"
-                                icon={ListChecks}
-                                color="#1A73A8"
-                                defaultOpen={true}
-                                badge={`${milestones.filter(m => m.completed).length}/${milestones.length}`}
-                            >
-                                <MilestoneChecklist
-                                    milestones={milestones}
-                                    phasedPlan={goalData.phasedPlan}
-                                    isEditing={isEditing}
-                                    onToggle={handleToggleMilestone}
-                                    onUpdateTitle={handleUpdateMilestoneTitle}
-                                    onUpdateNotes={handleUpdateMilestoneNotes}
-                                    onAdd={handleAddMilestone}
-                                    onRemove={handleRemoveMilestone}
-                                />
-                            </CollapsibleCard>
-                        ) : canGenerateMilestones ? (
+                        {/* Generate milestones CTA for legacy AI goals without milestones */}
+                        {canGenerateMilestones ? (
                             /* CTA for legacy goals without milestones */
                             <div className="bg-white rounded-xl shadow-sm border-2 border-dashed border-[#1A73A8]/30 p-6">
                                 <div className="flex items-start gap-4">
