@@ -275,3 +275,84 @@ export async function GET(request: NextRequest) {
         );
     }
 }
+
+// POST - Create a new participant
+export async function POST(request: NextRequest) {
+    try {
+        const session = await getSession();
+
+        if (!session?.user?.id) {
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401 }
+            );
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+
+        if (!userId) {
+            return NextResponse.json(
+                { error: 'User not found' },
+                { status: 404 }
+            );
+        }
+
+        const body = await request.json();
+        const {
+            organization_id, first_name, last_name, preferred_name,
+            date_of_birth, gender, email, phone,
+            address_line1, address_line2, city, state, zip,
+            emergency_contact_name, emergency_contact_phone, emergency_contact_relationship,
+            referral_source, internal_notes, is_reentry_participant, primary_pss_id
+        } = body;
+
+        if (!organization_id || !first_name || !last_name) {
+            return NextResponse.json(
+                { error: 'organization_id, first_name, and last_name are required' },
+                { status: 400 }
+            );
+        }
+
+        const result = await sql`
+            INSERT INTO participants (
+                organization_id, first_name, last_name, preferred_name,
+                date_of_birth, gender, email, phone,
+                address_line1, address_line2, city, state, zip,
+                emergency_contact_name, emergency_contact_phone, emergency_contact_relationship,
+                intake_date, referral_source, internal_notes, status,
+                primary_pss_id
+            ) VALUES (
+                ${organization_id}::uuid,
+                ${first_name},
+                ${last_name},
+                ${preferred_name || null},
+                ${date_of_birth || null},
+                ${gender || null},
+                ${email || null},
+                ${phone || null},
+                ${address_line1 || null},
+                ${address_line2 || null},
+                ${city || null},
+                ${state || null},
+                ${zip || null},
+                ${emergency_contact_name || null},
+                ${emergency_contact_phone || null},
+                ${emergency_contact_relationship || null},
+                NOW(),
+                ${referral_source || null},
+                ${internal_notes || null},
+                'active',
+                ${primary_pss_id || userId}::uuid
+            )
+            RETURNING *
+        `;
+
+        return NextResponse.json({ success: true, participant: result[0] });
+    } catch (error) {
+        console.error('Error creating participant:', error);
+        return NextResponse.json(
+            { error: 'Failed to create participant' },
+            { status: 500 }
+        );
+    }
+}
