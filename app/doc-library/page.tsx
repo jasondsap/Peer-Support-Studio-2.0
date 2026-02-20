@@ -289,7 +289,7 @@ export default function DocLibraryPage() {
     });
 
     // Get unique categories
-    const categories = ['all', ...new Set(documents.map(d => d.category))];
+    const categories = ['all', ...Array.from(new Set(documents.map(d => d.category)))];
 
     if (status === 'loading' || loadingDocs) {
         return (
