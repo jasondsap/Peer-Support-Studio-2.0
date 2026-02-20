@@ -8,6 +8,7 @@ import { generateLessonPDF } from '../utils/generatePDF';
 import { 
     ArrowLeft,
     ChevronRight,
+    ChevronDown,
     Loader2,
     Users,
     User,
@@ -21,6 +22,7 @@ import {
     Presentation,
     MessageCircle,
     BookOpen,
+    ShieldCheck,
 } from 'lucide-react';
 
 function LessonBuilderContent() {
@@ -42,6 +44,7 @@ function LessonBuilderContent() {
     const [generatedLesson, setGeneratedLesson] = useState<any>(null);
     const [error, setError] = useState('');
     const [allyResetTrigger, setAllyResetTrigger] = useState(0);
+    const [sourcesOpen, setSourcesOpen] = useState(false);
 
     // Check if Ally should open automatically
     const openAlly = searchParams.get('openAlly') === 'true';
@@ -189,6 +192,7 @@ function LessonBuilderContent() {
         setTopic('');
         setGeneratedLesson(null);
         setError('');
+        setSourcesOpen(false);
         setAllyResetTrigger(prev => prev + 1);
     };
 
@@ -561,6 +565,43 @@ function LessonBuilderContent() {
                                         ))}
                                     </ul>
                                 </section>
+
+                                {/* Evidence Sources — collapsible */}
+                                {generatedLesson.sourcesCited && generatedLesson.sourcesCited.length > 0 && (
+                                    <section className="border-t border-gray-200 pt-6">
+                                        <button
+                                            onClick={() => setSourcesOpen(!sourcesOpen)}
+                                            className="flex items-center gap-2 text-sm font-semibold text-[#0E2235] hover:text-[#1A73A8] transition-colors w-full"
+                                        >
+                                            <ShieldCheck className="w-4 h-4 text-[#30B27A]" />
+                                            <span>Evidence Sources ({generatedLesson.sourcesCited.length})</span>
+                                            <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${sourcesOpen ? 'rotate-180' : ''}`} />
+                                        </button>
+                                        {sourcesOpen && (
+                                            <div className="mt-3 bg-gray-50 rounded-lg p-4">
+                                                <p className="text-xs text-gray-500 mb-3">
+                                                    This lesson was built using the following authoritative sources from our knowledge base.
+                                                </p>
+                                                <ul className="space-y-2">
+                                                    {generatedLesson.sourcesCited.map((source: any, idx: number) => (
+                                                        <li key={idx} className="flex items-start gap-2 text-sm">
+                                                            <span className="text-[#30B27A] font-bold mt-0.5">✓</span>
+                                                            <div>
+                                                                <span className="font-medium text-[#0E2235]">
+                                                                    {source.doc}, {source.section}
+                                                                    {source.pages && <span className="text-gray-500"> — pp. {source.pages}</span>}
+                                                                </span>
+                                                                {source.usage && (
+                                                                    <span className="text-gray-500"> — {source.usage}</span>
+                                                                )}
+                                                            </div>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </section>
+                                )}
                             </div>
                         </div>
 

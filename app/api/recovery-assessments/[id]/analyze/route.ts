@@ -1,17 +1,12 @@
 // app/api/recovery-assessments/[id]/analyze/route.ts
-// AI analysis endpoint for recovery assessments
+// AI analysis endpoint for recovery assessments — now via RAG service
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { neon } from '@neondatabase/serverless';
-import OpenAI from 'openai';
 
 const sql = neon(process.env.DATABASE_URL!);
-
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
 
 export async function POST(
     request: NextRequest,
@@ -21,6 +16,16 @@ export async function POST(
         const session = await getServerSession(authOptions);
         if (!session?.user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const ragApiUrl = process.env.RAG_API_URL;
+        const ragApiKey = process.env.RAG_API_KEY;
+
+        if (!ragApiUrl || !ragApiKey) {
+            return NextResponse.json(
+                { error: 'RAG service not configured' },
+                { status: 500 }
+            );
         }
 
         const assessmentId = params.id;
@@ -41,64 +46,60 @@ export async function POST(
         const maxScore = assessment.assessment_type === 'mirc28' ? 140 : 60;
         const percentage = Math.round((totalScore / maxScore) * 100);
 
-        // Build prompt for AI analysis
-        const prompt = `You are a recovery capital assessment analyst helping peer support specialists understand their participants' recovery resources.
+        // Build query and context for RAG
+        const query = `Analyze this ${assessment.assessment_type?.toUpperCase() || 'BARC-10'} recovery capital assessment. ` +
+            `Total score: ${totalScore}/${maxScore} (${percentage}%). ` +
+            `Social Capital: ${domainScores.social?.percentage || domainScores.social || 'N/A'}%, ` +
+            `Physical Capital: ${domainScores.physical?.percentage || domainScores.physical || 'N/A'}%, ` +
+            `Human Capital: ${domainScores.human?.percentage || domainScores.human || 'N/A'}%, ` +
+            `Cultural Capital: ${domainScores.cultural?.percentage || domainScores.cultural || 'N/A'}%.`;
 
-Assessment Type: ${assessment.assessment_type?.toUpperCase() || 'BARC-10'}
-Total Score: ${totalScore}/${maxScore} (${percentage}%)
-
-Domain Scores:
-- Social Capital: ${domainScores.social?.percentage || domainScores.social || 'N/A'}%
-- Physical Capital: ${domainScores.physical?.percentage || domainScores.physical || 'N/A'}%
-- Human Capital: ${domainScores.human?.percentage || domainScores.human || 'N/A'}%
-- Cultural Capital: ${domainScores.cultural?.percentage || domainScores.cultural || 'N/A'}%
-
-Participant Responses:
-${JSON.stringify(responses, null, 2)}
-
-Please provide a comprehensive analysis in the following JSON format:
-{
-    "overallSummary": "2-3 sentence summary of overall recovery capital strength",
-    "strengthsHighlight": {
-        "title": "Key Strengths",
-        "items": ["strength 1", "strength 2", "strength 3"]
-    },
-    "growthOpportunities": {
-        "title": "Growth Opportunities", 
-        "items": ["opportunity 1", "opportunity 2", "opportunity 3"]
-    },
-    "recommendedGoals": [
-        {
-            "domain": "domain name",
-            "title": "Goal title",
-            "description": "Why this goal matters",
-            "actionSteps": ["step 1", "step 2", "step 3"],
-            "whyItMatters": "Connection to recovery"
-        }
-    ],
-    "weeklyChallenge": {
-        "title": "This Week's Challenge",
-        "description": "A specific, achievable challenge for this week",
-        "domain": "related domain"
-    },
-    "encouragement": "A brief, personalized encouraging message"
-}
-
-Focus on strengths-based language and practical, achievable goals. Keep recommendations specific and actionable.`;
-
-        const completion = await openai.chat.completions.create({
-            model: 'gpt-4-turbo-preview',
-            messages: [{ role: 'user', content: prompt }],
-            response_format: { type: 'json_object' },
-            temperature: 0.7,
+        const ragResponse = await fetch(ragApiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': ragApiKey,
+            },
+            body: JSON.stringify({
+                module: 'recovery_capital',
+                query,
+                context: {
+                    participant_name: assessment.participant_name || 'Self-Assessment',
+                    assessment_type: assessment.assessment_type,
+                    total_score: totalScore,
+                    max_score: maxScore,
+                    percentage,
+                    domain_scores: {
+                        social: domainScores.social?.percentage || domainScores.social,
+                        physical: domainScores.physical?.percentage || domainScores.physical,
+                        human: domainScores.human?.percentage || domainScores.human,
+                        cultural: domainScores.cultural?.percentage || domainScores.cultural,
+                    },
+                    responses,
+                },
+            }),
         });
 
-        const analysisContent = completion.choices[0]?.message?.content;
-        if (!analysisContent) {
-            return NextResponse.json({ error: 'No analysis generated' }, { status: 500 });
+        if (!ragResponse.ok) {
+            const errorData = await ragResponse.json().catch(() => ({}));
+            console.error('RAG service error:', ragResponse.status, errorData);
+            return NextResponse.json(
+                { error: errorData.error || 'RAG analysis failed' },
+                { status: 500 }
+            );
         }
 
-        const analysis = JSON.parse(analysisContent);
+        const ragData = await ragResponse.json();
+
+        // Parse JSON from RAG answer
+        let answerText = ragData.answer.trim();
+        if (answerText.startsWith('```json')) {
+            answerText = answerText.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+        } else if (answerText.startsWith('```')) {
+            answerText = answerText.replace(/^```\n?/, '').replace(/\n?```$/, '');
+        }
+
+        const analysis = JSON.parse(answerText);
 
         // Save analysis to database
         await sql`

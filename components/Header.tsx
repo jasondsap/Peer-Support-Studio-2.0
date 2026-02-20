@@ -11,6 +11,7 @@ import {
     LayoutDashboard,
     ChevronDown,
     Settings,
+    BookOpen,
     Plus
 } from 'lucide-react';
 import UserButton from './UserButton';
@@ -127,7 +128,14 @@ export default function Header() {
                             >
                                 <Users className="w-4 h-4" />
                                 Participants
-                            </Link>                      
+                            </Link> 
+                            <Link
+                                href="/doc-library"
+                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-[#1A73A8] hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                <BookOpen className="w-4 h-4" />
+                                Library
+                            </Link>
                             <Link
                                 href="/help"
                                 className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-[#1A73A8] hover:bg-gray-100 rounded-lg transition-colors"

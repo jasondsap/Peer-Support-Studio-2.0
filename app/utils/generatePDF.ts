@@ -19,6 +19,13 @@ interface ParticipantHandout {
     supportResources: string[];
 }
 
+interface SourceCitation {
+    doc: string;
+    section: string;
+    pages?: string;
+    usage?: string;
+}
+
 interface LessonPlan {
     title: string;
     overview: string;
@@ -29,6 +36,7 @@ interface LessonPlan {
     facilitatorNotes: string[];
     resources: string[];
     participantHandout: ParticipantHandout;
+    sourcesCited?: SourceCitation[];
 }
 
 export function generateLessonPDF(lessonPlan: LessonPlan) {
@@ -138,6 +146,50 @@ export function generateLessonPDF(lessonPlan: LessonPlan) {
 
     // Resources
     addSection('Additional Resources', lessonPlan.resources);
+
+    // Evidence Sources (if available from RAG)
+    if (lessonPlan.sourcesCited && lessonPlan.sourcesCited.length > 0) {
+        addSpace(8);
+
+        // Divider line
+        doc.setDrawColor(200, 200, 200);
+        doc.line(margin, yPosition, margin + maxWidth, yPosition);
+        yPosition += 8;
+
+        // Section header with green accent
+        doc.setFillColor(recoveryGreen.r, recoveryGreen.g, recoveryGreen.b);
+        doc.rect(margin - 5, yPosition - 5, 3, 10, 'F');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(recoveryGreen.r, recoveryGreen.g, recoveryGreen.b);
+        doc.text('Evidence Sources', margin + 2, yPosition);
+        yPosition += lineHeight;
+        doc.setTextColor(0, 0, 0);
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'italic');
+        doc.text('This lesson was built using the following authoritative sources.', margin, yPosition);
+        yPosition += lineHeight;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        lessonPlan.sourcesCited.forEach((source) => {
+            if (yPosition > pageHeight - margin) {
+                doc.addPage();
+                yPosition = margin;
+            }
+
+            let citation = `${source.doc}, ${source.section}`;
+            if (source.pages) citation += ` — pp. ${source.pages}`;
+            if (source.usage) citation += ` — ${source.usage}`;
+
+            doc.setTextColor(recoveryGreen.r, recoveryGreen.g, recoveryGreen.b);
+            doc.text('✓', margin, yPosition);
+            doc.setTextColor(0, 0, 0);
+            doc.text(citation, margin + 8, yPosition);
+            yPosition += lineHeight - 1;
+        });
+    }
 
     // ========================================
     // PARTICIPANT HANDOUT (NEW PAGE)

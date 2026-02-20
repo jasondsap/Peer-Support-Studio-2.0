@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import {
     X, Users, Home, Brain, Heart, Download, Trash2,
-    Sparkles, Loader2, Target, ChevronDown, ChevronUp
+    Sparkles, Loader2, Target, ChevronDown, ChevronUp, ShieldCheck
 } from 'lucide-react';
 
 const DOMAIN_INFO = {
@@ -53,6 +53,7 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
     const [savingNotes, setSavingNotes] = useState(false);
     const [analyzing, setAnalyzing] = useState(false);
     const [analysis, setAnalysis] = useState(assessment.ai_analysis);
+    const [sourcesOpen, setSourcesOpen] = useState(false);
 
     const maxScore = assessment.assessment_type === 'mirc28' ? 140 : 60;
     const percentage = Math.round((assessment.total_score / maxScore) * 100);
@@ -384,6 +385,41 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
                                         <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl p-4 text-white">
                                             <h3 className="font-semibold mb-2">{analysis.weeklyChallenge.title}</h3>
                                             <p>{analysis.weeklyChallenge.description}</p>
+                                        </div>
+                                    )}
+
+                                    {/* Evidence Sources */}
+                                    {analysis.sourcesCited && analysis.sourcesCited.length > 0 && (
+                                        <div className="border border-gray-200 rounded-xl overflow-hidden">
+                                            <button
+                                                onClick={() => setSourcesOpen(!sourcesOpen)}
+                                                className="flex items-center gap-2 w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                                            >
+                                                <ShieldCheck className="w-4 h-4 text-green-500" />
+                                                <span className="text-sm font-semibold text-gray-800">
+                                                    Evidence Sources ({analysis.sourcesCited.length})
+                                                </span>
+                                                <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${sourcesOpen ? 'rotate-180' : ''}`} />
+                                            </button>
+                                            {sourcesOpen && (
+                                                <div className="px-4 py-3 bg-white">
+                                                    <p className="text-xs text-gray-500 mb-2">
+                                                        This analysis was built using the following authoritative sources.
+                                                    </p>
+                                                    <ul className="space-y-1.5">
+                                                        {analysis.sourcesCited.map((source: any, idx: number) => (
+                                                            <li key={idx} className="flex items-start gap-2 text-sm">
+                                                                <span className="text-green-500 font-bold mt-0.5">✓</span>
+                                                                <span className="text-gray-700">
+                                                                    <span className="font-medium">{source.doc}, {source.section}</span>
+                                                                    {source.pages && <span className="text-gray-500"> — pp. {source.pages}</span>}
+                                                                    {source.usage && <span className="text-gray-500"> — {source.usage}</span>}
+                                                                </span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </>

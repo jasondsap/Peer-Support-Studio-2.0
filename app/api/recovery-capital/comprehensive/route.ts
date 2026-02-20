@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import OpenAI from 'openai';
 import { authOptions } from '@/lib/auth';
 import { query } from '@/lib/db';
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
-
-// MIRC-28 Domain structure
+// MIRC-28 Domain structure (pure computation — stays in route)
 const DOMAINS = {
     social: {
         name: "Social Capital",
@@ -63,9 +58,7 @@ const QUESTION_TEXT: { [key: number]: string } = {
     28: "I feel connected to my community."
 };
 
-interface Answers {
-    [key: string]: number;
-}
+interface Answers { [key: string]: number; }
 
 interface Scores {
     total: number;
@@ -103,13 +96,18 @@ function getScoreInterpretation(percentage: number): { level: string; descriptio
     }
 }
 
+// ─── AI Analysis via RAG service ───
+
 async function generateComprehensiveAnalysis(
-    answers: Answers, 
-    scores: Scores, 
+    answers: Answers,
+    scores: Scores,
     participantName?: string
 ) {
+    const ragApiUrl = process.env.RAG_API_URL;
+    const ragApiKey = process.env.RAG_API_KEY;
     const interpretation = getScoreInterpretation(scores.percentage);
 
+    // Build domain details for context
     const domainDetails = Object.entries(DOMAINS).map(([domainKey, domain]) => {
         const domainScore = scores.domains[domainKey as keyof typeof scores.domains];
         const questionDetails = domain.questions.map(qNum => {
@@ -118,14 +116,11 @@ async function generateComprehensiveAnalysis(
             const effectiveScore = isReverse ? (5 - rawAnswer) : rawAnswer;
             return {
                 question: QUESTION_TEXT[qNum],
-                rawAnswer,
-                effectiveScore,
-                isReverse,
+                rawAnswer, effectiveScore, isReverse,
                 isStrength: effectiveScore >= 3,
                 isChallenge: effectiveScore <= 2
             };
         });
-
         return {
             domain: domainKey,
             name: domain.name,
@@ -136,122 +131,116 @@ async function generateComprehensiveAnalysis(
         };
     });
 
-    const systemPrompt = `You are a Recovery Capital Coach providing comprehensive analysis for a 28-item MIRC assessment inside "Peer Support Studio", a digital workspace for Peer Support Specialists.
+    // If RAG not configured, use static fallback
+    if (!ragApiUrl || !ragApiKey) {
+        console.warn('RAG service not configured — using static fallback');
+        return buildFallbackAnalysis(scores, interpretation, domainDetails);
+    }
 
-ASSESSMENT RESULTS:
-${participantName ? `Participant: ${participantName}` : 'Self-Assessment'}
-
-OVERALL:
-- Total Score: ${scores.total}/${scores.maxScore} (${scores.percentage}%)
-- Level: ${interpretation.level}
-
-DOMAIN BREAKDOWN:
-${domainDetails.map(d => `
-${d.name.toUpperCase()} (${d.score.percentage}%):
-Strengths: ${d.strengths.length > 0 ? d.strengths.join('; ') : '(none at highest levels)'}
-Challenges: ${d.challenges.length > 0 ? d.challenges.join('; ') : '(none at lowest levels)'}
-`).join('\n')}
-
-Create a comprehensive, actionable analysis. Return ONLY valid JSON:
-
-{
-    "overallSummary": "3-4 sentences summarizing the full recovery capital profile.",
-    "scoreInterpretation": {
-        "level": "${interpretation.level}",
-        "description": "2-3 sentences interpreting what this score means."
-    },
-    "domainInsights": [
-        {
-            "domain": "social",
-            "domainName": "Social Capital",
-            "summary": "2-3 sentences analyzing their social capital.",
-            "strengths": ["Specific strength 1", "Strength 2"],
-            "growthAreas": ["Growth area 1", "Growth area 2"]
-        }
-    ],
-    "prioritizedGoals": [
-        {
-            "domain": "domain name",
-            "title": "Clear, actionable goal title",
-            "description": "2-3 sentences describing the goal",
-            "actionSteps": ["Step 1", "Step 2", "Step 3"],
-            "whyItMatters": "1-2 sentences connecting this goal to recovery capital",
-            "priority": "high|medium|low"
-        }
-    ],
-    "immediateActions": ["Action 1", "Action 2", "Action 3"],
-    "weeklyPlan": {
-        "week1": ["Focus area 1", "Action"],
-        "week2": ["Build on week 1"],
-        "week3": ["Expand efforts"],
-        "week4": ["Consolidate gains"]
-    },
-    "encouragement": "3-4 sentences of personalized encouragement."
-}
-
-Be warm, hopeful, and specific. Use peer support language throughout.`;
+    const ragQuery = `Analyze this MIRC-28 recovery capital assessment and provide a comprehensive, ` +
+        `actionable interpretation. Overall score: ${scores.percentage}% (${interpretation.level}). ` +
+        `Social Capital: ${scores.domains.social.percentage}%, ` +
+        `Physical Capital: ${scores.domains.physical.percentage}%, ` +
+        `Human Capital: ${scores.domains.human.percentage}%, ` +
+        `Cultural Capital: ${scores.domains.cultural.percentage}%.`;
 
     try {
-        const response = await openai.chat.completions.create({
-            model: 'gpt-4o',
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: 'Generate the comprehensive recovery capital analysis.' }
-            ],
-            max_tokens: 3500,
-            temperature: 0.7,
+        const ragResponse = await fetch(ragApiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': ragApiKey,
+            },
+            body: JSON.stringify({
+                module: 'recovery_capital',
+                query: ragQuery,
+                context: {
+                    participant_name: participantName || 'Self-Assessment',
+                    total_score: scores.total,
+                    max_score: scores.maxScore,
+                    percentage: scores.percentage,
+                    interpretation_level: interpretation.level,
+                    interpretation_description: interpretation.description,
+                    domain_details: domainDetails.map(d => ({
+                        domain: d.domain,
+                        name: d.name,
+                        percentage: d.score.percentage,
+                        strengths: d.strengths,
+                        challenges: d.challenges,
+                    })),
+                },
+            }),
         });
 
-        const content = response.choices[0]?.message?.content || '';
-        let cleanContent = content.trim();
-        
-        if (cleanContent.startsWith('```json')) {
-            cleanContent = cleanContent.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-        } else if (cleanContent.startsWith('```')) {
-            cleanContent = cleanContent.replace(/^```\n?/, '').replace(/\n?```$/, '');
+        if (!ragResponse.ok) {
+            const errorData = await ragResponse.json().catch(() => ({}));
+            console.error('RAG service error:', ragResponse.status, errorData);
+            throw new Error(errorData.error || `RAG service returned ${ragResponse.status}`);
         }
 
-        return JSON.parse(cleanContent);
+        const ragData = await ragResponse.json();
+
+        let answerText = ragData.answer.trim();
+        if (answerText.startsWith('```json')) {
+            answerText = answerText.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+        } else if (answerText.startsWith('```')) {
+            answerText = answerText.replace(/^```\n?/, '').replace(/\n?```$/, '');
+        }
+
+        // sourcesCited is embedded in the analysis JSON by the module config
+        // It gets stored in ai_analysis and flows to modal/PDF automatically
+        return JSON.parse(answerText);
+
     } catch (e) {
-        console.error('Failed to generate/parse AI analysis:', e);
-        return {
-            overallSummary: `Your assessment reveals ${interpretation.level.toLowerCase()} with a total score of ${scores.total} out of ${scores.maxScore}. ${interpretation.description}`,
-            scoreInterpretation: interpretation,
-            domainInsights: domainDetails.map(d => ({
-                domain: d.domain,
-                domainName: d.name,
-                summary: `Your ${d.name.toLowerCase()} score of ${d.score.percentage}% shows ${d.score.percentage >= 50 ? 'developing resources' : 'opportunities for growth'}.`,
-                strengths: d.strengths.slice(0, 3),
-                growthAreas: d.challenges.slice(0, 3)
-            })),
-            prioritizedGoals: [],
-            immediateActions: [
-                "Identify one small step in your lowest-scoring domain",
-                "Reach out to one supportive person",
-                "Write down three things you're grateful for"
-            ],
-            weeklyPlan: {
-                week1: ["Focus on your most immediate need"],
-                week2: ["Build on week 1 progress"],
-                week3: ["Add a goal in another domain"],
-                week4: ["Review and celebrate progress"]
-            },
-            encouragement: "Every step forward matters. You've taken an important step by completing this assessment."
-        };
+        console.error('Failed to generate/parse RAG analysis, using fallback:', e);
+        return buildFallbackAnalysis(scores, interpretation, domainDetails);
     }
 }
+
+// ─── Static fallback ───
+
+function buildFallbackAnalysis(
+    scores: Scores,
+    interpretation: { level: string; description: string },
+    domainDetails: any[]
+) {
+    return {
+        overallSummary: `Your assessment reveals ${interpretation.level.toLowerCase()} with a total score of ${scores.total} out of ${scores.maxScore}. ${interpretation.description}`,
+        scoreInterpretation: interpretation,
+        domainInsights: domainDetails.map(d => ({
+            domain: d.domain,
+            domainName: d.name,
+            summary: `Your ${d.name.toLowerCase()} score of ${d.score.percentage}% shows ${d.score.percentage >= 50 ? 'developing resources' : 'opportunities for growth'}.`,
+            strengths: d.strengths.slice(0, 3),
+            growthAreas: d.challenges.slice(0, 3)
+        })),
+        prioritizedGoals: [],
+        immediateActions: [
+            "Identify one small step in your lowest-scoring domain",
+            "Reach out to one supportive person",
+            "Write down three things you're grateful for"
+        ],
+        weeklyPlan: {
+            week1: ["Focus on your most immediate need"],
+            week2: ["Build on week 1 progress"],
+            week3: ["Add a goal in another domain"],
+            week4: ["Review and celebrate progress"]
+        },
+        encouragement: "Every step forward matters. You've taken an important step by completing this assessment."
+    };
+}
+
+// ─── POST handler ───
 
 export async function POST(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
-        
         const body = await request.json();
         const { action, answers, scores, participantName, organization_id, participant_id } = body;
 
         if (action === 'analyze') {
             const analysis = await generateComprehensiveAnalysis(answers, scores, participantName);
 
-            // Save to database if user is authenticated and org provided
             let assessmentId = null;
             if (session?.user && organization_id) {
                 const userResult = await query(
@@ -261,7 +250,6 @@ export async function POST(request: NextRequest) {
 
                 if (userResult.length > 0) {
                     const userId = userResult[0].id;
-                    
                     const result = await query(
                         `INSERT INTO recovery_assessments (
                             user_id, organization_id, participant_id, participant_name,
@@ -269,26 +257,19 @@ export async function POST(request: NextRequest) {
                         ) VALUES ($1, $2, $3, $4, 'mirc28', $5, $6, $7, $8)
                         RETURNING id`,
                         [
-                            userId,
-                            organization_id,
-                            participant_id || null,
-                            participantName || null,
+                            userId, organization_id,
+                            participant_id || null, participantName || null,
                             scores.total,
                             JSON.stringify(scores.domains),
                             JSON.stringify(answers),
                             JSON.stringify(analysis)
                         ]
                     ) as { id: string }[];
-                    
                     assessmentId = result[0]?.id;
                 }
             }
 
-            return NextResponse.json({
-                success: true,
-                analysis,
-                assessmentId
-            });
+            return NextResponse.json({ success: true, analysis, assessmentId });
         }
 
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

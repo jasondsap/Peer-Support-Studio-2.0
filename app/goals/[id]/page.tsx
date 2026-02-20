@@ -49,6 +49,7 @@ import {
     Check,
     Circle,
     RotateCcw,
+    ShieldCheck,
 } from 'lucide-react';
 
 import type { Milestone } from '@/app/lib/milestoneUtils';
@@ -136,6 +137,7 @@ interface GeneratedGoalData {
         sections: { title: string; items: string[] }[];
     };
     successVision?: string;
+    sourcesCited?: { doc: string; section: string; pages?: string; usage?: string }[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -476,6 +478,9 @@ export default function GoalDetailPage() {
 
     // Delete confirmation
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+    // Evidence sources toggle
+    const [sourcesOpen, setSourcesOpen] = useState(false);
 
     // Milestone save debounce (for checkbox clicks and notes — auto-save)
     const [pendingMilestoneSave, setPendingMilestoneSave] = useState(false);
@@ -1235,6 +1240,45 @@ export default function GoalDetailPage() {
                                     </div>
                                 </div>
                             </CollapsibleCard>
+                        )}
+
+                        {/* Evidence Sources */}
+                        {goalData.sourcesCited && goalData.sourcesCited.length > 0 && !isEditing && (
+                            <div className="border border-gray-200 rounded-xl overflow-hidden">
+                                <button
+                                    onClick={() => setSourcesOpen(!sourcesOpen)}
+                                    className="flex items-center gap-2 w-full px-5 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                                >
+                                    <ShieldCheck className="w-4 h-4 text-[#30B27A]" />
+                                    <span className="text-sm font-semibold text-[#0E2235]">
+                                        Evidence Sources ({goalData.sourcesCited.length})
+                                    </span>
+                                    <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${sourcesOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                                {sourcesOpen && (
+                                    <div className="px-5 py-4 bg-white">
+                                        <p className="text-xs text-gray-500 mb-3">
+                                            This goal plan was built using the following authoritative sources from our knowledge base.
+                                        </p>
+                                        <ul className="space-y-2">
+                                            {goalData.sourcesCited.map((source, idx) => (
+                                                <li key={idx} className="flex items-start gap-2 text-sm">
+                                                    <span className="text-[#30B27A] font-bold mt-0.5">✓</span>
+                                                    <div>
+                                                        <span className="font-medium text-[#0E2235]">
+                                                            {source.doc}, {source.section}
+                                                            {source.pages && <span className="text-gray-500"> — pp. {source.pages}</span>}
+                                                        </span>
+                                                        {source.usage && (
+                                                            <span className="text-gray-500"> — {source.usage}</span>
+                                                        )}
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </div>
                 )}

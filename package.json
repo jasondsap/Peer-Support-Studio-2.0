@@ -13,6 +13,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "@aws-sdk/client-cognito-identity-provider": "^3.975.0",
+    "@aws-sdk/client-s3": "^3.994.0",
+    "@aws-sdk/s3-request-presigner": "^3.994.0",
     "@humeai/voice-react": "^0.2.12",
     "@neondatabase/serverless": "^0.10.4",
     "assemblyai": "^4.22.1",

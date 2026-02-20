@@ -46,6 +46,7 @@ interface GoalPDFData {
             category?: string;
             sections?: { title: string; items: string[] }[];
         };
+        sourcesCited?: { doc: string; section: string; pages?: string; usage?: string }[];
     } | null;
 }
 
@@ -617,6 +618,56 @@ export function generateGoalPDF(data: GoalPDFData) {
         });
 
         yPosition += visionHeight + 8;
+    }
+
+    // ========================================
+    // EVIDENCE SOURCES (if from RAG)
+    // ========================================
+    if (data.goalData?.sourcesCited && data.goalData.sourcesCited.length > 0) {
+        checkNewPage(40);
+
+        // Divider line
+        doc.setDrawColor(200, 200, 200);
+        doc.line(margin, yPosition, margin + maxWidth, yPosition);
+        yPosition += 8;
+
+        // Section header with green accent
+        doc.setFillColor(green.r, green.g, green.b);
+        doc.rect(margin - 5, yPosition - 5, 3, 10, 'F');
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(green.r, green.g, green.b);
+        doc.text('Evidence Sources', margin + 2, yPosition);
+        yPosition += lineHeight;
+        doc.setTextColor(0, 0, 0);
+
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(128, 128, 128);
+        doc.text('This goal plan was built using the following authoritative sources.', margin, yPosition);
+        yPosition += lineHeight;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        data.goalData.sourcesCited.forEach((source) => {
+            checkNewPage(8);
+
+            let citation = `${source.doc}, ${source.section}`;
+            if (source.pages) citation += ` — pp. ${source.pages}`;
+            if (source.usage) citation += ` — ${source.usage}`;
+
+            doc.setTextColor(green.r, green.g, green.b);
+            doc.text('✓', margin, yPosition);
+            doc.setTextColor(80, 80, 80);
+            const citationLines = doc.splitTextToSize(citation, maxWidth - 8);
+            citationLines.forEach((line: string) => {
+                doc.text(line, margin + 8, yPosition);
+                yPosition += 5;
+            });
+            yPosition += 1;
+        });
+
+        addSpace(5);
     }
 
     // ========================================
