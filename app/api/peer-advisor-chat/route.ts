@@ -5,6 +5,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionWithUserId } from '@/lib/auth';
 import { sql } from '@/lib/db';
 
+// Map RAG doc_id prefixes to display labels
+const DOC_LABELS: Record<string, string> = {
+    'samhsa_tip64': 'TIP 64',
+    'samhsa_tip57': 'TIP 57',
+    'samhsa_tip35': 'TIP 35',
+    'samhsa_tip42': 'TIP 42',
+    'samhsa_tip63': 'TIP 63',
+    'samhsa_tip65': 'TIP 65',
+    'samhsa_10_guiding_principles': '10 Principles',
+    'samhsa_core_competencies': 'Peer Competencies',
+    'naadac_code_of_ethics': 'NAADAC Ethics',
+};
+
+function getDocLabel(docId: string): string {
+    for (const [key, label] of Object.entries(DOC_LABELS)) {
+        if (docId.startsWith(key)) return label;
+    }
+    return docId;
+}
+
 export async function POST(req: NextRequest) {
     try {
         // Auth
@@ -103,30 +123,7 @@ export async function POST(req: NextRequest) {
 
         const ragData = await ragResponse.json();
 
-        // Debug: log what the RAG service returns for sources
-        console.log('RAG response sources:', JSON.stringify(ragData.sources?.slice(0, 2)));
-
         const answerText = ragData.answer || "I wasn't able to generate a response. Please try rephrasing your question.";
-
-        // Map RAG source format to frontend citation format
-        const DOC_LABELS: Record<string, string> = {
-            'samhsa_tip64': 'TIP 64',
-            'samhsa_tip57': 'TIP 57',
-            'samhsa_tip35': 'TIP 35',
-            'samhsa_tip42': 'TIP 42',
-            'samhsa_tip63': 'TIP 63',
-            'samhsa_tip65': 'TIP 65',
-            'samhsa_10_guiding_principles': '10 Principles',
-            'samhsa_core_competencies': 'Peer Competencies',
-            'naadac_code_of_ethics': 'NAADAC Ethics',
-        };
-
-        function getDocLabel(docId: string): string {
-            for (const [key, label] of Object.entries(DOC_LABELS)) {
-                if (docId.startsWith(key)) return label;
-            }
-            return docId;
-        }
 
         const citations = (ragData.sources || [])
             .map((s: any) => ({
