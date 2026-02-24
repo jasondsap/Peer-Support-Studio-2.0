@@ -5,6 +5,7 @@
 'use client';
 
 import { useState, useRef, useEffect, FormEvent } from 'react';
+import ReactMarkdown from 'react-markdown';
 import {
     MessageSquare,
     Send,
@@ -189,11 +190,8 @@ function ChatMessage({ message }: { message: Message }) {
                         {isUser ? (
                             <p className="text-sm leading-relaxed">{message.content}</p>
                         ) : (
-                            <div className="text-sm text-gray-700 leading-relaxed space-y-3">
-                                {message.content.split('\n').map((p, i) => {
-                                    if (!p.trim()) return null;
-                                    return <p key={i}>{p}</p>;
-                                })}
+                            <div className="text-sm text-gray-700 leading-relaxed prose prose-sm max-w-none prose-headings:text-[#0E2235] prose-headings:mt-4 prose-headings:mb-2 prose-strong:text-gray-800 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
+                                <ReactMarkdown>{message.content}</ReactMarkdown>
                             </div>
                         )}
                     </div>

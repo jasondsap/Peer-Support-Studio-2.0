@@ -17,6 +17,7 @@
     "@aws-sdk/s3-request-presigner": "^3.994.0",
     "@humeai/voice-react": "^0.2.12",
     "@neondatabase/serverless": "^0.10.4",
+    "@tailwindcss/typography": "^0.5.19",
     "assemblyai": "^4.22.1",
     "date-fns": "^3.0.0",
     "hum": "^0.0.0",
@@ -28,6 +29,7 @@
     "openai": "^6.16.0",
     "react": "^18",
     "react-dom": "^18",
+    "react-markdown": "^10.1.0",
     "resend": "^6.7.0",
     "zod": "^3.22.0"
   },
