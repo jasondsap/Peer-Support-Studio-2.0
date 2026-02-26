@@ -73,6 +73,7 @@ export default function PlanServicePage() {
     const [setting, setSetting] = useState('outpatient');
     const [serviceCode, setServiceCode] = useState('');
     const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
+    const [selectedParticipants, setSelectedParticipants] = useState<Participant[]>([]);
     const [lessonId, setLessonId] = useState<string | null>(null);
     const [goalId, setGoalId] = useState<string | null>(null);
     const [notes, setNotes] = useState('');
@@ -196,23 +197,30 @@ export default function PlanServicePage() {
         setError(null);
 
         try {
+            const payload: any = {
+                action: 'create',
+                serviceType,
+                plannedDate,
+                plannedTime: plannedTime || null,
+                plannedDuration,
+                setting,
+                serviceCode: serviceCode || null,
+                lessonId,
+                goalId,
+                notes: notes || null,
+                status: submitForReview ? 'planned' : 'draft'
+            };
+
+            if (serviceType === 'group' && selectedParticipants.length > 0) {
+                payload.participantIds = selectedParticipants.map(p => p.id);
+            } else {
+                payload.participantId = selectedParticipant?.id || null;
+            }
+
             const res = await fetch('/api/service-log', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'create',
-                    serviceType,
-                    plannedDate,
-                    plannedTime: plannedTime || null,
-                    plannedDuration,
-                    setting,
-                    serviceCode: serviceCode || null,
-                    participantId: selectedParticipant?.id || null,
-                    lessonId,
-                    goalId,
-                    notes: notes || null,
-                    status: submitForReview ? 'planned' : 'draft'
-                })
+                body: JSON.stringify(payload)
             });
 
             const data = await res.json();
@@ -287,7 +295,10 @@ export default function PlanServicePage() {
                         </label>
                         <div className="flex gap-3">
                             <button
-                                onClick={() => setServiceType('individual')}
+                                onClick={() => {
+                                    setServiceType('individual');
+                                    setSelectedParticipants([]);
+                                }}
                                 className={`flex-1 p-4 rounded-xl border-2 transition-colors ${
                                     serviceType === 'individual'
                                         ? 'border-[#1A73A8] bg-[#1A73A8]/5'
@@ -304,7 +315,11 @@ export default function PlanServicePage() {
                                 </div>
                             </button>
                             <button
-                                onClick={() => setServiceType('group')}
+                                onClick={() => {
+                                    setServiceType('group');
+                                    setSelectedParticipant(null);
+                                    setParticipantSearch('');
+                                }}
                                 className={`flex-1 p-4 rounded-xl border-2 transition-colors ${
                                     serviceType === 'group'
                                         ? 'border-[#1A73A8] bg-[#1A73A8]/5'
@@ -386,38 +401,83 @@ export default function PlanServicePage() {
                     {/* Participant Selection */}
                     <div className="mb-6 relative">
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                            <User className="w-4 h-4 inline mr-1" />
-                            Participant (optional)
+                            {serviceType === 'group' ? (
+                                <><Users className="w-4 h-4 inline mr-1" /> Participants{selectedParticipants.length > 0 && (
+                                    <span className="ml-1.5 px-1.5 py-0.5 bg-[#1A73A8] text-white text-xs rounded-full">{selectedParticipants.length}</span>
+                                )}</>
+                            ) : (
+                                <><User className="w-4 h-4 inline mr-1" /> Participant <span className="text-gray-400 font-normal">(optional)</span></>
+                            )}
                         </label>
+
+                        {/* Group mode: show selected chips */}
+                        {serviceType === 'group' && selectedParticipants.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                {selectedParticipants.map((p) => (
+                                    <span
+                                        key={p.id}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1A73A8]/10 text-[#1A73A8] rounded-full text-sm font-medium"
+                                    >
+                                        <span className="w-5 h-5 rounded-full bg-[#1A73A8]/20 flex items-center justify-center text-[10px] font-bold">
+                                            {p.first_name?.[0]}{p.last_name?.[0]}
+                                        </span>
+                                        {getParticipantDisplayName(p)}
+                                        <button
+                                            onClick={() => setSelectedParticipants(prev => prev.filter(x => x.id !== p.id))}
+                                            className="ml-0.5 p-0.5 hover:bg-[#1A73A8]/20 rounded-full transition-colors"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+
                         <div className="flex items-center gap-2 border border-gray-300 rounded-lg px-4 py-2 focus-within:ring-2 focus-within:ring-[#1A73A8]">
                             <Search className="w-4 h-4 text-gray-400" />
-                            <input
-                                type="text"
-                                value={selectedParticipant ? getParticipantDisplayName(selectedParticipant) : participantSearch}
-                                onChange={(e) => {
-                                    setParticipantSearch(e.target.value);
-                                    setShowParticipantDropdown(true);
-                                    setSelectedParticipant(null);
-                                }}
-                                onFocus={() => setShowParticipantDropdown(true)}
-                                placeholder="Search participants..."
-                                className="flex-1 bg-transparent border-none outline-none"
-                            />
-                            {selectedParticipant && (
-                                <button
-                                    onClick={() => {
-                                        setSelectedParticipant(null);
-                                        setParticipantSearch('');
+                            {serviceType === 'individual' ? (
+                                <>
+                                    <input
+                                        type="text"
+                                        value={selectedParticipant ? getParticipantDisplayName(selectedParticipant) : participantSearch}
+                                        onChange={(e) => {
+                                            setParticipantSearch(e.target.value);
+                                            setShowParticipantDropdown(true);
+                                            setSelectedParticipant(null);
+                                        }}
+                                        onFocus={() => setShowParticipantDropdown(true)}
+                                        placeholder="Search participants..."
+                                        className="flex-1 bg-transparent border-none outline-none"
+                                    />
+                                    {selectedParticipant && (
+                                        <button
+                                            onClick={() => {
+                                                setSelectedParticipant(null);
+                                                setParticipantSearch('');
+                                            }}
+                                            className="p-1 hover:bg-gray-100 rounded"
+                                        >
+                                            <X className="w-4 h-4 text-gray-400" />
+                                        </button>
+                                    )}
+                                </>
+                            ) : (
+                                <input
+                                    type="text"
+                                    value={participantSearch}
+                                    onChange={(e) => {
+                                        setParticipantSearch(e.target.value);
+                                        setShowParticipantDropdown(true);
                                     }}
-                                    className="p-1 hover:bg-gray-100 rounded"
-                                >
-                                    <X className="w-4 h-4 text-gray-400" />
-                                </button>
+                                    onFocus={() => setShowParticipantDropdown(true)}
+                                    placeholder={selectedParticipants.length > 0 ? "Add another participant..." : "Search participants to add..."}
+                                    className="flex-1 bg-transparent border-none outline-none"
+                                />
                             )}
                         </div>
                         
                         {/* Participant Dropdown */}
-                        {showParticipantDropdown && participantSearch.length >= 2 && !selectedParticipant && (
+                        {showParticipantDropdown && participantSearch.length >= 2 && (serviceType === 'group' || !selectedParticipant) && (
                             <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                                 {loadingParticipants ? (
                                     <div className="p-3 text-center text-gray-500">
@@ -429,13 +489,21 @@ export default function PlanServicePage() {
                                         No participants found
                                     </div>
                                 ) : (
-                                    participants.map((participant) => (
+                                    participants
+                                        .filter(p => !selectedParticipants.some(sp => sp.id === p.id))
+                                        .map((participant) => (
                                         <button
                                             key={participant.id}
                                             onClick={() => {
-                                                setSelectedParticipant(participant);
-                                                setShowParticipantDropdown(false);
-                                                setParticipantSearch('');
+                                                if (serviceType === 'group') {
+                                                    setSelectedParticipants(prev => [...prev, participant]);
+                                                    setParticipantSearch('');
+                                                    setShowParticipantDropdown(false);
+                                                } else {
+                                                    setSelectedParticipant(participant);
+                                                    setShowParticipantDropdown(false);
+                                                    setParticipantSearch('');
+                                                }
                                             }}
                                             className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
                                         >
@@ -443,6 +511,9 @@ export default function PlanServicePage() {
                                                 {participant.first_name?.[0]}{participant.last_name?.[0]}
                                             </div>
                                             <span>{getParticipantDisplayName(participant)}</span>
+                                            {serviceType === 'group' && (
+                                                <span className="ml-auto text-xs text-gray-400">+ Add</span>
+                                            )}
                                         </button>
                                     ))
                                 )}
@@ -578,6 +649,9 @@ export default function PlanServicePage() {
                         <ul className="text-sm text-blue-700 mt-1 space-y-1">
                             <li>• <strong>Save as Draft:</strong> You can edit later before scheduling</li>
                             <li>• <strong>Schedule Service:</strong> Creates a time-stamped record of your planned service</li>
+                            {serviceType === 'group' && selectedParticipants.length > 1 && (
+                                <li>• <strong>Group Session:</strong> Creates a linked service record for each of the {selectedParticipants.length} participants</li>
+                            )}
                             <li>• After delivery, mark as completed and create session notes</li>
                         </ul>
                     </div>

@@ -192,40 +192,98 @@ export async function POST(request: NextRequest) {
 
         switch (action) {
             case 'create': {
-                const result = await sql`
-                    INSERT INTO service_plans (
-                        user_id,
-                        organization_id,
-                        service_type,
-                        planned_date,
-                        planned_time,
-                        planned_duration,
-                        setting,
-                        service_code,
-                        participant_id,
-                        lesson_id,
-                        goal_id,
-                        notes,
-                        status
-                    ) VALUES (
-                        ${userId},
-                        ${organizationId},
-                        ${data.serviceType},
-                        ${data.plannedDate},
-                        ${data.plannedTime || null},
-                        ${data.plannedDuration},
-                        ${data.setting},
-                        ${data.serviceCode || null},
-                        ${data.participantId || null},
-                        ${data.lessonId || null},
-                        ${data.goalId || null},
-                        ${data.notes || null},
-                        ${data.status || 'draft'}
-                    )
-                    RETURNING *
-                `;
+                const participantIds: string[] = data.participantIds || [];
+                const singleParticipantId: string | null = data.participantId || null;
+                const isGroupWithMultiple = data.serviceType === 'group' && participantIds.length > 0;
 
-                return NextResponse.json({ success: true, service: result[0] });
+                if (isGroupWithMultiple) {
+                    // Generate a shared group_session_id for all linked records
+                    const groupIdResult = await sql`SELECT gen_random_uuid() as gid`;
+                    const groupSessionId = groupIdResult[0].gid;
+
+                    const createdServices = [];
+                    for (const pid of participantIds) {
+                        const result = await sql`
+                            INSERT INTO service_plans (
+                                user_id,
+                                organization_id,
+                                service_type,
+                                planned_date,
+                                planned_time,
+                                planned_duration,
+                                setting,
+                                service_code,
+                                participant_id,
+                                lesson_id,
+                                goal_id,
+                                notes,
+                                status,
+                                group_session_id
+                            ) VALUES (
+                                ${userId},
+                                ${organizationId},
+                                ${data.serviceType},
+                                ${data.plannedDate},
+                                ${data.plannedTime || null},
+                                ${data.plannedDuration},
+                                ${data.setting},
+                                ${data.serviceCode || null},
+                                ${pid},
+                                ${data.lessonId || null},
+                                ${data.goalId || null},
+                                ${data.notes || null},
+                                ${data.status || 'draft'},
+                                ${groupSessionId}
+                            )
+                            RETURNING *
+                        `;
+                        createdServices.push(result[0]);
+                    }
+
+                    return NextResponse.json({
+                        success: true,
+                        service: createdServices[0],
+                        services: createdServices,
+                        groupSessionId,
+                        count: createdServices.length
+                    });
+                } else {
+                    // Single participant (individual or group with one/no participant)
+                    const result = await sql`
+                        INSERT INTO service_plans (
+                            user_id,
+                            organization_id,
+                            service_type,
+                            planned_date,
+                            planned_time,
+                            planned_duration,
+                            setting,
+                            service_code,
+                            participant_id,
+                            lesson_id,
+                            goal_id,
+                            notes,
+                            status
+                        ) VALUES (
+                            ${userId},
+                            ${organizationId},
+                            ${data.serviceType},
+                            ${data.plannedDate},
+                            ${data.plannedTime || null},
+                            ${data.plannedDuration},
+                            ${data.setting},
+                            ${data.serviceCode || null},
+                            ${singleParticipantId},
+                            ${data.lessonId || null},
+                            ${data.goalId || null},
+                            ${data.notes || null},
+                            ${data.status || 'draft'}
+                        )
+                        RETURNING *
+                    `;
+
+                    return NextResponse.json({ success: true, service: result[0] });
+                }
             }
 
             case 'update': {
@@ -304,6 +362,38 @@ export async function POST(request: NextRequest) {
                 }
 
                 return NextResponse.json({ success: true, service: result[0] });
+            }
+
+            case 'complete-group': {
+                // Complete all services linked by group_session_id
+                const { groupSessionId, actualDuration, attendanceCount, deliveredAsPlanned, deviationNotes } = data;
+
+                if (!groupSessionId) {
+                    return NextResponse.json({ error: 'groupSessionId is required' }, { status: 400 });
+                }
+
+                const result = await sql`
+                    UPDATE service_plans
+                    SET 
+                        status = 'completed',
+                        actual_duration = ${actualDuration},
+                        attendance_count = ${attendanceCount},
+                        delivered_as_planned = ${deliveredAsPlanned},
+                        deviation_notes = ${deviationNotes || null},
+                        completed_at = NOW(),
+                        completed_by = ${userId},
+                        updated_at = NOW()
+                    WHERE group_session_id = ${groupSessionId}
+                    AND user_id = ${userId}
+                    AND status IN ('planned', 'approved')
+                    RETURNING *
+                `;
+
+                if (result.length === 0) {
+                    return NextResponse.json({ error: 'No group services found or cannot be completed' }, { status: 404 });
+                }
+
+                return NextResponse.json({ success: true, services: result, count: result.length });
             }
 
             case 'link-note': {
