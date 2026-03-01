@@ -67,6 +67,7 @@ export default function PlanServicePage() {
 
     // Form state
     const [serviceType, setServiceType] = useState<'individual' | 'group'>('individual');
+    const [title, setTitle] = useState('');
     const [plannedDate, setPlannedDate] = useState(new Date().toISOString().split('T')[0]);
     const [plannedTime, setPlannedTime] = useState('');
     const [plannedDuration, setPlannedDuration] = useState(60);
@@ -200,6 +201,7 @@ export default function PlanServicePage() {
             const payload: any = {
                 action: 'create',
                 serviceType,
+                title: title.trim() || null,
                 plannedDate,
                 plannedTime: plannedTime || null,
                 plannedDuration,
@@ -336,6 +338,22 @@ export default function PlanServicePage() {
                                 </div>
                             </button>
                         </div>
+                    </div>
+
+                    {/* Session Title */}
+                    <div className="mb-6">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <FileText className="w-4 h-4 inline mr-1" />
+                            Session Title <span className="text-gray-400 font-normal">(optional)</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            placeholder="e.g., GED Prep Check-in, Recovery Meeting Follow-up, Housing Application Review"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A73A8] focus:border-transparent"
+                            maxLength={150}
+                        />
                     </div>
 
                     {/* Date, Time, and Duration */}

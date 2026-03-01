@@ -17,6 +17,7 @@ interface ServicePlan {
     user_id: string;
     organization_id: string;
     service_type: 'individual' | 'group';
+    title?: string;
     planned_date: string;
     planned_time?: string;
     planned_duration: number;
@@ -88,7 +89,7 @@ function AddToCalendarButton({ service }: { service: ServicePlan }) {
     const participantName = service.participant_preferred_name ||
         `${service.participant_first_name || ''} ${service.participant_last_name || ''}`.trim() || '';
 
-    const title = `${service.service_type.charAt(0).toUpperCase() + service.service_type.slice(1)} Session${participantName ? ` - ${participantName}` : ''}`;
+    const title = service.title || `${service.service_type.charAt(0).toUpperCase() + service.service_type.slice(1)} Session${participantName ? ` - ${participantName}` : ''}`;
     const description = [
         `${service.planned_duration} min ${service.setting} session`,
         participantName && `Participant: ${participantName}`,
@@ -439,9 +440,12 @@ export default function ServiceDetailPage() {
                                 <ArrowLeft className="w-5 h-5 text-gray-600" />
                             </button>
                             <div>
-                                <h1 className="text-xl font-bold text-[#0E2235] capitalize">
-                                    {service.service_type} Service
+                                <h1 className="text-xl font-bold text-[#0E2235]">
+                                    {service.title || <span className="capitalize">{service.service_type} Service</span>}
                                 </h1>
+                                {service.title && (
+                                    <p className="text-xs text-gray-400 capitalize">{service.service_type} Session{participantName ? ` · ${participantName}` : ''}</p>
+                                )}
                                 <p className="text-sm text-gray-500">
                                     {new Date(service.planned_date).toLocaleDateString('en-US', {
                                         weekday: 'long',

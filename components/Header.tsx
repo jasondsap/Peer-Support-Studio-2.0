@@ -6,13 +6,10 @@ import { useState } from 'react';
 import { 
     Building2, 
     Users, 
-    Target, 
     FileText, 
     LayoutDashboard,
     ChevronDown,
-    Settings,
-    BookOpen,
-    Plus
+    BookOpen
 } from 'lucide-react';
 import UserButton from './UserButton';
 
@@ -95,16 +92,6 @@ export default function Header() {
                                                     </div>
                                                 </button>
                                             ))}
-                                            <div className="border-t border-gray-100 mt-2 pt-2">
-                                                <Link
-                                                    href="/organizations/new"
-                                                    onClick={() => setOrgMenuOpen(false)}
-                                                    className="flex items-center gap-3 px-3 py-2 text-[#1A73A8] hover:bg-blue-50"
-                                                >
-                                                    <Plus className="w-4 h-4" />
-                                                    <span className="text-sm font-medium">Create Organization</span>
-                                                </Link>
-                                            </div>
                                         </div>
                                     </>
                                 )}

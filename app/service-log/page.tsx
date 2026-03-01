@@ -17,6 +17,7 @@ interface ServicePlan {
     user_id: string;
     organization_id: string;
     service_type: 'individual' | 'group';
+    title?: string;
     planned_date: string;
     planned_time?: string;
     planned_duration: number;
@@ -125,9 +126,12 @@ function ServiceCard({
                     ) : (
                         <Users className="w-4 h-4 text-gray-400" />
                     )}
-                    <span className="font-medium text-[#0E2235] capitalize">
-                        {service.service_type} Session
+                    <span className="font-medium text-[#0E2235]">
+                        {service.title || <span className="capitalize">{service.service_type} Session</span>}
                     </span>
+                    {service.title && (
+                        <span className="text-xs text-gray-400 capitalize ml-2">{service.service_type}</span>
+                    )}
                 </div>
                 <StatusBadge status={service.status} />
             </div>
