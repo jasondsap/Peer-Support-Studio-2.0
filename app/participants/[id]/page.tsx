@@ -14,11 +14,12 @@ import {
     ArrowLeft, User, Phone, Mail, Calendar, MapPin,
     Target, FileText, Activity, Plus, Edit, Loader2,
     AlertCircle, ChevronRight, Clock, Users, Heart,
-    Home, Scale, Shield, Sparkles, BookHeart, Eye, Lock, X
+    Home, Scale, Shield, Sparkles, BookHeart, Eye, Lock, X,
+    ClipboardList
 } from 'lucide-react';
 import AssessmentDetailModal from '@/app/components/AssessmentDetailModal';
 import ReadinessChecklist from '@/app/components/ReadinessChecklist';
-import ParticipantSnapshotModal from '@/app/components/ParticipantSnapshotModal';  // ADDED: Snapshot modal
+import ParticipantSnapshotModal from '@/app/components/ParticipantSnapshotModal';
 
 // ============================================================================
 // Types
@@ -47,6 +48,9 @@ interface Participant {
     primary_pss_name?: string;
     internal_notes?: string;
     is_reentry_participant?: boolean;
+    location_id?: string;
+    location_name?: string;
+    location_short_name?: string;
 }
 
 interface Goal {
@@ -97,7 +101,7 @@ interface JournalEntry {
     updated_at: string;
 }
 
-type TabType = 'overview' | 'goals' | 'notes' | 'assessments' | 'readiness';
+type TabType = 'overview' | 'intake' | 'goals' | 'plans' | 'notes' | 'assessments' | 'readiness';
 
 // ============================================================================
 // Helper Functions
@@ -170,6 +174,122 @@ const moodMap: Record<string, { emoji: string; label: string }> = {
 };
 
 // ============================================================================
+// Intake Display Helpers
+// ============================================================================
+
+const MARITAL_MAP: Record<string, string> = {
+    single: 'Single / Never Married', married: 'Married', partner: 'Domestic Partner',
+    separated: 'Separated', divorced: 'Divorced', widowed: 'Widowed',
+};
+const RACE_MAP: Record<string, string> = {
+    white: 'White', black: 'Black / African American', hispanic: 'Hispanic / Latino',
+    asian: 'Asian', native: 'American Indian / Alaska Native', pacific: 'Native Hawaiian / Pacific Islander', other: 'Other',
+};
+const ETHNICITY_MAP: Record<string, string> = {
+    hispanic: 'Hispanic or Latino', not_hispanic: 'Not Hispanic or Latino',
+};
+const GENDER_MAP: Record<string, string> = {
+    male: 'Male', female: 'Female', non_binary: 'Non-binary', prefer_not: 'Prefer not to say', other: 'Other',
+};
+const REFERRAL_MAP: Record<string, string> = {
+    self: 'Self', family: 'Family / Friend', professional: 'Treatment Professional',
+    court: 'Court / Legal System', community: 'Community Organization', other: 'Other',
+};
+const LEGAL_STATUS_MAP: Record<string, string> = {
+    none: 'No current legal involvement', court_diversion: 'Court Diversion Program',
+    probation: 'Probation', parole: 'Parole', drug_court: 'Drug Court', pending: 'Charges Pending',
+};
+const LEGAL_OFFICER_MAP: Record<string, string> = {
+    none: 'None', probation_officer: 'Probation Officer', parole_officer: 'Parole Officer', case_manager: 'Court Case Manager',
+};
+const PHYSICAL_MAP: Record<string, string> = {
+    none: 'None', chronic: 'Chronic Pain / Condition', cancer: 'Cancer',
+    communicable: 'Communicable Disease', diabetes: 'Diabetes', heart: 'Heart Disease',
+    respiratory: 'Respiratory Condition', seizures: 'Seizure Disorder', other: 'Other',
+};
+const MENTAL_MAP: Record<string, string> = {
+    none: 'None', anxiety: 'Anxiety Disorder', mood: 'Mood Disorder',
+    ptsd: 'PTSD / Trauma-Related', behavioral: 'Behavioral Disorder',
+    psychotic: 'Psychotic Disorder', eating: 'Eating Disorder', other: 'Other',
+};
+const INSURANCE_MAP: Record<string, string> = {
+    none: 'No Insurance', medicaid: 'Medicaid', medicare: 'Medicare',
+    private_self: 'Private (Self)', private_family: 'Private (Family/Employer)', va: 'VA / Military', other: 'Other',
+};
+const EDUCATION_MAP: Record<string, string> = {
+    less_hs: 'Less than High School', hs_diploma: 'High School Diploma', ged: 'GED',
+    some_college: 'Some College', associates: "Associate's Degree", bachelors: "Bachelor's Degree",
+    technical: 'Technical / Vocational', military: 'Military Training', advanced: 'Advanced Degree',
+};
+const EMPLOYMENT_MAP: Record<string, string> = {
+    full_time: 'Full-Time', part_time: 'Part-Time', part_time_seasonal: 'Part-Time (Seasonal)',
+    unemployed_student: 'Unemployed — Student', unemployed_homemaker: 'Unemployed — Homemaker',
+    unemployed_looking: 'Unemployed', retired: 'Retired', unemployed_disabled: 'Disability',
+    controlled_environment: 'Controlled Environment', other: 'Other',
+};
+const INCOME_SOURCE_MAP: Record<string, string> = {
+    employment: 'Employment', ssdi: 'SSDI', ssi: 'SSI', tanf: 'TANF', snap: 'SNAP / Food Stamps',
+    unemployment: 'Unemployment', family_support: 'Family Support', va_benefits: 'VA Benefits', other: 'Other',
+};
+const BENEFIT_MAP: Record<string, string> = {
+    health_insurance: 'Health Insurance', retirement: 'Retirement / 401k', pto: 'Paid Time Off',
+};
+const SUBSTANCE_MAP: Record<string, string> = {
+    alcohol: 'Alcohol', tobacco: 'Tobacco / Nicotine', marijuana: 'Marijuana / Cannabis',
+    opiates: 'Prescription Opioids', heroin: 'Heroin', methadone: 'Methadone',
+    suboxone: 'Suboxone / Buprenorphine', cocaine: 'Cocaine / Crack', stimulants: 'Stimulants (Meth, Adderall)',
+    sedatives: 'Sedatives / Benzos', hallucinogens: 'Hallucinogens', inhalants: 'Inhalants',
+    synthetic: 'Synthetic Drugs', none: 'None', other: 'Other',
+};
+const DV_TIMELINE_MAP: Record<string, string> = {
+    within_3mo: 'Within 3 months', '3_6mo': '3–6 months ago', '7_12mo': '7–12 months ago', over_1yr: 'Over 1 year ago',
+};
+
+function formatLookup(val: string | null | undefined, map: Record<string, string>): string | null {
+    if (!val) return null;
+    return map[val] || val;
+}
+
+function formatJsonbArray(val: any, map: Record<string, string>): string | null {
+    if (!val) return null;
+    const arr = typeof val === 'string' ? JSON.parse(val) : val;
+    if (!Array.isArray(arr) || arr.length === 0) return null;
+    return arr.map((v: string) => map[v] || v).join(', ');
+}
+
+function formatBool(val: boolean | null | undefined): string | null {
+    if (val === true) return 'Yes';
+    if (val === false) return 'No';
+    return null;
+}
+
+function IntakeSection({ title, icon: Icon, color, children }: {
+    title: string; icon: any; color: string; children: React.ReactNode;
+}) {
+    return (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-100" style={{ backgroundColor: `${color}08` }}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
+                    <Icon className="w-4 h-4" style={{ color }} />
+                </div>
+                <h3 className="font-semibold text-[#0E2235]">{title}</h3>
+            </div>
+            <div className="divide-y divide-gray-50">{children}</div>
+        </div>
+    );
+}
+
+function IntakeRow({ label, value }: { label: string; value: string | null | undefined }) {
+    if (!value) return null;
+    return (
+        <div className="flex items-start gap-4 px-5 py-3">
+            <span className="text-sm text-gray-500 w-44 flex-shrink-0">{label}</span>
+            <span className="text-sm text-gray-900">{value}</span>
+        </div>
+    );
+}
+
+// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -183,6 +303,8 @@ export default function ParticipantDetailPage() {
     const [goals, setGoals] = useState<Goal[]>([]);
     const [notes, setNotes] = useState<SessionNote[]>([]);
     const [assessments, setAssessments] = useState<Assessment[]>([]);
+    const [recoveryPlans, setRecoveryPlans] = useState<any[]>([]);
+    const [intake, setIntake] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -220,6 +342,16 @@ export default function ParticipantDetailPage() {
                 const aRes = await fetch(`/api/recovery-assessments?organization_id=${currentOrg.id}&participant_id=${params.id}`);
                 const aData = await aRes.json();
                 setAssessments(aData.assessments || []);
+
+                // Fetch recovery plans
+                const rpRes = await fetch(`/api/rc-plans?organization_id=${currentOrg.id}&participant_id=${params.id}`);
+                const rpData = await rpRes.json();
+                setRecoveryPlans(rpData.plans || []);
+
+                // Fetch intake
+                const iRes = await fetch(`/api/intake?organization_id=${currentOrg.id}&participant_id=${params.id}`);
+                const iData = await iRes.json();
+                if (iData.intakes?.length > 0) setIntake(iData.intakes[0]);
 
                 // Fetch shared journal entries
                 const jRes = await fetch(`/api/journal?participant_id=${params.id}&organization_id=${currentOrg.id}`);
@@ -333,7 +465,9 @@ export default function ParticipantDetailPage() {
     // Tab configuration - include Readiness tab for reentry participants
     const tabs = [
         { id: 'overview', label: 'Overview', icon: User },
+        { id: 'intake', label: 'Intake', icon: ClipboardList },
         { id: 'goals', label: 'Goals', icon: Target },
+        { id: 'plans', label: 'Recovery Plans', icon: Heart },
         { id: 'notes', label: 'Session Notes', icon: FileText },
         { id: 'assessments', label: 'Assessments', icon: Activity },
         ...(participant.is_reentry_participant ? [{ id: 'readiness', label: 'Readiness', icon: Shield }] : [])
@@ -382,7 +516,6 @@ export default function ParticipantDetailPage() {
                         </div>
                     </div>
 
-                    {/* UPDATED: Added Snapshot button */}
                     <div className="flex gap-3">
                         <button
                             onClick={() => setShowSnapshotModal(true)}
@@ -391,6 +524,23 @@ export default function ParticipantDetailPage() {
                             <Sparkles className="w-4 h-4" />
                             Snapshot
                         </button>
+                        {intake ? (
+                            <button
+                                onClick={() => setActiveTab('intake')}
+                                className="flex items-center gap-2 px-4 py-2 bg-teal-100 text-teal-700 rounded-lg hover:bg-teal-200 transition-colors"
+                            >
+                                <ClipboardList className="w-4 h-4" />
+                                View Intake
+                            </button>
+                        ) : (
+                            <Link
+                                href={`/intake?participant_id=${params.id}`}
+                                className="flex items-center gap-2 px-4 py-2 bg-teal-100 text-teal-700 rounded-lg hover:bg-teal-200 transition-colors"
+                            >
+                                <ClipboardList className="w-4 h-4" />
+                                Start Intake
+                            </Link>
+                        )}
                         <Link
                             href={`/participants/${params.id}/edit`}
                             className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
@@ -404,7 +554,7 @@ export default function ParticipantDetailPage() {
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
                 <div className="bg-white rounded-xl p-4 border border-gray-200">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
@@ -435,6 +585,17 @@ export default function ParticipantDetailPage() {
                         <div>
                             <p className="text-2xl font-bold text-[#0E2235]">{assessments.length}</p>
                             <p className="text-sm text-gray-500">Assessments</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl p-4 border border-gray-200">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center">
+                            <ClipboardList className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <div>
+                            <p className="text-2xl font-bold text-[#0E2235]">{recoveryPlans.length}</p>
+                            <p className="text-sm text-gray-500">Recovery Plans</p>
                         </div>
                     </div>
                 </div>
@@ -537,6 +698,12 @@ export default function ParticipantDetailPage() {
                                     <span className="text-gray-700">Primary PSS: {participant.primary_pss_name}</span>
                                 </div>
                             )}
+                            {participant.location_name && (
+                                <div className="flex items-center gap-3">
+                                    <Home className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-700">Location: {participant.location_name}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -624,62 +791,284 @@ export default function ParticipantDetailPage() {
             )}
 
             {/* ================================================================ */}
+            {/* INTAKE TAB */}
+            {/* ================================================================ */}
+            {activeTab === 'intake' && (
+                <div className="space-y-6">
+                    {!intake ? (
+                        <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
+                            <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold text-gray-700 mb-2">No Intake on File</h3>
+                            <p className="text-gray-500 mb-6">Complete an intake to document {displayName}&apos;s background, health, and recovery history.</p>
+                            <Link
+                                href={`/intake?participant_id=${participant.id}`}
+                                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#1A73A8] to-[#30B27A] text-white rounded-lg hover:opacity-90 font-medium"
+                            >
+                                <Plus className="w-4 h-4" />
+                                Start Intake
+                            </Link>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Action bar */}
+                            <div className="flex items-center justify-between">
+                                <div className="text-sm text-gray-500">
+                                    Completed {intake.intake_date ? new Date(intake.intake_date).toLocaleDateString() : ''}
+                                    {intake.completed_by_name && <> by {intake.completed_by_name}</>}
+                                    {intake.updated_at && intake.updated_at !== intake.created_at && (
+                                        <> · Updated {new Date(intake.updated_at).toLocaleDateString()}</>
+                                    )}
+                                </div>
+                                <Link
+                                    href={`/intake?participant_id=${participant.id}&edit=true&intake_id=${intake.id}`}
+                                    className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090] text-sm font-medium"
+                                >
+                                    <Edit className="w-4 h-4" />
+                                    Edit Intake
+                                </Link>
+                            </div>
+
+                            {/* Background */}
+                            <IntakeSection title="Background" icon={User} color="#6366F1">
+                                <IntakeRow label="Other Names / Aliases" value={intake.other_names} />
+                                <IntakeRow label="SSN (Last 4)" value={intake.ssn_last_four ? `***-**-${intake.ssn_last_four}` : null} />
+                                <IntakeRow label="Home ZIP" value={intake.home_zip} />
+                                <IntakeRow label="City / State" value={intake.home_city_state} />
+                                <IntakeRow label="Veteran" value={intake.is_veteran ? 'Yes' : intake.is_veteran === false ? 'No' : null} />
+                                <IntakeRow label="English First Language" value={intake.is_english_first_language ? 'Yes' : intake.is_english_first_language === false ? 'No' : null} />
+                                {!intake.is_english_first_language && <IntakeRow label="Other Language" value={intake.other_language} />}
+                                <IntakeRow label="Marital Status" value={formatLookup(intake.marital_status, MARITAL_MAP)} />
+                                <IntakeRow label="Race" value={formatJsonbArray(intake.race, RACE_MAP)} />
+                                {intake.race_other && <IntakeRow label="Race (Other)" value={intake.race_other} />}
+                                <IntakeRow label="Ethnicity" value={formatLookup(intake.ethnicity, ETHNICITY_MAP)} />
+                                <IntakeRow label="Gender Identity" value={formatLookup(intake.gender_identity, GENDER_MAP)} />
+                                {intake.gender_other && <IntakeRow label="Gender (Other)" value={intake.gender_other} />}
+                                <IntakeRow label="Minor Children" value={intake.has_minor_children} />
+                                <IntakeRow label="Referral Source" value={formatLookup(intake.referral_source, REFERRAL_MAP)} />
+                                {intake.referral_source_other && <IntakeRow label="Referral (Other)" value={intake.referral_source_other} />}
+                                <IntakeRow label="Legal Status" value={formatJsonbArray(intake.legal_status, LEGAL_STATUS_MAP)} />
+                                <IntakeRow label="Legal Officers" value={formatJsonbArray(intake.legal_officers, LEGAL_OFFICER_MAP)} />
+                            </IntakeSection>
+
+                            {/* Emergency Contact 2 */}
+                            {(intake.emergency_contact_2_name || intake.emergency_contact_2_phone) && (
+                                <IntakeSection title="Second Emergency Contact" icon={Phone} color="#DC2626">
+                                    <IntakeRow label="Name" value={intake.emergency_contact_2_name} />
+                                    <IntakeRow label="Relationship" value={intake.emergency_contact_2_relationship} />
+                                    <IntakeRow label="Phone" value={intake.emergency_contact_2_phone} />
+                                </IntakeSection>
+                            )}
+
+                            {/* Health */}
+                            <IntakeSection title="Health" icon={Heart} color="#EC4899">
+                                <IntakeRow label="Physical Conditions" value={formatJsonbArray(intake.physical_health_conditions, PHYSICAL_MAP)} />
+                                {intake.physical_health_other && <IntakeRow label="Physical (Other)" value={intake.physical_health_other} />}
+                                <IntakeRow label="Takes Physical Medications" value={formatBool(intake.takes_physical_medications)} />
+                                {intake.takes_physical_medications && <IntakeRow label="Physical Medications" value={intake.physical_medications} />}
+                                <IntakeRow label="Mental Health Conditions" value={formatJsonbArray(intake.mental_health_conditions, MENTAL_MAP)} />
+                                {intake.mental_health_other && <IntakeRow label="Mental Health (Other)" value={intake.mental_health_other} />}
+                                <IntakeRow label="Takes Mental Health Medications" value={formatBool(intake.takes_mental_medications)} />
+                                {intake.takes_mental_medications && <IntakeRow label="Mental Medications" value={intake.mental_medications} />}
+                                <IntakeRow label="Pregnant" value={intake.is_pregnant || null} />
+                                {intake.pregnancy_months && <IntakeRow label="Months Pregnant" value={String(intake.pregnancy_months)} />}
+                            </IntakeSection>
+
+                            {/* Insurance */}
+                            <IntakeSection title="Insurance & Provider" icon={Activity} color="#0891B2">
+                                <IntakeRow label="Insurance" value={formatLookup(intake.insurance_type, INSURANCE_MAP)} />
+                                {intake.insurance_other && <IntakeRow label="Insurance (Other)" value={intake.insurance_other} />}
+                                <IntakeRow label="Has Primary Provider" value={formatBool(intake.has_primary_provider)} />
+                                {intake.has_primary_provider && <IntakeRow label="Provider Name" value={intake.provider_name} />}
+                                {intake.has_primary_provider && <IntakeRow label="Provider Phone" value={intake.provider_phone} />}
+                            </IntakeSection>
+
+                            {/* Education & Employment */}
+                            <IntakeSection title="Education & Employment" icon={Target} color="#D97706">
+                                <IntakeRow label="Education Level" value={formatLookup(intake.education_level, EDUCATION_MAP)} />
+                                <IntakeRow label="Past Year Employment" value={formatLookup(intake.past_year_employment, EMPLOYMENT_MAP)} />
+                                <IntakeRow label="Currently Employed" value={formatBool(intake.currently_employed)} />
+                                {intake.currently_employed && <IntakeRow label="Employer" value={intake.employer} />}
+                                <IntakeRow label="Monthly Income (Pre-tax)" value={intake.monthly_income_pretax ? `$${Number(intake.monthly_income_pretax).toLocaleString()}` : null} />
+                                <IntakeRow label="Employer Benefits" value={formatJsonbArray(intake.employer_benefits, BENEFIT_MAP)} />
+                                <IntakeRow label="Income Sources" value={formatJsonbArray(intake.income_sources, INCOME_SOURCE_MAP)} />
+                                {intake.income_sources_other && <IntakeRow label="Income (Other)" value={intake.income_sources_other} />}
+                            </IntakeSection>
+
+                            {/* Social & Safety */}
+                            <IntakeSection title="Social & Safety" icon={Users} color="#059669">
+                                <IntakeRow label="Supportive People" value={intake.supportive_people_count != null ? String(intake.supportive_people_count) : null} />
+                                <IntakeRow label="DV Survivor" value={formatBool(intake.is_dv_survivor)} />
+                                {intake.is_dv_survivor && <IntakeRow label="Last DV Episode" value={formatLookup(intake.last_dv_episode, DV_TIMELINE_MAP)} />}
+                                {intake.is_dv_survivor && <IntakeRow label="Currently Fleeing" value={formatBool(intake.is_currently_fleeing)} />}
+                            </IntakeSection>
+
+                            {/* Substance Use */}
+                            <IntakeSection title="Substance Use History" icon={Shield} color="#F97316">
+                                <IntakeRow label="Age of First Use" value={intake.age_first_use != null ? String(intake.age_first_use) : null} />
+                                <IntakeRow label="Substances Used" value={formatJsonbArray(intake.substances_used, SUBSTANCE_MAP)} />
+                                {intake.substances_other && <IntakeRow label="Substances (Other)" value={intake.substances_other} />}
+                                <IntakeRow label="History of Overdose" value={formatBool(intake.has_overdosed)} />
+                                {intake.has_overdosed && <IntakeRow label="Overdose Count" value={intake.overdose_count != null ? String(intake.overdose_count) : null} />}
+                            </IntakeSection>
+
+                            {/* Recovery History */}
+                            <IntakeSection title="Recovery History" icon={Home} color="#10B981">
+                                <IntakeRow label="First Recovery Attempt" value={formatBool(intake.is_first_recovery_attempt)} />
+                                {intake.is_first_recovery_attempt === false && <IntakeRow label="Previous Attempts" value={intake.previous_attempt_count != null ? String(intake.previous_attempt_count) : null} />}
+                                <IntakeRow label="Received Prior Treatment" value={formatBool(intake.has_received_treatment)} />
+                                {intake.has_received_treatment && <IntakeRow label="Treatment Types" value={intake.treatment_types} />}
+                                {intake.recovery_notes && <IntakeRow label="Notes" value={intake.recovery_notes} />}
+                            </IntakeSection>
+                        </>
+                    )}
+                </div>
+            )}
+
+            {/* ================================================================ */}
             {/* GOALS TAB */}
             {/* ================================================================ */}
             {activeTab === 'goals' && (
                 <div className="space-y-4">
                     <div className="flex justify-end">
                         <Link
-                            href={`/goals/new?participant_id=${params.id}`}
-                            className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#15608a]"
+                            href={`/goal-generator?participant_id=${participant.id}`}
+                            className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090]"
                         >
                             <Plus className="w-4 h-4" />
-                            New Goal
+                            Create Goal
                         </Link>
                     </div>
                     {goals.length === 0 ? (
                         <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
                             <Target className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                            <p className="text-gray-600">No goals yet. Create the first goal for {displayName}.</p>
+                            <p className="text-gray-600">No goals yet. Create a recovery goal for {displayName}.</p>
                         </div>
                     ) : (
                         <div className="grid gap-4">
-                            {goals.map(goal => (
-                                <Link
-                                    key={goal.id}
-                                    href={`/goals/${goal.id}`}
-                                    className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow"
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <div
-                                                    className="w-3 h-3 rounded-full"
-                                                    style={{ backgroundColor: goalAreaColors[goal.goal_area] || '#1A73A8' }}
-                                                />
-                                                <h4 className="font-medium text-[#0E2235]">{goal.smart_goal || goal.desired_outcome}</h4>
-                                                <span className={`px-2 py-0.5 text-xs rounded-full ${
-                                                    goal.status === 'active' ? 'bg-green-100 text-green-700' :
-                                                    goal.status === 'completed' ? 'bg-blue-100 text-blue-700' :
-                                                    'bg-gray-100 text-gray-600'
-                                                }`}>
-                                                    {goal.status}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center gap-4">
-                                                <div className="flex-1 max-w-xs h-2 bg-gray-200 rounded-full">
-                                                    <div
-                                                        className="h-full bg-[#1A73A8] rounded-full transition-all"
-                                                        style={{ width: `${goal.progress}%` }}
-                                                    />
+                            {goals.map(goal => {
+                                const color = goalAreaColors[goal.goal_area] || '#6B7280';
+                                return (
+                                    <div key={goal.id} className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow">
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span
+                                                        className="text-xs font-medium px-2 py-0.5 rounded-full"
+                                                        style={{ backgroundColor: `${color}15`, color }}
+                                                    >
+                                                        {goal.goal_area}
+                                                    </span>
+                                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${
+                                                        goal.status === 'active' ? 'bg-green-100 text-green-700' :
+                                                        goal.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                                        'bg-gray-100 text-gray-600'
+                                                    }`}>
+                                                        {goal.status}
+                                                    </span>
                                                 </div>
-                                                <span className="text-sm text-gray-600">{goal.progress}%</span>
+                                                <p className="text-[#0E2235] font-medium">{goal.smart_goal}</p>
+                                                {goal.desired_outcome && (
+                                                    <p className="text-sm text-gray-500 mt-1">{goal.desired_outcome}</p>
+                                                )}
+                                                <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                                                    {goal.timeframe && (
+                                                        <span className="flex items-center gap-1">
+                                                            <Clock className="w-3.5 h-3.5" />
+                                                            {goal.timeframe}
+                                                        </span>
+                                                    )}
+                                                    <span>
+                                                        Created {new Date(goal.created_at).toLocaleDateString()}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
-                                        <ChevronRight className="w-5 h-5 text-gray-400" />
                                     </div>
-                                </Link>
-                            ))}
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ================================================================ */}
+            {/* RECOVERY PLANS TAB */}
+            {/* ================================================================ */}
+            {activeTab === 'plans' && (
+                <div className="space-y-4">
+                    <div className="flex justify-end">
+                        <Link
+                            href={`/recovery-plans?create=true&participant_id=${participant.id}`}
+                            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#1A73A8] to-[#30B27A] text-white rounded-lg hover:opacity-90 font-medium"
+                        >
+                            <Plus className="w-4 h-4" />
+                            New Recovery Plan
+                        </Link>
+                    </div>
+                    {recoveryPlans.length === 0 ? (
+                        <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
+                            <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold text-gray-700 mb-2">No Recovery Plans Yet</h3>
+                            <p className="text-gray-500 mb-6">Create a plan using the 10-domain recovery framework to track {displayName}&apos;s recovery journey.</p>
+                            <Link
+                                href={`/recovery-plans?create=true&participant_id=${participant.id}`}
+                                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#1A73A8] to-[#30B27A] text-white rounded-lg hover:opacity-90 font-medium"
+                            >
+                                <Plus className="w-4 h-4" />
+                                Create First Plan
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="grid gap-4">
+                            {recoveryPlans.map(plan => {
+                                const domainCount = Number(plan.domain_count || 0);
+                                const totalGoals = Number(plan.total_goals || 0);
+                                const completedGoals = Number(plan.completed_goals || 0);
+                                const progress = totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0;
+
+                                return (
+                                    <Link
+                                        key={plan.id}
+                                        href={`/recovery-plans?view=${plan.id}`}
+                                        className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition-all block group"
+                                    >
+                                        <div className="flex items-start justify-between mb-3">
+                                            <div>
+                                                <span className={`inline-block text-xs font-medium px-2.5 py-1 rounded-full capitalize mb-2 ${
+                                                    plan.status === 'active' ? 'bg-green-100 text-green-700' :
+                                                    plan.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                                    plan.status === 'on_hold' ? 'bg-amber-100 text-amber-700' :
+                                                    'bg-gray-100 text-gray-600'
+                                                }`}>
+                                                    {plan.status === 'on_hold' ? 'On Hold' : plan.status}
+                                                </span>
+                                                <h4 className="font-semibold text-[#0E2235] text-lg">{plan.plan_name || 'Recovery Plan'}</h4>
+                                                <p className="text-sm text-gray-500 mt-0.5">
+                                                    {new Date(plan.created_at).toLocaleDateString()}
+                                                    {domainCount > 0 && <> · {domainCount} domain{domainCount !== 1 ? 's' : ''}</>}
+                                                    {totalGoals > 0 && <> · {totalGoals} goal{totalGoals !== 1 ? 's' : ''}</>}
+                                                </p>
+                                            </div>
+                                            <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-[#1A73A8] transition-colors mt-1" />
+                                        </div>
+
+                                        {totalGoals > 0 && (
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs text-gray-500 whitespace-nowrap">Goal Progress</span>
+                                                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full rounded-full bg-gradient-to-r from-[#1A73A8] to-[#30B27A] transition-all"
+                                                        style={{ width: `${progress}%` }}
+                                                    />
+                                                </div>
+                                                <span className="text-xs text-gray-500 whitespace-nowrap">
+                                                    {completedGoals}/{totalGoals} completed
+                                                </span>
+                                            </div>
+                                        )}
+                                    </Link>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -692,8 +1081,8 @@ export default function ParticipantDetailPage() {
                 <div className="space-y-4">
                     <div className="flex justify-end">
                         <Link
-                            href={`/session-notes/new?participant_id=${params.id}`}
-                            className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600"
+                            href={`/session-notes?participant_id=${participant.id}`}
+                            className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090]"
                         >
                             <Plus className="w-4 h-4" />
                             New Session Note
@@ -702,7 +1091,7 @@ export default function ParticipantDetailPage() {
                     {notes.length === 0 ? (
                         <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
                             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                            <p className="text-gray-600">No session notes yet. Document your first session with {displayName}.</p>
+                            <p className="text-gray-600">No session notes yet. Document your sessions with {displayName}.</p>
                         </div>
                     ) : (
                         <div className="grid gap-4">
@@ -710,24 +1099,18 @@ export default function ParticipantDetailPage() {
                                 <Link
                                     key={note.id}
                                     href={`/session-notes/${note.id}`}
-                                    className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow"
+                                    className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow block"
                                 >
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <div className="flex items-center gap-3 mb-1">
-                                                <span className="font-medium text-[#0E2235]">
-                                                    {getSessionType(note)} Session
-                                                </span>
-                                                {getDuration(note) && (
-                                                    <span className="text-sm text-gray-500 flex items-center gap-1">
-                                                        <Clock className="w-3.5 h-3.5" />
-                                                        {getDuration(note)}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <p className="text-sm text-gray-500">
+                                            <p className="font-medium text-[#0E2235]">
                                                 {formatSessionDate(note)}
                                             </p>
+                                            <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+                                                <span>{getSessionType(note)}</span>
+                                                {getDuration(note) && <span>{getDuration(note)}</span>}
+                                                {note.source && <span className="capitalize">{note.source}</span>}
+                                            </div>
                                         </div>
                                         <ChevronRight className="w-5 h-5 text-gray-400" />
                                     </div>
@@ -743,24 +1126,31 @@ export default function ParticipantDetailPage() {
             {/* ================================================================ */}
             {activeTab === 'assessments' && (
                 <div className="space-y-4">
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-3">
                         <Link
-                            href={`/recovery-capital?participant_id=${params.id}`}
-                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                            href={`/recovery-capital?participant_id=${participant.id}&type=barc10`}
+                            className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090]"
                         >
                             <Plus className="w-4 h-4" />
-                            New Assessment
+                            BARC-10
+                        </Link>
+                        <Link
+                            href={`/recovery-capital?participant_id=${participant.id}&type=mirc28`}
+                            className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090]"
+                        >
+                            <Plus className="w-4 h-4" />
+                            MIRC-28
                         </Link>
                     </div>
                     {assessments.length === 0 ? (
                         <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
                             <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                            <p className="text-gray-600">No assessments yet. Conduct a Recovery Capital assessment for {displayName}.</p>
+                            <p className="text-gray-600">No assessments yet. Conduct a recovery capital assessment for {displayName}.</p>
                         </div>
                     ) : (
                         <div className="grid gap-4">
                             {assessments.map(assessment => {
-                                const maxScore = assessment.assessment_type === 'mirc28' ? 140 : 60;
+                                const maxScore = assessment.assessment_type === 'mirc28' ? 112 : assessment.assessment_type === 'barc10' ? 60 : assessment.assessment_type === 'aces' ? 10 : 60;
                                 return (
                                     <div
                                         key={assessment.id}
@@ -818,7 +1208,7 @@ export default function ParticipantDetailPage() {
                 />
             )}
 
-            {/* ADDED: Participant Snapshot Modal */}
+            {/* Participant Snapshot Modal */}
             {showSnapshotModal && (
                 <ParticipantSnapshotModal
                     participantId={participant.id}

@@ -275,6 +275,102 @@ export default function HelpCenter() {
                 { question: 'Can I search outside Kentucky?', answer: 'Yes! Enter any US ZIP code or city name to search nationwide. The tool works for all 50 states.' },
                 { question: 'What\'s the SAMHSA Helpline?', answer: 'For immediate help finding treatment, call 1-800-662-4357. It\'s free, confidential, and available 24/7, 365 days a year.' }
             ]
+        },
+        {
+            id: 'recovery-plans',
+            name: 'Recovery Plans',
+            route: '/recovery-plans',
+            icon: <ClipboardList className="w-6 h-6" />,
+            color: '#30B27A',
+            description: 'Create comprehensive, template-driven recovery plans using a 10-domain framework. Build structured plans covering Substance Use, Emotional Wellbeing, Physical Health, Civic Engagement, Functional Wellbeing, Meaning & Purpose, Housing, Risk Taking, Recovery Experience, and Social Support. Set goals, track activities, rate importance and confidence, and record outcome measures within each domain.',
+            quickStart: [
+                'Go to Recovery Plans from the Dashboard or a participant\'s detail page',
+                'Click "New Recovery Plan" and select a participant',
+                'Choose which recovery domains to include (select from 10 available)',
+                'Configure each domain: uncheck goals or activities that don\'t apply',
+                'Rate importance and confidence (0-10) for each domain',
+                'Click "Create Plan" to save',
+                'Track progress by updating goal and activity statuses over time',
+                'Record outcome measures and assessment scores within each domain'
+            ],
+            tips: [
+                'Start with 2-3 domains rather than all 10 - you can always add more later',
+                'Use the importance and confidence ratings as conversation starters with participants',
+                'Customize template goals by adding your own - every participant\'s journey is unique',
+                'Record outcome measures regularly to document progress over time',
+                'Review plans during sessions and update statuses together with participants',
+                'The progress bar on each plan card shows goal completion at a glance',
+                'Plans are accessible from both the Recovery Plans page and each participant\'s detail page'
+            ],
+            faqs: [
+                { question: 'What are the 10 recovery domains?', answer: 'Substance Use, Emotional Wellbeing, Physical Health, Civic Engagement, Functional Wellbeing, Meaning & Purpose, Housing, Risk Taking, Recovery Experience, and Social Support. Each domain includes pre-built goals, activities, and outcome measures based on clinical best practices.' },
+                { question: 'Can I add custom goals and activities?', answer: 'Yes! Each domain comes with template goals and activities, but you can add custom ones at any time. Custom items are marked so you can distinguish them from templates.' },
+                { question: 'What are outcome measures?', answer: 'Outcome measures let you record specific data points within each domain, such as assessment scores (BARC-10, PHQ-4, etc.), numeric values, ratings, or yes/no indicators. They create a history of measurable progress.' },
+                { question: 'Can a participant have multiple plans?', answer: 'Yes. You might create a new plan for a new phase of recovery or when priorities shift. Previous plans remain accessible for reference.' },
+                { question: 'How do importance and confidence ratings work?', answer: 'These are 0-10 scales completed with the participant. Importance measures how much a domain matters to them. Confidence measures how ready they feel to work on it. High importance + low confidence areas may need extra support.' }
+            ]
+        },
+        {
+            id: 'intake',
+            name: 'Participant Intake',
+            route: '/intake',
+            icon: <PenLine className="w-6 h-6" />,
+            color: '#0891B2',
+            description: 'Complete comprehensive intake assessments for new participants using a guided 9-step wizard. Capture background demographics, emergency contacts, physical and mental health history, insurance and provider information, education and employment, social supports and safety, substance use history, and recovery history. All data is viewable and editable from the participant\'s detail page.',
+            quickStart: [
+                'Click "Start Intake" from a participant\'s detail page, or go to Intake from the Dashboard',
+                'Select the participant and set the intake date',
+                'Work through each section - all fields are optional, fill in what\'s available',
+                'Use the progress bar at the top to track completion',
+                'Click any completed section in the step list to jump back and edit',
+                'Submit the intake on the final step',
+                'View the completed intake from the participant\'s "Intake" tab',
+                'Edit anytime by clicking "Edit Intake" on the Intake tab'
+            ],
+            tips: [
+                'You don\'t have to complete every field — fill in what the participant is comfortable sharing',
+                'The wizard remembers your progress, so work through it naturally during conversation',
+                'Sensitive sections like DV and substance use are placed later in the flow to build rapport first',
+                'Use the participant\'s own language when documenting — this builds trust and accuracy',
+                'The intake is always editable, so you can update it as you learn more over time',
+                'View completed intakes on the participant detail page under the "Intake" tab'
+            ],
+            faqs: [
+                { question: 'Can I complete an intake across multiple sessions?', answer: 'Currently the intake submits as one form, but you can come back and edit it anytime after saving. Fill in what you have and update later as you learn more.' },
+                { question: 'Is any field required?', answer: 'Only the participant selection is required. All other fields are optional. Document what the participant is comfortable sharing.' },
+                { question: 'Where do I view a completed intake?', answer: 'Go to the participant\'s detail page and click the "Intake" tab. You\'ll see a read-only view organized by section with an "Edit Intake" button.' },
+                { question: 'Can a participant have multiple intakes?', answer: 'Yes. Each intake is timestamped with a date. This supports re-admission scenarios where a new intake is needed.' },
+                { question: 'Who can see the intake data?', answer: 'Intake data is visible to staff members within your organization. It follows the same access controls as other participant data.' }
+            ]
+        },
+        {
+            id: 'locations',
+            name: 'Locations',
+            route: '/locations',
+            icon: <MapPin className="w-6 h-6" />,
+            color: '#6366F1',
+            description: 'Manage your organization\'s service locations, offices, and program sites. Create locations with names, addresses, and short codes, then assign participants and staff to specific locations for better organization and filtering.',
+            quickStart: [
+                'Go to Locations from the header navigation',
+                'Click "Add Location" to create a new site',
+                'Enter the location name, short name, and address',
+                'Set the location type (Office, Program Site, etc.)',
+                'Save the location — it will appear in participant filters and assignment dropdowns',
+                'Assign participants to locations from their profile or during intake'
+            ],
+            tips: [
+                'Use short names (e.g., "Main", "North") for compact display in lists and filters',
+                'Locations appear as filter options on the Participants list page',
+                'Each participant can be assigned to one primary location',
+                'Add all your service sites upfront so they\'re available when creating participants',
+                'Location assignments help you filter your caseload when you work across multiple sites'
+            ],
+            faqs: [
+                { question: 'Do I need to create locations?', answer: 'Locations are optional but recommended if your organization operates from multiple sites. They help organize participants and make filtering easier.' },
+                { question: 'Can I edit or delete a location?', answer: 'Yes. You can edit location details anytime. Deleting a location will remove the assignment from any linked participants.' },
+                { question: 'How do I assign a participant to a location?', answer: 'When creating or editing a participant, select a location from the dropdown. You can also set locations during intake.' },
+                { question: 'Can a participant be at multiple locations?', answer: 'Currently each participant has one primary location. This represents where they primarily receive services.' }
+            ]
         }
     ];
 
@@ -286,7 +382,10 @@ export default function HelpCenter() {
         { question: 'Is there a mobile app?', answer: 'Peer Support Studio works in any modern web browser on desktop, tablet, or phone. No app download needed.' },
         { question: 'Can I share content with colleagues?', answer: 'Yes! Your organization members can collaborate and share content within your workspace.' },
         { question: 'What frameworks are the assessments based on?', answer: 'Our assessments are based on established frameworks from SAMHSA, NAADAC, and IC&RC. Recovery Capital uses the BARC-10 and MIRC methodologies.' },
-        { question: 'How do PDFs work?', answer: 'Most tools offer PDF download. PDFs are generated instantly and include all relevant information. They\'re great for sharing with participants, supervisors, or keeping for your records.' }
+        { question: 'How do PDFs work?', answer: 'Most tools offer PDF download. PDFs are generated instantly and include all relevant information. They\'re great for sharing with participants, supervisors, or keeping for your records.' },
+        { question: 'What is the 10-domain recovery plan framework?', answer: 'Recovery Plans use 10 evidence-informed domains: Substance Use, Emotional Wellbeing, Physical Health, Civic Engagement, Functional Wellbeing, Meaning & Purpose, Housing, Risk Taking, Recovery Experience, and Social Support. Each domain includes template goals, activities, and outcome measures.' },
+        { question: 'How do Intake, Recovery Plans, and Goals work together?', answer: 'Start with Intake to capture a participant\'s background and history. Use Recovery Plans to create a structured plan across life domains. Use the Goal Generator to create specific SMART goals within those domains. All three are accessible from the participant detail page.' },
+        { question: 'How do I set up locations for my organization?', answer: 'Go to Locations from the header navigation. Create locations with names and addresses. Once created, they appear in participant filters and can be assigned when creating or editing participants.' }
     ];
 
     const filteredTools = tools.filter(tool =>
@@ -398,7 +497,7 @@ export default function HelpCenter() {
                             </h2>
                             <p className="text-gray-600 mb-6">
                                 Peer Support Studio is a comprehensive toolkit designed specifically for Peer Support Specialists. 
-                                Our AI-powered tools help you create lessons, set recovery goals, document sessions, find resources, 
+                                Our AI-powered tools help you create lessons, build recovery plans, complete participant intakes, set recovery goals, document sessions, find resources, 
                                 assess recovery capital, and review your notes for billing compliance - all while maintaining the 
                                 human-centered, trauma-informed approach that defines great peer support.
                             </p>
@@ -438,7 +537,7 @@ export default function HelpCenter() {
                         {/* Tools Grid */}
                         <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-sm">
                             <h2 className="text-xl font-bold text-[#0E2235] mb-4">Available Tools</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {tools.map(tool => (
                                     <button
                                         key={tool.id}
@@ -478,6 +577,14 @@ export default function HelpCenter() {
                                 </div>
                                 <div className="flex items-start gap-3">
                                     <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                                    <p className="text-gray-600">Complete a <strong>Participant Intake</strong> to capture background and history</p>
+                                </div>
+                                <div className="flex items-start gap-3">
+                                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                                    <p className="text-gray-600">Create <strong>Recovery Plans</strong> with the 10-domain framework to set goals and track progress</p>
+                                </div>
+                                <div className="flex items-start gap-3">
+                                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
                                     <p className="text-gray-600">Use <strong>Note Reviewer</strong> to ensure billing compliance before submission</p>
                                 </div>
                                 <div className="flex items-start gap-3">
@@ -486,11 +593,11 @@ export default function HelpCenter() {
                                 </div>
                                 <div className="flex items-start gap-3">
                                     <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                                    <p className="text-gray-600">Use <strong>Service Planner</strong> to create audit-ready records</p>
+                                    <p className="text-gray-600">Set up <strong>Locations</strong> to organize participants across your service sites</p>
                                 </div>
                                 <div className="flex items-start gap-3">
                                     <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                                    <p className="text-gray-600">Try <strong>Peer Advisor</strong> when you need support or want to brainstorm</p>
+                                    <p className="text-gray-600">Use <strong>Service Planner</strong> to create audit-ready records</p>
                                 </div>
                                 <div className="flex items-start gap-3">
                                     <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />

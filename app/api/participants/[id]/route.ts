@@ -23,12 +23,14 @@ export async function GET(
         // Verify org access
         await requireOrgAccess(organizationId);
 
-        // Fetch participant with related data
+        // Fetch participant with related data — now includes location
         const participants = await sql`
             SELECT 
                 p.*,
                 u.first_name || ' ' || u.last_name as primary_pss_name,
                 u.email as primary_pss_email,
+                l.name as location_name,
+                l.short_name as location_short_name,
                 (SELECT COUNT(*) FROM saved_goals g WHERE g.participant_id = p.id AND g.status != 'abandoned') as goals_count,
                 (SELECT COUNT(*) FROM saved_goals g WHERE g.participant_id = p.id AND g.status = 'completed') as goals_completed,
                 (SELECT COUNT(*) FROM session_notes sn WHERE sn.participant_id = p.id AND NOT sn.is_archived) as notes_count,
@@ -36,6 +38,7 @@ export async function GET(
                 (SELECT MAX(created_at) FROM session_notes sn WHERE sn.participant_id = p.id) as last_session
             FROM participants p
             LEFT JOIN users u ON p.primary_pss_id = u.id
+            LEFT JOIN locations l ON l.id = p.location_id
             WHERE p.id = ${participantId}
             AND p.organization_id = ${organizationId}
         `;
@@ -49,7 +52,7 @@ export async function GET(
 
         const participant = participants[0];
 
-        // Fetch care team - using correct columns
+        // Fetch care team
         let careTeam: any[] = [];
         try {
             careTeam = await sql`
@@ -70,11 +73,10 @@ export async function GET(
                 ORDER BY pct.is_primary DESC, pct.assigned_at ASC
             `;
         } catch (e) {
-            // Care team table might not exist or have different structure
             console.log("Care team query failed, skipping:", e);
         }
 
-        // Fetch recent goals - using correct columns
+        // Fetch recent goals
         const recentGoals = await sql`
             SELECT id, smart_goal, goal_area, desired_outcome, status, timeframe, created_at
             FROM saved_goals
@@ -83,7 +85,7 @@ export async function GET(
             LIMIT 5
         `;
 
-        // Fetch recent session notes - using correct columns
+        // Fetch recent session notes
         const recentNotes = await sql`
             SELECT id, created_at, source, status, is_archived
             FROM session_notes
@@ -93,7 +95,7 @@ export async function GET(
             LIMIT 5
         `;
 
-        // Fetch recent assessments - using correct columns
+        // Fetch recent assessments
         const recentAssessments = await sql`
             SELECT id, assessment_type, assessment_date, total_score, ai_analysis, participant_name
             FROM recovery_assessments
@@ -125,7 +127,6 @@ export async function GET(
                     };
                 }
             } catch (e) {
-                // Readiness table might not exist yet
                 console.log("Readiness query failed, skipping:", e);
             }
         }
@@ -191,14 +192,15 @@ export async function PUT(
 
         const wasReentryParticipant = existing[0].is_reentry_participant;
 
-        // Build dynamic update - added is_reentry_participant
+        // Build dynamic update — location_id added
         const allowedFields = [
             'first_name', 'last_name', 'preferred_name', 'date_of_birth',
             'gender', 'email', 'phone', 'address_line1', 'address_line2',
             'city', 'state', 'zip', 'emergency_contact_name',
             'emergency_contact_phone', 'emergency_contact_relationship',
             'status', 'referral_source', 'discharge_date', 'discharge_reason',
-            'primary_pss_id', 'internal_notes', 'is_reentry_participant'
+            'primary_pss_id', 'internal_notes', 'is_reentry_participant',
+            'location_id'
         ];
 
         const setClauses: string[] = [];
@@ -233,12 +235,10 @@ export async function PUT(
         // If participant was just marked as reentry, initialize readiness items
         if (updateData.is_reentry_participant === true && !wasReentryParticipant) {
             try {
-                // Get all active readiness item definitions
                 const definitions = await sql`
                     SELECT item_key FROM readiness_item_definitions WHERE is_active = true
                 `;
                 
-                // Insert readiness items for this participant
                 for (const def of definitions) {
                     await sql`
                         INSERT INTO participant_readiness_items 
@@ -249,7 +249,6 @@ export async function PUT(
                     `;
                 }
             } catch (e) {
-                // Readiness tables might not exist yet - that's ok
                 console.log("Could not initialize readiness items:", e);
             }
         }

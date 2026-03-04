@@ -7,7 +7,7 @@ import Link from 'next/link';
 import {
     Users, Plus, Search, Filter, Loader2,
     User, Phone, Mail, Calendar, Target,
-    FileText, ChevronRight, AlertCircle, UserCheck
+    FileText, ChevronRight, AlertCircle, UserCheck, MapPin
 } from 'lucide-react';
 
 interface Participant {
@@ -20,6 +20,9 @@ interface Participant {
     status: string;
     intake_date: string;
     primary_pss_name?: string;
+    location_id?: string;
+    location_name?: string;
+    location_short_name?: string;
     goals_count?: number;
     notes_count?: number;
     last_assessment?: string;
@@ -42,7 +45,9 @@ export default function ParticipantsPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('active');
     const [pssFilter, setPssFilter] = useState('all');
+    const [locationFilter, setLocationFilter] = useState('all');
     const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
+    const [locations, setLocations] = useState<{ id: string; name: string; short_name?: string }[]>([]);
     
     const currentOrg = (session as any)?.currentOrganization;
     
@@ -72,6 +77,24 @@ export default function ParticipantsPage() {
             fetchOrgMembers();
         }
     }, [status, currentOrg?.id]);
+
+    // Fetch locations for filter dropdown
+    useEffect(() => {
+        async function fetchLocations() {
+            if (!currentOrg?.id) return;
+            try {
+                const res = await fetch(`/api/locations?organization_id=${currentOrg.id}`);
+                const data = await res.json();
+                setLocations(data.locations || []);
+            } catch (e) {
+                console.error('Error fetching locations:', e);
+            }
+        }
+
+        if (status === 'authenticated' && currentOrg?.id) {
+            fetchLocations();
+        }
+    }, [status, currentOrg?.id]);
     
     // Fetch participants
     useEffect(() => {
@@ -84,6 +107,7 @@ export default function ParticipantsPage() {
                     organization_id: currentOrg.id,
                     status: statusFilter,
                     pss_filter: pssFilter,
+                    location_filter: locationFilter,
                 });
                 if (searchTerm) {
                     params.append('search', searchTerm);
@@ -103,7 +127,7 @@ export default function ParticipantsPage() {
         
         const debounce = setTimeout(fetchParticipants, 300);
         return () => clearTimeout(debounce);
-    }, [currentOrg?.id, statusFilter, searchTerm, pssFilter]);
+    }, [currentOrg?.id, statusFilter, searchTerm, pssFilter, locationFilter]);
     
     if (status === 'loading' || !currentOrg) {
         return (
@@ -122,6 +146,8 @@ export default function ParticipantsPage() {
         };
         return styles[status] || styles.active;
     };
+
+    const hasFilters = searchTerm || statusFilter !== 'active' || pssFilter !== 'all' || locationFilter !== 'all';
     
     return (
         <div className="max-w-7xl mx-auto px-6 py-8">
@@ -153,7 +179,7 @@ export default function ParticipantsPage() {
                             className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A73A8]/20 focus:border-[#1A73A8]"
                         />
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                         <div className="flex items-center gap-2">
                             <Filter className="w-5 h-5 text-gray-400" />
                             <select
@@ -188,6 +214,24 @@ export default function ParticipantsPage() {
                                 )}
                             </select>
                         </div>
+                        {locations.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <MapPin className="w-5 h-5 text-gray-400" />
+                                <select
+                                    value={locationFilter}
+                                    onChange={(e) => setLocationFilter(e.target.value)}
+                                    className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A73A8]/20 focus:border-[#1A73A8]"
+                                >
+                                    <option value="all">All Locations</option>
+                                    <option value="unassigned">Unassigned</option>
+                                    {locations.map(loc => (
+                                        <option key={loc.id} value={loc.id}>
+                                            {loc.short_name || loc.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -270,16 +314,14 @@ export default function ParticipantsPage() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
                     <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                     <h2 className="text-xl font-bold text-[#0E2235] mb-2">
-                        {searchTerm || statusFilter !== 'active' || pssFilter !== 'all'
-                            ? 'No matching participants' 
-                            : 'No participants yet'}
+                        {hasFilters ? 'No matching participants' : 'No participants yet'}
                     </h2>
                     <p className="text-gray-500 mb-6">
-                        {searchTerm || statusFilter !== 'active' || pssFilter !== 'all'
+                        {hasFilters
                             ? 'Try adjusting your search or filters'
                             : 'Add your first participant to get started'}
                     </p>
-                    {!searchTerm && statusFilter === 'active' && pssFilter === 'all' && (
+                    {!hasFilters && (
                         <Link
                             href="/participants/new"
                             className="inline-flex items-center gap-2 px-6 py-3 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090] transition-colors"

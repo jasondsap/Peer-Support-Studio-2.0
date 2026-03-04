@@ -12,7 +12,7 @@ import Link from 'next/link';
 import {
     ArrowLeft, User, Phone, Mail, Calendar, MapPin,
     AlertCircle, Save, Loader2, Users, Heart, Building2,
-    ChevronRight, Scale, CheckCircle
+    ChevronRight, Scale, CheckCircle, Home
 } from 'lucide-react';
 
 interface Organization {
@@ -38,6 +38,7 @@ export default function AddParticipantPage() {
     const [userOrganizations, setUserOrganizations] = useState<Organization[]>([]);
     const [loadingOrgs, setLoadingOrgs] = useState(true);
     const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
+    const [locations, setLocations] = useState<{ id: string; name: string; short_name?: string }[]>([]);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
@@ -62,6 +63,7 @@ export default function AddParticipantPage() {
         internal_notes: '',
         is_reentry_participant: false,
         primary_pss_id: '',
+        location_id: '',
     });
 
     // Redirect if not authenticated
@@ -131,6 +133,25 @@ export default function AddParticipantPage() {
 
         if (status === 'authenticated' && selectedOrg?.id) {
             fetchOrgMembers();
+        }
+    }, [status, selectedOrg?.id]);
+
+    // Fetch locations for assignment dropdown
+    useEffect(() => {
+        async function fetchLocations() {
+            const orgId = selectedOrg?.id;
+            if (!orgId) return;
+            try {
+                const res = await fetch(`/api/locations?organization_id=${orgId}`);
+                const data = await res.json();
+                setLocations(data.locations || []);
+            } catch (e) {
+                console.error('Error fetching locations:', e);
+            }
+        }
+
+        if (status === 'authenticated' && selectedOrg?.id) {
+            fetchLocations();
         }
     }, [status, selectedOrg?.id]);
 
@@ -571,6 +592,29 @@ export default function AddParticipantPage() {
                                     Defaults to you. Select a different team member if needed.
                                 </p>
                             </div>
+                            {locations.length > 0 && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Location / House
+                                    </label>
+                                    <select
+                                        name="location_id"
+                                        value={formData.location_id}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                        <option value="">— Unassigned —</option>
+                                        {locations.map(loc => (
+                                            <option key={loc.id} value={loc.id}>
+                                                {loc.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Assign this participant to a specific house or program site.
+                                    </p>
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Referral Source

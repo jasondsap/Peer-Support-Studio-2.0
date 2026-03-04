@@ -12,7 +12,7 @@ import Link from 'next/link';
 import {
     ArrowLeft, User, Phone, Mail, Calendar, MapPin,
     AlertCircle, Save, Loader2, Heart, Building2,
-    ChevronRight, Trash2, UserCheck
+    ChevronRight, Trash2, UserCheck, Home
 } from 'lucide-react';
 
 interface Participant {
@@ -38,6 +38,7 @@ interface Participant {
     internal_notes?: string;
     is_reentry_participant?: boolean;
     primary_pss_id?: string;
+    location_id?: string;
 }
 
 interface OrgMember {
@@ -59,6 +60,7 @@ export default function EditParticipantPage() {
     const [success, setSuccess] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
+    const [locations, setLocations] = useState<{ id: string; name: string; short_name?: string }[]>([]);
 
     const [formData, setFormData] = useState<Participant>({
         id: '',
@@ -82,6 +84,7 @@ export default function EditParticipantPage() {
         referral_source: '',
         internal_notes: '',
         is_reentry_participant: false,
+        location_id: '',
     });
 
     // Redirect if not authenticated
@@ -148,6 +151,24 @@ export default function EditParticipantPage() {
 
         if (authStatus === 'authenticated' && currentOrg?.id) {
             fetchOrgMembers();
+        }
+    }, [authStatus, currentOrg?.id]);
+
+    // Fetch locations for assignment dropdown
+    useEffect(() => {
+        async function fetchLocations() {
+            if (!currentOrg?.id) return;
+            try {
+                const res = await fetch(`/api/locations?organization_id=${currentOrg.id}`);
+                const data = await res.json();
+                setLocations(data.locations || []);
+            } catch (e) {
+                console.error('Error fetching locations:', e);
+            }
+        }
+
+        if (authStatus === 'authenticated' && currentOrg?.id) {
+            fetchLocations();
         }
     }, [authStatus, currentOrg?.id]);
 
@@ -657,6 +678,29 @@ export default function EditParticipantPage() {
                         </div>
 
                         <div className="space-y-4">
+                            {locations.length > 0 && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Location / House
+                                    </label>
+                                    <select
+                                        name="location_id"
+                                        value={formData.location_id || ''}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                        <option value="">— Unassigned —</option>
+                                        {locations.map(loc => (
+                                            <option key={loc.id} value={loc.id}>
+                                                {loc.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Assign this participant to a specific house or program site.
+                                    </p>
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Referral Source

@@ -9,7 +9,8 @@ import {
     FileText, 
     LayoutDashboard,
     ChevronDown,
-    BookOpen
+    BookOpen,
+    MapPin
 } from 'lucide-react';
 import UserButton from './UserButton';
 
@@ -115,6 +116,13 @@ export default function Header() {
                             >
                                 <Users className="w-4 h-4" />
                                 Participants
+                            </Link>
+                            <Link
+                                href="/locations"
+                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-[#1A73A8] hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                <MapPin className="w-4 h-4" />
+                                Locations
                             </Link> 
                             <Link
                                 href="/doc-library"

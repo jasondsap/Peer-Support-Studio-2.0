@@ -9,7 +9,7 @@ import {
     ArrowRight, Loader2, Sparkles,
     BookOpen, ClipboardList, MessageSquare,
     Building2, ClipboardCheck, Search,
-    TrendingUp, Mail, Plus,
+    Mail, Plus,
 } from 'lucide-react';
 import AllyIntelligenceChat from './components/AllyIntelligenceChat';
 
@@ -49,7 +49,7 @@ function NoOrganizationModal({ userName }: { userName: string }) {
                 {/* Content */}
                 <div className="p-6">
                     <p className="text-gray-600 text-center mb-6">
-                        You need to be part of an organization to use Continuum Care Studio.
+                        You need to be part of an organization to use Peer Support Studio.
                         Create your own or join an existing one.
                     </p>
 
@@ -185,13 +185,17 @@ export default function HomePage() {
             },
         },
         {
-            title: 'Journey Tracker',
-            description: 'Track recovery progress across life domains',
-            icon: TrendingUp,
-            href: '/journey-tracker',
+            title: 'Recovery Plans',
+            description: 'Template-driven planning across 10 recovery domains',
+            icon: ClipboardList,
+            href: '/recovery-plans',
             gradient: 'from-[#30B27A] to-[#4AC490]',
             stat: null,
-            action: null,
+            action: {
+                label: 'Create New',
+                href: '/recovery-plans?create=true',
+                icon: Plus,
+            },
         },
     ];
 
@@ -226,10 +230,18 @@ export default function HomePage() {
     // Assessment & Goals tools
     const assessmentTools = [
         {
-            title: 'Recovery Capital',
-            description: 'BARC-10 & MIRC-28 assessments',
+            title: 'BARC-10',
+            description: 'Recovery Capital (Brief)',
             icon: Activity,
-            href: '/recovery-capital',
+            href: '/assessments/barc10',
+            badge: null,
+            color: 'bg-purple-500',
+        },
+        {
+            title: 'MIRC-28',
+            description: 'Recovery Capital (Full)',
+            icon: Activity,
+            href: '/assessments/mirc28',
             badge: null,
             color: 'bg-purple-500',
         },
@@ -389,7 +401,7 @@ export default function HomePage() {
                         title="Assessment & Goals" 
                         subtitle="Measure progress and set objectives"
                     />
-                    <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {assessmentTools.map((tool) => (
                             <ToolCard key={tool.title} tool={tool} />
                         ))}
