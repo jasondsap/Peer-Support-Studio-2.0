@@ -49,7 +49,7 @@ The summary should be written in third person ("Peer Specialist...") and flow na
 - Avoid clinical/diagnostic language (no "patient exhibited symptoms")
 - Use ordinary human experience language
 - Include specific details, not vague statements
-- Reference the participant's recovery goals when relevant
+- When recovery goals are provided, weave them meaningfully into the narrative — name the specific goal, reference its recovery domain if present, and connect the session's discussion and interventions directly to that goal. Don't just mention the goal title; show how the session advanced it.
 - Document participation and motivation levels naturally within the narrative
 - Keep professional but warm tone
 - NEVER use bullet points in the summary - write in flowing paragraphs
@@ -148,10 +148,22 @@ export async function POST(request: NextRequest) {
 ${othersPresent ? `- Others Present: ${othersPresent}` : ''}
 
 **Recovery Goals Addressed:**
-${selectedGoals && selectedGoals.length > 0 
-    ? selectedGoals.map((g: any) => `- ${g.title}`).join('\n')
+${selectedGoals && selectedGoals.length > 0
+    ? selectedGoals.map((g: any) => {
+        const goalText = g.goal_text || g.title;
+        const status = g.status ? ` [${g.status.replace(/_/g, ' ')}]` : '';
+        let line = `- Goal: ${goalText}${status}`;
+        if (g.source === 'recovery_plan') {
+            if (g.domainKey) line += `\n  Recovery domain: ${g.domainKey.replace(/_/g, ' ')}`;
+            if (g.planName) line += `\n  Plan: ${g.planName}`;
+            if (g.activities && g.activities.length > 0) {
+                line += `\n  Action steps in plan: ${g.activities.map((a: any) => a.activity_text).join('; ')}`;
+            }
+        }
+        return line;
+    }).join('\n')
     : '- No specific goals selected'}
-${goalDiscussion ? `\nGoal Discussion: ${goalDiscussion}` : ''}
+${goalDiscussion ? `\nHow goals were discussed / progress or challenges: ${goalDiscussion}` : ''}
 
 **What Participant Shared:**
 ${participantShared || 'Not documented'}

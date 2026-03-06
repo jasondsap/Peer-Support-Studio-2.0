@@ -35,6 +35,7 @@ function SessionNotesContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { data: session, status: authStatus } = useSession();
+    const currentOrg = (session as any)?.currentOrganization;
 
     const [mode, setMode] = useState<Mode>('select');
     const [participants, setParticipants] = useState<Participant[]>([]);
@@ -424,6 +425,7 @@ function SessionNotesContent() {
                             participants={participants}
                             onSave={handleSaveManualNote}
                             onCancel={() => setMode('select')}
+                            organizationId={currentOrg?.id || undefined}
                             prefillData={{
                                 topic: prefillTopic || undefined,
                                 intervention: prefillIntervention || undefined,

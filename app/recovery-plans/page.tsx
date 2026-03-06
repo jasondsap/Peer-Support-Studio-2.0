@@ -350,6 +350,7 @@ interface Plan {
     plan_name: string; status: string; notes: string; created_at: string; updated_at: string;
     participant_first_name?: string; participant_last_name?: string; participant_preferred_name?: string;
     domains?: PlanDomain[]; domain_count?: number; completed_goals?: number; total_goals?: number;
+    plan_summary?: string;
 }
 
 type ViewState = 'list' | 'create_select_participant' | 'create_select_domains' | 'create_configure' | 'detail';
@@ -393,6 +394,10 @@ function RecoveryPlansContent() {
     // Detail view state
     const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
     const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+    // Plan summary state
+    const [generatingSummary, setGeneratingSummary] = useState(false);
+    const [summaryError, setSummaryError] = useState('');
 
     // ========================================================================
     // Init & Data
@@ -666,6 +671,29 @@ function RecoveryPlansContent() {
             await fetchPlanDetail(selectedPlan.id);
         } catch (e) { console.error(e); }
         finally { setAddItemLoading(false); }
+    };
+
+    const generatePlanSummary = async () => {
+        if (!selectedPlan || !currentOrg?.id) return;
+        setGeneratingSummary(true);
+        setSummaryError('');
+        try {
+            const res = await fetch('/api/rc-plans/generate-summary', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    plan_id: selectedPlan.id,
+                    organization_id: currentOrg.id,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to generate summary');
+            setSelectedPlan(prev => prev ? { ...prev, plan_summary: data.summary } : prev);
+        } catch (e: any) {
+            setSummaryError(e.message || 'Failed to generate summary');
+        } finally {
+            setGeneratingSummary(false);
+        }
     };
 
     const deleteItem = async (type: string, id: string) => {
@@ -1153,6 +1181,46 @@ function RecoveryPlansContent() {
                                                 </button>
                                             );
                                         })}
+                                    </div>
+
+                                    {/* Plan Summary */}
+                                    <div className="mt-4 border-t border-gray-100 pt-4">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <Sparkles className="w-4 h-4 text-[#1A73A8]" />
+                                                <span className="text-sm font-semibold text-[#0E2235]">Plan Summary</span>
+                                                {selectedPlan.plan_summary && (
+                                                    <span className="text-xs text-gray-400 font-normal">AI-generated · grounded in SAMHSA recovery standards</span>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={generatePlanSummary}
+                                                disabled={generatingSummary}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[#1A73A8] text-[#1A73A8] hover:bg-blue-50 disabled:opacity-50 transition-colors"
+                                            >
+                                                {generatingSummary
+                                                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating...</>
+                                                    : <><Sparkles className="w-3.5 h-3.5" /> {selectedPlan.plan_summary ? 'Regenerate' : 'Generate Summary'}</>
+                                                }
+                                            </button>
+                                        </div>
+
+                                        {summaryError && (
+                                            <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2">
+                                                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                                                {summaryError}
+                                            </div>
+                                        )}
+
+                                        {selectedPlan.plan_summary ? (
+                                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                                {selectedPlan.plan_summary}
+                                            </p>
+                                        ) : !generatingSummary && (
+                                            <p className="text-sm text-gray-400 italic">
+                                                No summary yet. Click &ldquo;Generate Summary&rdquo; to create an AI-written narrative grounded in recovery best practices.
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 

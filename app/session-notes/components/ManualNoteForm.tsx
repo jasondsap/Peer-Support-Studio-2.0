@@ -20,12 +20,17 @@ interface RecoveryGoal {
     id: string;
     title: string;
     status: string;
+    source: 'goals_module' | 'recovery_plan';
+    planName?: string;
+    domainKey?: string;
+    activities?: { activity_text: string; status?: string }[];
 }
 
 interface ManualNoteFormProps {
     participants: Participant[];
     onSave: (data: any) => Promise<void>;
     onCancel: () => void;
+    organizationId?: string;
     staffName?: string;
     prefillData?: {
         topic?: string;
@@ -38,6 +43,7 @@ export default function ManualNoteForm({
     participants, 
     onSave, 
     onCancel,
+    organizationId,
     staffName: initialStaffName = '',
     prefillData 
 }: ManualNoteFormProps) {
@@ -159,11 +165,59 @@ export default function ManualNoteForm({
     const fetchParticipantGoals = async (participantId: string) => {
         setIsLoadingGoals(true);
         try {
-            const response = await fetch(`/api/participants/${participantId}/goals`);
-            if (response.ok) {
-                const data = await response.json();
-                setParticipantGoals(data.goals || []);
+            const merged: RecoveryGoal[] = [];
+
+            // ── Goals module ──────────────────────────────────────────────────
+            const [goalsRes, plansRes] = await Promise.all([
+                fetch(`/api/participants/${participantId}/goals`),
+                organizationId
+                    ? fetch(`/api/rc-plans?organization_id=${organizationId}&participant_id=${participantId}`)
+                    : Promise.resolve(null),
+            ]);
+
+            if (goalsRes.ok) {
+                const data = await goalsRes.json();
+                for (const g of (data.goals || [])) {
+                    merged.push({
+                        id: g.id,
+                        title: g.title,
+                        status: g.status || 'active',
+                        source: 'goals_module' as const,
+                    });
+                }
             }
+
+            // ── Recovery plan goals ───────────────────────────────────────────
+            if (plansRes && plansRes.ok) {
+                const plansData = await plansRes.json();
+                for (const plan of (plansData.plans || [])) {
+                    if (plan.status === 'archived') continue;
+                    const detailRes = await fetch(
+                        `/api/rc-plans?organization_id=${organizationId}&id=${plan.id}`
+                    );
+                    if (!detailRes.ok) continue;
+                    const { plan: fullPlan } = await detailRes.json();
+                    for (const domain of (fullPlan.domains || [])) {
+                        for (const goal of (domain.goals || [])) {
+                            if (goal.status === 'completed') continue;
+                            merged.push({
+                                id: goal.id,
+                                title: goal.goal_text,
+                                status: goal.status || 'active',
+                                source: 'recovery_plan' as const,
+                                planName: fullPlan.plan_name,
+                                domainKey: domain.domain_key,
+                                activities: (goal.activities || []).map((a: any) => ({
+                                    activity_text: a.activity_text,
+                                    status: a.status,
+                                })),
+                            });
+                        }
+                    }
+                }
+            }
+
+            setParticipantGoals(merged);
         } catch (error) {
             console.error('Error fetching goals:', error);
         } finally {
@@ -664,28 +718,65 @@ export default function ManualNoteForm({
                                 <label className="block text-sm font-medium text-gray-700">
                                     Which recovery goals were addressed?
                                 </label>
-                                {participantGoals.map(goal => (
-                                    <label key={goal.id} className="flex items-start gap-3 p-3 bg-white rounded-lg cursor-pointer hover:bg-amber-50 transition-colors">
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.selectedGoalIds.includes(goal.id)}
-                                            onChange={() => {
-                                                const newIds = formData.selectedGoalIds.includes(goal.id)
-                                                    ? formData.selectedGoalIds.filter(id => id !== goal.id)
-                                                    : [...formData.selectedGoalIds, goal.id];
-                                                setFormData({ ...formData, selectedGoalIds: newIds });
-                                            }}
-                                            className="mt-1 rounded text-amber-600 focus:ring-amber-500"
-                                        />
-                                        <div>
-                                            <p className="font-medium text-gray-900 text-sm">{goal.title}</p>
-                                        </div>
-                                    </label>
-                                ))}
+
+                                {/* Goals Module */}
+                                {participantGoals.filter(g => g.source === 'goals_module').length > 0 && (
+                                    <div>
+                                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 px-1">Goals Module</p>
+                                        {participantGoals.filter(g => g.source === 'goals_module').map(goal => (
+                                            <label key={goal.id} className="flex items-start gap-3 p-3 bg-white rounded-lg cursor-pointer hover:bg-amber-50 transition-colors mb-1">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={formData.selectedGoalIds.includes(goal.id)}
+                                                    onChange={() => {
+                                                        const newIds = formData.selectedGoalIds.includes(goal.id)
+                                                            ? formData.selectedGoalIds.filter(id => id !== goal.id)
+                                                            : [...formData.selectedGoalIds, goal.id];
+                                                        setFormData({ ...formData, selectedGoalIds: newIds });
+                                                    }}
+                                                    className="mt-1 rounded text-amber-600 focus:ring-amber-500"
+                                                />
+                                                <div>
+                                                    <p className="font-medium text-gray-900 text-sm">{goal.title}</p>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Recovery Plan Goals */}
+                                {participantGoals.filter(g => g.source === 'recovery_plan').length > 0 && (
+                                    <div>
+                                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 px-1">Recovery Plan Goals</p>
+                                        {participantGoals.filter(g => g.source === 'recovery_plan').map(goal => (
+                                            <label key={goal.id} className="flex items-start gap-3 p-3 bg-white rounded-lg cursor-pointer hover:bg-amber-50 transition-colors mb-1">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={formData.selectedGoalIds.includes(goal.id)}
+                                                    onChange={() => {
+                                                        const newIds = formData.selectedGoalIds.includes(goal.id)
+                                                            ? formData.selectedGoalIds.filter(id => id !== goal.id)
+                                                            : [...formData.selectedGoalIds, goal.id];
+                                                        setFormData({ ...formData, selectedGoalIds: newIds });
+                                                    }}
+                                                    className="mt-1 rounded text-amber-600 focus:ring-amber-500"
+                                                />
+                                                <div>
+                                                    <p className="font-medium text-gray-900 text-sm">{goal.title}</p>
+                                                    {(goal.planName || goal.domainKey) && (
+                                                        <p className="text-xs text-gray-400 mt-0.5">
+                                                            {goal.planName}{goal.planName && goal.domainKey ? ' · ' : ''}{goal.domainKey?.replace(/_/g, ' ')}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <p className="text-sm text-gray-500 mb-4 italic">
-                                No recovery goals found. Consider creating goals in the Goal Generator.
+                                No recovery goals found. Consider creating goals in the Goal Generator or Recovery Plan.
                             </p>
                         )}
                     </>
