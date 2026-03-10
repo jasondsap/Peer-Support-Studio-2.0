@@ -564,8 +564,9 @@ function RecoveryPlansContent() {
             const data = await res.json();
             if (data.success) {
                 await fetchPlans();
+                await fetchPlanDetail(data.planId);
                 resetCreate();
-                setView('list');
+                setView('detail');
             } else {
                 setError(data.error || 'Failed to save');
             }
