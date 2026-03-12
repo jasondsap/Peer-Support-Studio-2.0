@@ -21,10 +21,23 @@ const issuerUrl = process.env.COGNITO_ISSUER || '';
 const issuerParts = issuerUrl.replace('https://', '').split('/');
 const derivedRegion = issuerParts[0]?.split('.')[1] || '';
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || issuerParts[1] || '';
+const cognitoRegion = derivedRegion || process.env.RESIDENT_POOL_REGION || process.env.APP_AWS_REGION || process.env.AWS_REGION || 'us-east-2';
 
-// Initialize Cognito client — prefer region derived from issuer URL
+// Resolve AWS credentials — check Cognito-specific, then app-level, then standard
+const awsAccessKey = process.env.COGNITO_ADMIN_ACCESS_KEY_ID || process.env.COGNITO_AWS_ACCESS_KEY_ID || process.env.APP_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '';
+const awsSecretKey = process.env.COGNITO_ADMIN_SECRET_ACCESS_KEY || process.env.COGNITO_AWS_SECRET_ACCESS_KEY || process.env.APP_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '';
+
+// Initialize Cognito client with explicit credentials
 const cognitoClient = new CognitoIdentityProviderClient({
-    region: derivedRegion || process.env.AWS_REGION || 'us-east-2',
+    region: cognitoRegion,
+    ...(awsAccessKey && awsSecretKey
+        ? {
+              credentials: {
+                  accessKeyId: awsAccessKey,
+                  secretAccessKey: awsSecretKey,
+              },
+          }
+        : {}),
 });
 
 // ─── GET: List organization members ─────────────────────────────────────────
@@ -208,6 +221,7 @@ export async function POST(
 
         // ── Step 1: Create Cognito user ──
         let cognitoSub: string | null = null;
+        let isNewCognitoUser = false;
 
         try {
             // Check if user already exists in Cognito
@@ -222,6 +236,7 @@ export async function POST(
                 cognitoSub = existingCognitoUser.UserAttributes?.find(
                     (attr) => attr.Name === 'sub'
                 )?.Value || null;
+                console.log(`Cognito: Existing user found for ${email}`);
             } catch (cognitoError: any) {
                 if (cognitoError.name === 'UserNotFoundException') {
                     // User doesn't exist in Cognito — create them
@@ -245,6 +260,8 @@ export async function POST(
                     cognitoSub = createResult.User?.Attributes?.find(
                         (attr) => attr.Name === 'sub'
                     )?.Value || null;
+                    isNewCognitoUser = true;
+                    console.log(`Cognito: New user created for ${email}`);
                 } else {
                     throw cognitoError;
                 }
@@ -307,7 +324,10 @@ export async function POST(
 
         return NextResponse.json({
             success: true,
-            message: `Invitation sent to ${email}. They will receive an email with login instructions.`,
+            message: isNewCognitoUser
+                ? `Invitation sent to ${email}. They will receive an email with temporary login credentials.`
+                : `${first_name} ${last_name} has been added to your organization. They already have an account and can log in now.`,
+            isNewUser: isNewCognitoUser,
             member: {
                 id: membership[0].id,
                 user_id: dbUser.id,
