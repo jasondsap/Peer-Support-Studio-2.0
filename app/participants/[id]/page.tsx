@@ -931,7 +931,7 @@ export default function ParticipantDetailPage() {
                 <div className="space-y-4">
                     <div className="flex justify-end">
                         <Link
-                            href={`/goal-generator?participant_id=${participant.id}`}
+                            href={`/goals/new?participant_id=${participant.id}`}
                             className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090]"
                         >
                             <Plus className="w-4 h-4" />
@@ -948,7 +948,7 @@ export default function ParticipantDetailPage() {
                             {goals.map(goal => {
                                 const color = goalAreaColors[goal.goal_area] || '#6B7280';
                                 return (
-                                    <div key={goal.id} className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow">
+                                    <div key={goal.id} onClick={() => router.push(`/goals/${goal.id}`)} className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
                                         <div className="flex items-start justify-between">
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2 mb-1">
@@ -1128,14 +1128,14 @@ export default function ParticipantDetailPage() {
                 <div className="space-y-4">
                     <div className="flex justify-end gap-3">
                         <Link
-                            href={`/recovery-capital?participant_id=${participant.id}&type=barc10`}
+                            href={`/assessments/barc10?participant_id=${participant.id}&type=barc10`}
                             className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090]"
                         >
                             <Plus className="w-4 h-4" />
                             BARC-10
                         </Link>
                         <Link
-                            href={`/recovery-capital?participant_id=${participant.id}&type=mirc28`}
+                            href={`/assessments/mirc28?participant_id=${participant.id}&type=mirc28`}
                             className="flex items-center gap-2 px-4 py-2 bg-[#1A73A8] text-white rounded-lg hover:bg-[#156090]"
                         >
                             <Plus className="w-4 h-4" />

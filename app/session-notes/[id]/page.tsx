@@ -503,7 +503,7 @@ ${note.pss_note.followUpNeeded.map(f => `• ${f}`).join('\n')}`;
                             </div>
                         </button>
                         <button
-                            onClick={() => router.push('/goal-generator')}
+                            onClick={() => router.push('/goals/new')}
                             className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl hover:bg-green-100 transition-colors text-left"
                         >
                             <Target className="w-8 h-8 text-green-600" />

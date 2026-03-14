@@ -9,6 +9,62 @@ import {
     Sparkles, Loader2, Target, ChevronDown, ChevronUp, ShieldCheck
 } from 'lucide-react';
 
+// ============================================================================
+// Question Definitions — used to map stored responses back to display
+// ============================================================================
+
+const BARC10_QUESTIONS = [
+    { id: 1, text: "There are more important things to me in life than using substances.", domain: "human", shortLabel: "Purpose & Meaning", reverse: false },
+    { id: 2, text: "In general I am happy with my life.", domain: "human", shortLabel: "Life Satisfaction", reverse: false },
+    { id: 3, text: "I have enough energy to complete the tasks I set myself.", domain: "human", shortLabel: "Energy & Vitality", reverse: false },
+    { id: 4, text: "I am proud of the community I live in and feel part of it.", domain: "social", shortLabel: "Community Connection", reverse: false },
+    { id: 5, text: "I get lots of support from friends.", domain: "social", shortLabel: "Friend Support", reverse: false },
+    { id: 6, text: "I regard my life as challenging and fulfilling without the need for using drugs or alcohol.", domain: "human", shortLabel: "Fulfillment in Recovery", reverse: false },
+    { id: 7, text: "My living space has helped to drive my recovery journey.", domain: "physical", shortLabel: "Supportive Environment", reverse: false },
+    { id: 8, text: "I take full responsibility for my actions.", domain: "human", shortLabel: "Personal Responsibility", reverse: false },
+    { id: 9, text: "I am happy dealing with a range of professional people.", domain: "cultural", shortLabel: "Professional Engagement", reverse: false },
+    { id: 10, text: "I am making good progress on my recovery journey.", domain: "cultural", shortLabel: "Recovery Progress", reverse: false }
+];
+
+const MIRC28_QUESTIONS = [
+    // Social Capital (items 1-7)
+    { id: 1, text: "I actively support other people who are in recovery.", domain: "social", shortLabel: "Peer Support", reverse: false },
+    { id: 2, text: "My family makes my recovery more difficult.", domain: "social", shortLabel: "Family Barriers", reverse: true },
+    { id: 3, text: "I have at least one friend who supports my recovery.", domain: "social", shortLabel: "Friend Support", reverse: false },
+    { id: 4, text: "My family supports my recovery.", domain: "social", shortLabel: "Family Support", reverse: false },
+    { id: 5, text: "Some people in my life do not think I'll make it in my recovery.", domain: "social", shortLabel: "Negative Beliefs", reverse: true },
+    { id: 6, text: "I feel alone.", domain: "social", shortLabel: "Loneliness", reverse: true },
+    { id: 7, text: "I feel like I'm part of a recovery community.", domain: "social", shortLabel: "Community Belonging", reverse: false },
+    // Physical Capital (items 8-14)
+    { id: 8, text: "My housing situation is helpful for my recovery.", domain: "physical", shortLabel: "Housing Support", reverse: false },
+    { id: 9, text: "I have difficulty getting transportation.", domain: "physical", shortLabel: "Transportation Barriers", reverse: true },
+    { id: 10, text: "My housing situation is unstable.", domain: "physical", shortLabel: "Housing Instability", reverse: true },
+    { id: 11, text: "I have enough money every week to buy the basic things I need.", domain: "physical", shortLabel: "Basic Needs", reverse: false },
+    { id: 12, text: "Not having enough money makes my recovery more difficult.", domain: "physical", shortLabel: "Financial Barriers", reverse: true },
+    { id: 13, text: "I can afford the care I need for my health, mental health, and recovery.", domain: "physical", shortLabel: "Affordable Care", reverse: false },
+    { id: 14, text: "I have reliable access to a phone and the internet.", domain: "physical", shortLabel: "Connectivity", reverse: false },
+    // Human Capital (items 15-21)
+    { id: 15, text: "I find it hard to have fun.", domain: "human", shortLabel: "Enjoyment Barriers", reverse: true },
+    { id: 16, text: "I feel physically healthy most days.", domain: "human", shortLabel: "Physical Health", reverse: false },
+    { id: 17, text: "I am struggling with guilt or shame.", domain: "human", shortLabel: "Guilt & Shame", reverse: true },
+    { id: 18, text: "I am experiencing a lot of stress.", domain: "human", shortLabel: "Stress Level", reverse: true },
+    { id: 19, text: "My education and training have prepared me to handle life's challenges.", domain: "human", shortLabel: "Preparedness", reverse: false },
+    { id: 20, text: "I have problems with my mental health.", domain: "human", shortLabel: "Mental Health", reverse: true },
+    { id: 21, text: "I feel my life has purpose and meaning.", domain: "human", shortLabel: "Purpose & Meaning", reverse: false },
+    // Cultural Capital (items 22-28)
+    { id: 22, text: "It's hard for me to trust others.", domain: "cultural", shortLabel: "Trust Barriers", reverse: true },
+    { id: 23, text: "I have opportunities to participate in fun activities that do not involve drugs and alcohol.", domain: "cultural", shortLabel: "Sober Activities", reverse: false },
+    { id: 24, text: "I feel disconnected from my culture or not part of any culture.", domain: "cultural", shortLabel: "Cultural Disconnection", reverse: true },
+    { id: 25, text: "I feel like an outcast.", domain: "cultural", shortLabel: "Social Exclusion", reverse: true },
+    { id: 26, text: "There are helpful services and resources accessible to me.", domain: "cultural", shortLabel: "Resource Access", reverse: false },
+    { id: 27, text: "It's hard to let go of the part of my identity that was linked to my drinking or drug use.", domain: "cultural", shortLabel: "Identity Attachment", reverse: true },
+    { id: 28, text: "My neighborhood or town feels safe.", domain: "cultural", shortLabel: "Neighborhood Safety", reverse: false },
+];
+
+// ============================================================================
+// Domain info and response labels
+// ============================================================================
+
 const DOMAIN_INFO = {
     social: { name: "Social Capital", icon: Users, color: "#8B5CF6" },
     physical: { name: "Physical Capital", icon: Home, color: "#F59E0B" },
@@ -16,14 +72,25 @@ const DOMAIN_INFO = {
     cultural: { name: "Cultural Capital", icon: Heart, color: "#EC4899" }
 };
 
-const RESPONSE_LABELS: Record<number, string> = {
+const BARC10_LABELS: Record<number, string> = {
     1: "Strongly Disagree",
-    2: "Disagree", 
+    2: "Disagree",
     3: "Somewhat Disagree",
     4: "Somewhat Agree",
     5: "Agree",
     6: "Strongly Agree"
 };
+
+const MIRC28_LABELS: Record<number, string> = {
+    1: "Strongly Disagree",
+    2: "Disagree",
+    3: "Agree",
+    4: "Strongly Agree"
+};
+
+// ============================================================================
+// Types
+// ============================================================================
 
 interface Assessment {
     id: string;
@@ -46,6 +113,10 @@ interface Props {
     onAnalyze?: (id: string) => Promise<any>;
 }
 
+// ============================================================================
+// Component
+// ============================================================================
+
 export default function AssessmentDetailModal({ assessment, onClose, onDelete, onAnalyze }: Props) {
     const [activeTab, setActiveTab] = useState<'overview' | 'answers' | 'analysis' | 'goals'>('overview');
     const [expandedDomains, setExpandedDomains] = useState<string[]>([]);
@@ -55,21 +126,58 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
     const [analysis, setAnalysis] = useState(assessment.ai_analysis);
     const [sourcesOpen, setSourcesOpen] = useState(false);
 
-    const maxScore = assessment.assessment_type === 'mirc28' ? 140 : 60;
+    const isMirc = assessment.assessment_type === 'mirc28';
+    const maxScore = isMirc ? 112 : 60;
     const percentage = Math.round((assessment.total_score / maxScore) * 100);
+    const questions = isMirc ? MIRC28_QUESTIONS : BARC10_QUESTIONS;
+    const responseLabels = isMirc ? MIRC28_LABELS : BARC10_LABELS;
+    const maxLikert = isMirc ? 4 : 6;
 
-    const participantName = assessment.participant_name 
-        || (assessment.participant_first_name 
+    const participantName = assessment.participant_name
+        || (assessment.participant_first_name
             ? `${assessment.participant_first_name} ${assessment.participant_last_name || ''}`.trim()
             : 'Self-Assessment');
 
     const toggleDomain = (domain: string) => {
-        setExpandedDomains(prev => 
-            prev.includes(domain) 
+        setExpandedDomains(prev =>
+            prev.includes(domain)
                 ? prev.filter(d => d !== domain)
                 : [...prev, domain]
         );
     };
+
+    // ========================================================================
+    // Map stored responses { "q1": 5, "q2": 3 } back to question definitions
+    // ========================================================================
+    const getAnswersByDomain = () => {
+        const responses = assessment.responses || {};
+        const byDomain: Record<string, any[]> = {
+            social: [], physical: [], human: [], cultural: []
+        };
+
+        questions.forEach((q) => {
+            const key = `q${q.id}`;
+            const rawValue = responses[key];
+            if (rawValue !== undefined && rawValue !== null) {
+                byDomain[q.domain]?.push({
+                    id: q.id,
+                    text: q.text,
+                    shortLabel: q.shortLabel,
+                    answer: rawValue,
+                    domain: q.domain,
+                    reverse: q.reverse || false,
+                });
+            }
+        });
+
+        return byDomain;
+    };
+
+    const answersByDomain = getAnswersByDomain();
+
+    // ========================================================================
+    // Handlers
+    // ========================================================================
 
     const handleSaveNotes = async () => {
         setSavingNotes(true);
@@ -102,11 +210,10 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
     };
 
     const handleDownloadPDF = async () => {
-        // Dynamically import to avoid SSR issues
         const { generateRecoveryCapitalPDF } = await import('../lib/generateRecoveryCapitalPDF');
-        
+
         const domainScores = assessment.domain_scores || {};
-        
+
         generateRecoveryCapitalPDF({
             participantName,
             assessmentType: assessment.assessment_type as 'barc10' | 'mirc28',
@@ -148,23 +255,18 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
         return 'bg-red-100 text-red-700';
     };
 
-    // Parse responses for answers tab
-    const getAnswersByDomain = () => {
-        const responses = assessment.responses || {};
-        const byDomain: Record<string, any[]> = {
-            social: [], physical: [], human: [], cultural: []
-        };
-
-        Object.entries(responses).forEach(([key, value]: [string, any]) => {
-            if (value?.domain && byDomain[value.domain]) {
-                byDomain[value.domain].push(value);
-            }
-        });
-
-        return byDomain;
+    // For answer display: color based on whether the response is positive
+    const getAnswerColor = (value: number, reverse: boolean) => {
+        const effectiveValue = reverse ? (maxLikert + 1 - value) : value;
+        const midpoint = (maxLikert + 1) / 2;
+        if (effectiveValue >= midpoint + 1) return { bar: 'bg-green-500', text: 'text-green-600' };
+        if (effectiveValue >= midpoint) return { bar: 'bg-yellow-500', text: 'text-yellow-600' };
+        return { bar: 'bg-red-500', text: 'text-red-600' };
     };
 
-    const answersByDomain = getAnswersByDomain();
+    // ========================================================================
+    // Render
+    // ========================================================================
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -181,6 +283,9 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
                                 hour: 'numeric',
                                 minute: '2-digit'
                             })}
+                            <span className="ml-2 px-2 py-0.5 bg-gray-100 rounded text-xs font-medium uppercase">
+                                {isMirc ? 'MIRC-28' : 'BARC-10'}
+                            </span>
                         </p>
                     </div>
                     <button
@@ -210,7 +315,9 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6">
+                    {/* ============================================================ */}
                     {/* Overview Tab */}
+                    {/* ============================================================ */}
                     {activeTab === 'overview' && (
                         <div className="space-y-6">
                             {/* Score Circle */}
@@ -232,14 +339,14 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
                                 <h3 className="font-semibold text-gray-900">Domain Breakdown</h3>
                                 {Object.entries(DOMAIN_INFO).map(([key, domain]) => {
                                     const domainScore = assessment.domain_scores?.[key];
-                                    const domainPct = typeof domainScore === 'object' 
-                                        ? domainScore?.percentage 
+                                    const domainPct = typeof domainScore === 'object'
+                                        ? domainScore?.percentage
                                         : domainScore || 0;
                                     const Icon = domain.icon;
 
                                     return (
                                         <div key={key} className="flex items-center gap-3">
-                                            <div 
+                                            <div
                                                 className="w-8 h-8 rounded-lg flex items-center justify-center"
                                                 style={{ backgroundColor: `${domain.color}20` }}
                                             >
@@ -283,7 +390,9 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
                         </div>
                     )}
 
-                    {/* Answers Tab */}
+                    {/* ============================================================ */}
+                    {/* Answers Tab — maps stored { q1: 5 } to question definitions */}
+                    {/* ============================================================ */}
                     {activeTab === 'answers' && (
                         <div className="space-y-4">
                             {Object.entries(DOMAIN_INFO).map(([domainKey, domain]) => {
@@ -306,30 +415,35 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
                                         </button>
                                         {isExpanded && domainAnswers.length > 0 && (
                                             <div className="divide-y divide-gray-100">
-                                                {domainAnswers.map((answer: any, idx: number) => (
-                                                    <div key={idx} className="p-4">
-                                                        <p className="text-sm text-gray-700 mb-2">
-                                                            <span className="font-medium text-gray-500">Q{idx + 1}:</span> {answer.text || answer.question}
-                                                        </p>
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="h-2 flex-1 bg-gray-100 rounded-full overflow-hidden">
-                                                                <div
-                                                                    className={`h-full rounded-full ${
-                                                                        answer.answer >= 4 ? 'bg-green-500' :
-                                                                        answer.answer >= 3 ? 'bg-yellow-500' : 'bg-red-500'
-                                                                    }`}
-                                                                    style={{ width: `${(answer.answer / 6) * 100}%` }}
-                                                                />
+                                                {domainAnswers.map((answer: any) => {
+                                                    const colors = getAnswerColor(answer.answer, answer.reverse);
+                                                    return (
+                                                        <div key={answer.id} className="p-4">
+                                                            <div className="flex items-start justify-between gap-3 mb-2">
+                                                                <p className="text-sm text-gray-700 flex-1">
+                                                                    <span className="font-medium text-gray-500">Q{answer.id}:</span>{' '}
+                                                                    {answer.text}
+                                                                </p>
+                                                                {answer.reverse && (
+                                                                    <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded flex-shrink-0">
+                                                                        Reverse
+                                                                    </span>
+                                                                )}
                                                             </div>
-                                                            <span className={`text-sm font-medium min-w-[120px] text-right ${
-                                                                answer.answer >= 4 ? 'text-green-600' :
-                                                                answer.answer >= 3 ? 'text-yellow-600' : 'text-red-600'
-                                                            }`}>
-                                                                {RESPONSE_LABELS[answer.answer] || answer.answer}
-                                                            </span>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="h-2 flex-1 bg-gray-100 rounded-full overflow-hidden">
+                                                                    <div
+                                                                        className={`h-full rounded-full ${colors.bar}`}
+                                                                        style={{ width: `${(answer.answer / maxLikert) * 100}%` }}
+                                                                    />
+                                                                </div>
+                                                                <span className={`text-sm font-medium min-w-[130px] text-right ${colors.text}`}>
+                                                                    {responseLabels[answer.answer] || `${answer.answer}/${maxLikert}`}
+                                                                </span>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                         {isExpanded && domainAnswers.length === 0 && (
@@ -343,7 +457,9 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
                         </div>
                     )}
 
+                    {/* ============================================================ */}
                     {/* Analysis Tab */}
+                    {/* ============================================================ */}
                     {activeTab === 'analysis' && (
                         <div className="space-y-6">
                             {analysis ? (
@@ -443,7 +559,9 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
                         </div>
                     )}
 
+                    {/* ============================================================ */}
                     {/* Goals Tab */}
+                    {/* ============================================================ */}
                     {activeTab === 'goals' && (
                         <div className="space-y-4">
                             {analysis?.recommendedGoals && analysis.recommendedGoals.length > 0 ? (
@@ -480,10 +598,13 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
                                     <h3 className="text-lg font-semibold text-gray-900 mb-2">No Goals Generated</h3>
                                     <p className="text-gray-500 mb-4">Run AI analysis first to generate suggested goals</p>
                                     <button
-                                        onClick={() => setActiveTab('analysis')}
+                                        onClick={() => {
+                                            setActiveTab('analysis');
+                                            if (!analysis && onAnalyze) handleAnalyze();
+                                        }}
                                         className="text-purple-600 font-medium hover:underline"
                                     >
-                                        Go to Analysis →
+                                        {!analysis ? 'Generate Analysis & Goals →' : 'Go to Analysis →'}
                                     </button>
                                 </div>
                             )}

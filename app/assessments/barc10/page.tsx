@@ -631,6 +631,9 @@ export default function Barc10AssessmentPage() {
                             <button onClick={() => { setView('history'); fetchHistory(); }} className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-semibold hover:bg-emerald-600">
                                 View History
                             </button>
+                            <button onClick={() => router.push('/')} className="flex-1 py-3 bg-[#1A73A8] text-white rounded-xl font-semibold hover:bg-[#156090] flex items-center justify-center gap-2">
+                                <CheckCircle2 className="w-4 h-4" /> Done
+                            </button>
                         </div>
                     </div>
                 )}
