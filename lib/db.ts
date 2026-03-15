@@ -1,7 +1,26 @@
 import { neon } from '@neondatabase/serverless';
 
-// Create SQL query function
-export const sql = neon(process.env.DATABASE_URL!);
+// Lazy initialization for AWS Amplify SSR compatibility
+// (env vars may not be available at module load time in Lambda)
+let _sql: ReturnType<typeof neon> | null = null;
+
+function getConnection(): ReturnType<typeof neon> {
+    if (!_sql) {
+        if (!process.env.DATABASE_URL) {
+            throw new Error('DATABASE_URL environment variable is not set');
+        }
+        _sql = neon(process.env.DATABASE_URL);
+    }
+    return _sql;
+}
+
+// Proxy defers connection until first actual query
+// Works with both tagged templates: sql`SELECT ...` and function calls: sql('SELECT ...', params)
+export const sql: ReturnType<typeof neon> = new Proxy(function () {} as any, {
+    apply(_target, _thisArg, args) {
+        return (getConnection() as any)(...args);
+    },
+}) as any;
 
 // ==================== QUERY HELPERS ====================
 

@@ -9,13 +9,21 @@ import { sql } from '@/lib/db';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION || 'us-east-1',
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    },
-});
+// Lazy init — Amplify Lambda env vars aren't available at module load time
+let _s3Client: S3Client | null = null;
+
+function getS3Client(): S3Client {
+    if (!_s3Client) {
+        _s3Client = new S3Client({
+            region: process.env.APP_AWS_REGION || 'us-east-1',
+            credentials: {
+                accessKeyId: process.env.APP_AWS_ACCESS_KEY_ID!,
+                secretAccessKey: process.env.APP_AWS_SECRET_ACCESS_KEY!,
+            },
+        });
+    }
+    return _s3Client;
+}
 
 export async function GET(req: NextRequest) {
     try {
@@ -45,7 +53,12 @@ export async function GET(req: NextRequest) {
             });
 
             // URL expires in 60 minutes
-            const presignedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+            // unhoistableHeaders excludes x-amz-checksum-mode that newer SDK versions
+            // inject, which causes SignatureDoesNotMatch errors with presigned URLs
+            const presignedUrl = await getSignedUrl(getS3Client(), command, {
+                expiresIn: 3600,
+                unhoistableHeaders: new Set(['x-amz-checksum-mode']),
+            });
 
             return NextResponse.json({
                 document: {

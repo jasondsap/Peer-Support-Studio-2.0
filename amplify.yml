@@ -1,0 +1,90 @@
+# ============================================================================
+# AWS Amplify Build Spec — Peer Support Studio
+# File: amplify.yml (place in repository root)
+#
+# Next.js 14 (App Router) with SSR API routes
+# Stack: TypeScript, Tailwind CSS, Neon PostgreSQL, AWS Cognito,
+#         AWS Bedrock, OpenAI, AssemblyAI, Hume AI
+#
+# ============================================================================
+
+version: 1
+
+frontend:
+  phases:
+    preBuild:
+      commands:
+        # ── Pin Node version (Amplify default may be older) ──
+        - nvm install 20
+        - nvm use 20
+        - node --version
+        - npm --version
+
+        # ── Force clean build (remove after first successful deploy) ──
+        - rm -rf .next/cache node_modules/.cache
+
+        # ── Install dependencies ──
+        - npm ci
+
+    build:
+      commands:
+        # ── Build Next.js (SSR mode — no "output: export") ──
+        - npm run build
+
+  artifacts:
+    # Next.js standalone output for Amplify SSR
+    baseDirectory: .next
+    files:
+      - '**/*'
+
+  cache:
+    paths:
+      - 'node_modules/**/*'
+      - '.next/cache/**/*'
+
+  computeSettings:
+    defaultTimeout: 60
+
+  # ── Environment variable mapping ──
+  # Set ALL of these in the Amplify Console → App settings → Environment variables
+  # Do NOT hardcode secrets here.
+  #
+  # Required env vars to configure in Amplify Console:
+  #
+  # ── Auth ──
+  # NEXTAUTH_URL              → https://your-amplify-domain.amplifyapp.com  (or custom domain)
+  # NEXTAUTH_SECRET           → (generate: openssl rand -base64 32)
+  # COGNITO_CLIENT_ID         → AWS Cognito app client ID
+  # COGNITO_CLIENT_SECRET     → AWS Cognito app client secret
+  # COGNITO_ISSUER            → https://cognito-idp.{region}.amazonaws.com/{userPoolId}
+  # COGNITO_DOMAIN            → https://us-east-1xxxxxxx.auth.us-east-1.amazoncognito.com
+  # COGNITO_USER_POOL_ID      → us-east-1_XXXXXXXXX
+  #
+  # ── Database ──
+  # DATABASE_URL              → Neon PostgreSQL connection string (pooled)
+  #
+  # ── AWS Services (APP_ prefix — Amplify reserves AWS_ namespace) ──
+  # APP_AWS_ACCESS_KEY_ID     → IAM user for Bedrock + Polly + S3
+  # APP_AWS_SECRET_ACCESS_KEY → IAM secret key
+  # APP_AWS_REGION            → us-east-1
+  #
+  # ── AI Services ──
+  # ANTHROPIC_API_KEY         → Anthropic Claude for Bedrock
+  # OPENAI_API_KEY            → OpenAI GPT-4
+  # ASSEMBLYAI_API_KEY        → AssemblyAI for transcription
+  # HUME_API_KEY              → Hume AI for empathic voice
+  # HUME_SECRET_KEY           → Hume AI secret
+  # GAMMA_API_KEY             → Gamma presentation generation
+  #
+  # ── RAG Service ──
+  # RAG_API_URL               → RAG API endpoint
+  # RAG_API_KEY               → RAG API key
+  #
+  # ── Google APIs ──
+  # GOOGLE_API_KEY            → Places, Geocoding, Custom Search
+  # GOOGLE_CUSTOM_SEARCH_ID   → Custom Search engine ID
+  #
+  # ── HIPAA Note ──
+  # Amplify runs within your AWS account where your BAA is active.
+  # Ensure the Amplify service role has least-privilege IAM policies
+  # for Bedrock, Polly, S3, Cognito, and CloudWatch Logs only.
