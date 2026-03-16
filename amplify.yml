@@ -20,8 +20,6 @@ frontend:
         - node --version
         - npm --version
 
-        # ── Force clean build (remove after first successful deploy) ──
-        - rm -rf .next/cache node_modules/.cache
 
         # ── Install dependencies ──
         - npm ci
@@ -43,7 +41,7 @@ frontend:
       - '.next/cache/**/*'
 
   computeSettings:
-    defaultTimeout: 60
+  defaultTimeout: 60
 
   # ── Environment variable mapping ──
   # Set ALL of these in the Amplify Console → App settings → Environment variables

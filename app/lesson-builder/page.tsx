@@ -45,6 +45,7 @@ function LessonBuilderContent() {
     const [error, setError] = useState('');
     const [allyResetTrigger, setAllyResetTrigger] = useState(0);
     const [sourcesOpen, setSourcesOpen] = useState(false);
+    const [generationStatus, setGenerationStatus] = useState('');
 
     // Check if Ally should open automatically
     const openAlly = searchParams.get('openAlly') === 'true';
@@ -129,6 +130,7 @@ function LessonBuilderContent() {
 
         setIsGenerating(true);
         setError('');
+        setGenerationStatus('Starting lesson generation...');
 
         try {
             const response = await fetch('/api/generate-lesson', {
@@ -145,28 +147,78 @@ function LessonBuilderContent() {
                 }),
             });
 
-            const data = await response.json();
-
-            if (data.error) {
-                throw new Error(data.error);
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
             }
 
-            setGeneratedLesson(data.lessonPlan);
+            // Read the streaming response line by line
+            const reader = response.body?.getReader();
+            if (!reader) throw new Error('No response stream available');
+
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let lessonData: any = null;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                // Process complete lines (newline-delimited JSON)
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+
+                    try {
+                        const msg = JSON.parse(line);
+
+                        switch (msg.type) {
+                            case 'ping':
+                                // Keep-alive — ignore
+                                break;
+                            case 'status':
+                                setGenerationStatus(msg.message);
+                                break;
+                            case 'result':
+                                lessonData = msg;
+                                break;
+                            case 'error':
+                                throw new Error(msg.message);
+                        }
+                    } catch (parseErr: any) {
+                        // If it's our own thrown error, re-throw
+                        if (parseErr.message && parseErr.message !== 'Unexpected token') {
+                            throw parseErr;
+                        }
+                        console.warn('Skipping unparseable stream line:', line);
+                    }
+                }
+            }
+
+            if (!lessonData?.lessonPlan) {
+                throw new Error('No lesson plan received from server');
+            }
+
+            setGeneratedLesson(lessonData.lessonPlan);
+            setGenerationStatus('');
 
             // Format as readable text before saving
-            const facilitatorGuide = formatFacilitatorGuide(data.lessonPlan);
-            const participantHandout = formatParticipantHandout(data.lessonPlan);
+            const facilitatorGuide = formatFacilitatorGuide(lessonData.lessonPlan);
+            const participantHandout = formatParticipantHandout(lessonData.lessonPlan);
 
             // Save to database via API route
             const saveResponse = await fetch('/api/lessons', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    title: data.lessonPlan.title,
+                    title: lessonData.lessonPlan.title,
                     topic,
                     facilitator_guide: facilitatorGuide,
                     participant_handout: participantHandout,
-                    lesson_json: JSON.stringify(data.lessonPlan),
+                    lesson_json: JSON.stringify(lessonData.lessonPlan),
                     session_type: sessionType,
                     group_size: sessionType === 'group' ? groupSize : null,
                     session_length: sessionLength,
@@ -185,6 +237,7 @@ function LessonBuilderContent() {
             setError(err.message || 'Failed to generate lesson');
         } finally {
             setIsGenerating(false);
+            setGenerationStatus('');
         }
     };
 
@@ -192,6 +245,7 @@ function LessonBuilderContent() {
         setTopic('');
         setGeneratedLesson(null);
         setError('');
+        setGenerationStatus('');
         setSourcesOpen(false);
         setAllyResetTrigger(prev => prev + 1);
     };
@@ -432,7 +486,7 @@ function LessonBuilderContent() {
                                 {isGenerating ? (
                                     <span className="flex items-center justify-center gap-2">
                                         <Loader2 className="w-5 h-5 animate-spin" />
-                                        Generating Your Lesson...
+                                        {generationStatus || 'Generating Your Lesson...'}
                                     </span>
                                 ) : (
                                     <span className="flex items-center justify-center gap-2">
@@ -463,14 +517,6 @@ function LessonBuilderContent() {
                                     >
                                         Download PDF
                                     </button>
-                                    {sessionType === 'group' && (
-                                        <button
-                                            onClick={() => router.push(`/session-note?topic=${encodeURIComponent(generatedLesson.title)}&intervention=${encodeURIComponent(generatedLesson.overview)}&sessionType=${sessionType}`)}
-                                            className="px-6 py-2.5 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
-                                        >
-                                            Create Note
-                                        </button>
-                                    )}
                                 </div>
                             </div>
 
