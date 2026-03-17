@@ -44,9 +44,19 @@ export async function GET(request: NextRequest) {
             });
         }
 
+        // Move currentOrganization to front so every page that does
+        // organizations[0] automatically gets the correct org after switching.
+        const currentOrgId = (session as any)?.currentOrganization?.id;
+        const sorted = currentOrgId
+            ? [
+                ...organizations.filter((o: any) => o.id === currentOrgId),
+                ...organizations.filter((o: any) => o.id !== currentOrgId),
+              ]
+            : organizations;
+
         return NextResponse.json({
-            organizations,
-            defaultOrganization: organizations[0],
+            organizations: sorted,
+            defaultOrganization: sorted[0],
         });
 
     } catch (error) {

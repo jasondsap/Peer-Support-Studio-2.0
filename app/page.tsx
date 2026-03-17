@@ -9,7 +9,7 @@ import {
     ArrowRight, Loader2, Sparkles,
     BookOpen, ClipboardList, MessageSquare,
     Building2, ClipboardCheck, Search,
-    Mail, Plus,
+    Plus,
 } from 'lucide-react';
 import AllyIntelligenceChat from './components/AllyIntelligenceChat';
 
@@ -258,14 +258,6 @@ export default function HomePage() {
     // Connect & Support tools
     const connectTools = [
         {
-            title: 'Messages',
-            description: 'Communicate with participants',
-            icon: Mail,
-            href: '/messages',
-            badge: null,
-            color: 'bg-blue-500',
-        },
-        {
             title: 'Peer Advisor',
             description: 'AI coaching and guidance',
             icon: MessageSquare,
@@ -414,7 +406,7 @@ export default function HomePage() {
                         title="Connect & Support" 
                         subtitle="Communication and resources"
                     />
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {connectTools.map((tool) => (
                             <ToolCard key={tool.title} tool={tool} />
                         ))}

@@ -10,13 +10,33 @@ import {
     LayoutDashboard,
     ChevronDown,
     BookOpen,
-    MapPin
+    MapPin,
+    Check,
+    Loader2
 } from 'lucide-react';
 import UserButton from './UserButton';
 
 export default function Header() {
     const { data: session, status } = useSession();
     const [orgMenuOpen, setOrgMenuOpen] = useState(false);
+    const [switching, setSwitching] = useState(false);
+
+    const handleSwitchOrg = async (orgId: string) => {
+        if (orgId === currentOrg?.id || switching) return;
+        setSwitching(true);
+        setOrgMenuOpen(false);
+        try {
+            await fetch('/api/user/select-org', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ organizationId: orgId }),
+            });
+            window.location.href = '/';
+        } catch (err) {
+            console.error('Failed to switch org:', err);
+            setSwitching(false);
+        }
+    };
     
     const organizations = (session as any)?.organizations || [];
     const currentOrg = (session as any)?.currentOrganization;
@@ -54,11 +74,15 @@ export default function Header() {
                             <div className="relative ml-4">
                                 <button
                                     onClick={() => setOrgMenuOpen(!orgMenuOpen)}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 transition-colors"
+                                    disabled={switching}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 transition-colors disabled:opacity-60"
                                 >
-                                    <Building2 className="w-4 h-4 text-gray-500" />
+                                    {switching
+                                        ? <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
+                                        : <Building2 className="w-4 h-4 text-gray-500" />
+                                    }
                                     <span className="hidden md:inline text-gray-700 max-w-[150px] truncate">
-                                        {currentOrg?.name || 'Select Organization'}
+                                        {switching ? 'Switching…' : (currentOrg?.name || 'Select Organization')}
                                     </span>
                                     <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${orgMenuOpen ? 'rotate-180' : ''}`} />
                                 </button>
@@ -76,10 +100,7 @@ export default function Header() {
                                             {organizations.map((org: any) => (
                                                 <button
                                                     key={org.id}
-                                                    onClick={() => {
-                                                        // TODO: Switch organization context
-                                                        setOrgMenuOpen(false);
-                                                    }}
+                                                    onClick={() => handleSwitchOrg(org.id)}
                                                     className={`w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-3 ${
                                                         currentOrg?.id === org.id ? 'bg-blue-50' : ''
                                                     }`}
@@ -91,6 +112,9 @@ export default function Header() {
                                                         <p className="font-medium text-[#0E2235] truncate">{org.name}</p>
                                                         <p className="text-xs text-gray-500 capitalize">{org.role}</p>
                                                     </div>
+                                                    {currentOrg?.id === org.id && (
+                                                        <Check className="w-4 h-4 text-[#1A73A8] flex-shrink-0" />
+                                                    )}
                                                 </button>
                                             ))}
                                         </div>
