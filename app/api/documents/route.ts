@@ -20,6 +20,8 @@ function getS3Client(): S3Client {
                 accessKeyId: process.env.APP_AWS_ACCESS_KEY_ID!,
                 secretAccessKey: process.env.APP_AWS_SECRET_ACCESS_KEY!,
             },
+            requestChecksumCalculation: 'WHEN_REQUIRED',
+            responseChecksumValidation: 'WHEN_REQUIRED',
         });
     }
     return _s3Client;
