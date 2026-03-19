@@ -90,6 +90,7 @@ function LibraryContent() {
     const [activeTab, setActiveTab] = useState<'recent' | 'starred' | 'shared'>('recent');
     const [isGeneratingPresentation, setIsGeneratingPresentation] = useState(false);
     const [generatingLessonId, setGeneratingLessonId] = useState<string | null>(null);
+    const [presentationStatus, setPresentationStatus] = useState('');
 
     // Survey-related state
     const [sendSurveyLesson, setSendSurveyLesson] = useState<SavedLesson | null>(null);
@@ -172,6 +173,7 @@ function LibraryContent() {
 
         setIsGeneratingPresentation(true);
         setGeneratingLessonId(lesson.id);
+        setPresentationStatus('Preparing lesson data...');
 
         try {
             // Get full lesson data from database via API
@@ -214,7 +216,7 @@ function LibraryContent() {
                 };
             }
 
-            // Call the presentation API
+            // Call the presentation API (streaming)
             const response = await fetch('/api/generate-gamma', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -224,18 +226,62 @@ function LibraryContent() {
                 })
             });
 
-            const result = await response.json();
-
             if (!response.ok) {
-                throw new Error(result.details || result.error || 'Failed to generate presentation');
+                throw new Error(`Server error: ${response.status}`);
+            }
+
+            // Read the streaming response line by line
+            const reader = response.body?.getReader();
+            if (!reader) throw new Error('No response stream available');
+
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let resultData: any = null;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+
+                    try {
+                        const msg = JSON.parse(line);
+
+                        switch (msg.type) {
+                            case 'ping':
+                                break;
+                            case 'status':
+                                setPresentationStatus(msg.message);
+                                break;
+                            case 'result':
+                                resultData = msg;
+                                break;
+                            case 'error':
+                                throw new Error(msg.message);
+                        }
+                    } catch (parseErr: any) {
+                        if (parseErr.message && parseErr.message !== 'Unexpected token') {
+                            throw parseErr;
+                        }
+                        console.warn('Skipping unparseable stream line:', line);
+                    }
+                }
+            }
+
+            if (!resultData?.gammaUrl) {
+                throw new Error('No presentation URL received from server');
             }
 
             // Open the presentation
-            if (result.gammaUrl) {
-                window.open(result.gammaUrl, '_blank');
-                // Refresh lessons to show updated gamma_presentation_url
-                fetchLessons();
-            }
+            window.open(resultData.gammaUrl, '_blank');
+            // Refresh lessons to show updated gamma_presentation_url
+            fetchLessons();
 
         } catch (error) {
             console.error('Error generating presentation:', error);
@@ -243,6 +289,7 @@ function LibraryContent() {
         } finally {
             setIsGeneratingPresentation(false);
             setGeneratingLessonId(null);
+            setPresentationStatus('');
         }
     };
 
@@ -552,7 +599,7 @@ function LibraryContent() {
                         <Loader2 className="w-12 h-12 animate-spin text-[#1A73A8] mx-auto mb-4" />
                         <h3 className="text-xl font-semibold text-[#0E2235] mb-2">Generating Presentation</h3>
                         <p className="text-gray-600 mb-4">
-                            This may take 1-2 minutes. We're using AI to create beautiful, participant-focused slides.
+                            {presentationStatus || "This may take 1-2 minutes. We're using AI to create beautiful, participant-focused slides."}
                         </p>
                         <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
                             <div className="w-2 h-2 bg-[#1A73A8] rounded-full animate-pulse"></div>
