@@ -598,10 +598,16 @@ function AIGoalGenerator({
     const handleGenerate = async () => {
         setIsGenerating(true);
         try {
-            const response = await fetch('/api/generate-goal', {
+            const generatorUrl = process.env.NEXT_PUBLIC_RAG_PROXY_URL;
+            if (!generatorUrl) {
+                throw new Error('RAG proxy service not configured');
+            }
+
+            const response = await fetch(generatorUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    module: 'goal_generator',
                     goalArea: goalAreas.find(a => a.id === selectedArea)?.label,
                     participantName: participantName || 'the participant',
                     desiredOutcome, motivation, strengths: selectedStrengths, challenges: selectedChallenges, timeframe,

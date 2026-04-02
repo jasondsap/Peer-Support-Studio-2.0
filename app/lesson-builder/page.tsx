@@ -130,13 +130,20 @@ function LessonBuilderContent() {
 
         setIsGenerating(true);
         setError('');
-        setGenerationStatus('Starting lesson generation...');
+        setGenerationStatus('Searching knowledge base...');
 
         try {
-            const response = await fetch('/api/generate-lesson', {
+            // Call the standalone Lambda Function URL (120s timeout, no SSR Lambda limit)
+            const generatorUrl = process.env.NEXT_PUBLIC_RAG_PROXY_URL;
+            if (!generatorUrl) {
+                throw new Error('RAG proxy service not configured');
+            }
+
+            const response = await fetch(generatorUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    module: 'lesson_builder',
                     topic,
                     sessionType,
                     groupSize: sessionType === 'group' ? groupSize : null,
@@ -147,78 +154,33 @@ function LessonBuilderContent() {
                 }),
             });
 
-            if (!response.ok) {
-                throw new Error(`Server error: ${response.status}`);
+            const data = await response.json();
+
+            if (!response.ok || data.error) {
+                throw new Error(data.error || `Server error: ${response.status}`);
             }
 
-            // Read the streaming response line by line
-            const reader = response.body?.getReader();
-            if (!reader) throw new Error('No response stream available');
-
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let lessonData: any = null;
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-
-                // Process complete lines (newline-delimited JSON)
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-                for (const line of lines) {
-                    if (!line.trim()) continue;
-
-                    try {
-                        const msg = JSON.parse(line);
-
-                        switch (msg.type) {
-                            case 'ping':
-                                // Keep-alive — ignore
-                                break;
-                            case 'status':
-                                setGenerationStatus(msg.message);
-                                break;
-                            case 'result':
-                                lessonData = msg;
-                                break;
-                            case 'error':
-                                throw new Error(msg.message);
-                        }
-                    } catch (parseErr: any) {
-                        // If it's our own thrown error, re-throw
-                        if (parseErr.message && parseErr.message !== 'Unexpected token') {
-                            throw parseErr;
-                        }
-                        console.warn('Skipping unparseable stream line:', line);
-                    }
-                }
-            }
-
-            if (!lessonData?.lessonPlan) {
+            if (!data.lessonPlan) {
                 throw new Error('No lesson plan received from server');
             }
 
-            setGeneratedLesson(lessonData.lessonPlan);
-            setGenerationStatus('');
+            setGeneratedLesson(data.lessonPlan);
+            setGenerationStatus('Saving lesson...');
 
             // Format as readable text before saving
-            const facilitatorGuide = formatFacilitatorGuide(lessonData.lessonPlan);
-            const participantHandout = formatParticipantHandout(lessonData.lessonPlan);
+            const facilitatorGuide = formatFacilitatorGuide(data.lessonPlan);
+            const participantHandout = formatParticipantHandout(data.lessonPlan);
 
-            // Save to database via API route
+            // Save to database via the lightweight Amplify SSR route (fast, no timeout risk)
             const saveResponse = await fetch('/api/lessons', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    title: lessonData.lessonPlan.title,
+                    title: data.lessonPlan.title,
                     topic,
                     facilitator_guide: facilitatorGuide,
                     participant_handout: participantHandout,
-                    lesson_json: JSON.stringify(lessonData.lessonPlan),
+                    lesson_json: JSON.stringify(data.lessonPlan),
                     session_type: sessionType,
                     group_size: sessionType === 'group' ? groupSize : null,
                     session_length: sessionLength,

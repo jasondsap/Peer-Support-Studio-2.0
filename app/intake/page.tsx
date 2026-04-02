@@ -1,9 +1,10 @@
 'use client';
 
 // ============================================================================
-// Peer Support Studio - Participant Intake Form
+// Peer Support Studio - Participant Intake Form (Billing-Ready)
 // File: /app/intake/page.tsx
-// 9-step wizard for comprehensive participant intake
+// 10-step wizard: Select → Consent → Background → Emergency → Health →
+//   Insurance & Eligibility → Education → Social → Substance → Recovery
 // ============================================================================
 
 import { useState, useEffect, useRef, Suspense } from 'react';
@@ -13,8 +14,28 @@ import {
     ArrowLeft, ArrowRight, CheckCircle2, Loader2,
     Search, X, Save, UserPlus, AlertTriangle, Info,
     User, Heart, Stethoscope, GraduationCap,
-    Users, Pill, RotateCcw, Phone
+    Users, Pill, RotateCcw, Phone, Shield, FileCheck
 } from 'lucide-react';
+
+import type { IntakeFormData } from '@/lib/intakeFormTypes';
+import {
+    INITIAL_FORM,
+    fromDatabase,
+    toPayload,
+    STEPS,
+    INSURANCE_TYPE_OPTIONS,
+
+    SUBSCRIBER_RELATIONSHIP_OPTIONS,
+    ELIGIBILITY_STATUS_OPTIONS,
+    ELIGIBILITY_METHOD_OPTIONS,
+    INSURANCE_VERIFIED_FROM_OPTIONS,
+    RELEASE_PARTY_OPTIONS,
+    CREDENTIAL_OPTIONS,
+    DIAGNOSIS_SOURCE_OPTIONS,
+    COMMON_DIAGNOSIS_OPTIONS,
+} from '@/lib/intakeFormTypes';
+
+import type { BillingReadinessResult } from '@/lib/billingReadiness';
 
 // =============================================
 // TYPES
@@ -29,124 +50,8 @@ interface Participant {
     gender?: string;
 }
 
-interface IntakeFormData {
-    // Background
-    other_names: string;
-    ssn_last_four: string;
-    home_zip: string;
-    home_city_state: string;
-    is_veteran: boolean;
-    is_english_first_language: boolean;
-    other_language: string;
-    marital_status: string;
-    race: string[];
-    race_other: string;
-    ethnicity: string;
-    gender_identity: string;
-    gender_other: string;
-    has_minor_children: string;
-    referral_source: string;
-    referral_source_other: string;
-    legal_status: string[];
-    legal_officers: string[];
-
-    // Emergency Contact 2
-    emergency_contact_2_name: string;
-    emergency_contact_2_relationship: string;
-    emergency_contact_2_phone: string;
-
-    // Health
-    physical_health_conditions: string[];
-    physical_health_other: string;
-    takes_physical_medications: boolean | null;
-    physical_medications: string;
-    mental_health_conditions: string[];
-    mental_health_other: string;
-    takes_mental_medications: boolean | null;
-    mental_medications: string;
-    is_pregnant: string;
-    pregnancy_months: number | null;
-
-    // Insurance
-    insurance_type: string;
-    insurance_other: string;
-    has_primary_provider: boolean | null;
-    provider_name: string;
-    provider_phone: string;
-
-    // Education & Employment
-    education_level: string;
-    past_year_employment: string;
-    currently_employed: boolean | null;
-    employer: string;
-    monthly_income_pretax: string;
-    employer_benefits: string[];
-    income_sources: string[];
-    income_sources_other: string;
-
-    // Social
-    supportive_people_count: string;
-    is_dv_survivor: boolean | null;
-    last_dv_episode: string;
-    is_currently_fleeing: boolean | null;
-
-    // Substance Use
-    age_first_use: string;
-    substances_used: string[];
-    substances_other: string;
-    has_overdosed: boolean | null;
-    overdose_count: string;
-
-    // Recovery History (simplified)
-    is_first_recovery_attempt: boolean | null;
-    previous_attempt_count: string;
-    has_received_treatment: boolean | null;
-    treatment_types: string;
-    recovery_notes: string;
-}
-
-const INITIAL_FORM: IntakeFormData = {
-    other_names: '', ssn_last_four: '', home_zip: '', home_city_state: '',
-    is_veteran: false, is_english_first_language: true, other_language: '',
-    marital_status: '', race: [], race_other: '', ethnicity: '',
-    gender_identity: '', gender_other: '', has_minor_children: '',
-    referral_source: '', referral_source_other: '', legal_status: [], legal_officers: [],
-    emergency_contact_2_name: '', emergency_contact_2_relationship: '', emergency_contact_2_phone: '',
-    physical_health_conditions: [], physical_health_other: '',
-    takes_physical_medications: null, physical_medications: '',
-    mental_health_conditions: [], mental_health_other: '',
-    takes_mental_medications: null, mental_medications: '',
-    is_pregnant: '', pregnancy_months: null,
-    insurance_type: '', insurance_other: '',
-    has_primary_provider: null, provider_name: '', provider_phone: '',
-    education_level: '', past_year_employment: '',
-    currently_employed: null, employer: '', monthly_income_pretax: '',
-    employer_benefits: [], income_sources: [], income_sources_other: '',
-    supportive_people_count: '', is_dv_survivor: null, last_dv_episode: '', is_currently_fleeing: null,
-    age_first_use: '', substances_used: [], substances_other: '',
-    has_overdosed: null, overdose_count: '',
-    is_first_recovery_attempt: null, previous_attempt_count: '',
-    has_received_treatment: null, treatment_types: '', recovery_notes: '',
-};
-
 // =============================================
-// STEP DEFINITIONS (9 steps — no Prior Housing)
-// =============================================
-
-const STEPS = [
-    { key: 'select', label: 'Select Participant', icon: UserPlus, color: '#1A73A8' },
-    { key: 'background', label: 'Background', icon: User, color: '#6366F1' },
-    { key: 'emergency', label: 'Emergency Contact', icon: Phone, color: '#DC2626' },
-    { key: 'health', label: 'Health', icon: Heart, color: '#EC4899' },
-    { key: 'insurance', label: 'Insurance & Provider', icon: Stethoscope, color: '#0891B2' },
-    { key: 'education', label: 'Education & Work', icon: GraduationCap, color: '#D97706' },
-    { key: 'social', label: 'Social & Safety', icon: Users, color: '#059669' },
-    { key: 'substance', label: 'Substance Use', icon: Pill, color: '#F97316' },
-    { key: 'recovery', label: 'Recovery History', icon: RotateCcw, color: '#10B981' },
-];
-
-// =============================================
-// OPTION LISTS
+// OPTION LISTS (original — unchanged)
 // =============================================
 
 const MARITAL_OPTIONS = [
@@ -221,16 +126,6 @@ const MENTAL_HEALTH_OPTIONS = [
     { value: 'behavioral', label: 'Behavioral Disorder (ADHD, etc.)' },
     { value: 'psychotic', label: 'Psychotic Disorder' },
     { value: 'eating', label: 'Eating Disorder' },
-    { value: 'other', label: 'Other' },
-];
-
-const INSURANCE_OPTIONS = [
-    { value: 'none', label: 'No Insurance' },
-    { value: 'medicaid', label: 'Medicaid' },
-    { value: 'medicare', label: 'Medicare' },
-    { value: 'private_self', label: 'Private (Self)' },
-    { value: 'private_family', label: 'Private (Family/Employer)' },
-    { value: 'va', label: 'VA / Military' },
     { value: 'other', label: 'Other' },
 ];
 
@@ -455,6 +350,17 @@ function SectionNote({ text, type = 'info' }: { text: string; type?: 'info' | 'w
     );
 }
 
+/** Visual divider within a step for section grouping */
+function SectionDivider({ label }: { label: string }) {
+    return (
+        <div className="flex items-center gap-3 pt-2">
+            <div className="h-px flex-1 bg-gray-200" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">{label}</span>
+            <div className="h-px flex-1 bg-gray-200" />
+        </div>
+    );
+}
+
 // =============================================
 // MAIN COMPONENT
 // =============================================
@@ -489,6 +395,7 @@ function IntakeContent() {
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState('');
     const [editLoaded, setEditLoaded] = useState(false);
+    const [billingResult, setBillingResult] = useState<BillingReadinessResult | null>(null);
 
     // Participant selection
     const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
@@ -496,6 +403,16 @@ function IntakeContent() {
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [showDropdown, setShowDropdown] = useState(false);
     const [intakeDate, setIntakeDate] = useState(new Date().toISOString().split('T')[0]);
+
+    // Diagnosis manual entry toggle
+    const [manualDxEntry, setManualDxEntry] = useState(false);
+    const [manualSecondaryDxEntry, setManualSecondaryDxEntry] = useState(false);
+
+    // Dynamic MCO payers (fetched from payers table)
+    const [mcoOptions, setMcoOptions] = useState<{ value: string; label: string }[]>([]);
+    const [mcoState, setMcoState] = useState('');  // state filter for MCO dropdown
+    const [mcoManualEntry, setMcoManualEntry] = useState(false);
+    const [mcoLoading, setMcoLoading] = useState(false);
 
     useEffect(() => {
         if (status === 'unauthenticated') router.push('/auth/signin');
@@ -510,17 +427,12 @@ function IntakeContent() {
                     if (data.participant) {
                         const p = data.participant;
                         setSelectedParticipant({
-                            id: p.id,
-                            first_name: p.first_name,
-                            last_name: p.last_name,
-                            preferred_name: p.preferred_name,
-                            date_of_birth: p.date_of_birth,
-                            gender: p.gender,
+                            id: p.id, first_name: p.first_name, last_name: p.last_name,
+                            preferred_name: p.preferred_name, date_of_birth: p.date_of_birth, gender: p.gender,
                         });
                         if (p.gender) {
                             setForm(prev => ({ ...prev, gender_identity: p.gender || '' }));
                         }
-                        // If not edit mode, skip to step 1
                         if (!isEditMode) setStep(1);
                     }
                 })
@@ -528,7 +440,7 @@ function IntakeContent() {
         }
     }, [paramParticipantId, currentOrg?.id]);
 
-    // Load existing intake for edit mode
+    // Load existing intake for edit mode — uses fromDatabase()
     useEffect(() => {
         if (isEditMode && editIntakeId && currentOrg?.id && !editLoaded) {
             fetch(`/api/intake?organization_id=${currentOrg.id}&participant_id=${paramParticipantId}`)
@@ -536,78 +448,16 @@ function IntakeContent() {
                 .then(data => {
                     const intake = data.intakes?.find((i: any) => i.id === editIntakeId) || data.intakes?.[0];
                     if (intake) {
-                        // Parse JSONB fields that might come as strings
-                        const parseJsonb = (val: any): string[] => {
-                            if (!val) return [];
-                            if (Array.isArray(val)) return val;
-                            if (typeof val === 'string') {
-                                try { return JSON.parse(val); } catch { return []; }
-                            }
-                            return [];
-                        };
-
-                        setForm({
-                            other_names: intake.other_names || '',
-                            ssn_last_four: intake.ssn_last_four || '',
-                            home_zip: intake.home_zip || '',
-                            home_city_state: intake.home_city_state || '',
-                            is_veteran: intake.is_veteran ?? false,
-                            is_english_first_language: intake.is_english_first_language ?? true,
-                            other_language: intake.other_language || '',
-                            marital_status: intake.marital_status || '',
-                            race: parseJsonb(intake.race),
-                            race_other: intake.race_other || '',
-                            ethnicity: intake.ethnicity || '',
-                            gender_identity: intake.gender_identity || '',
-                            gender_other: intake.gender_other || '',
-                            has_minor_children: intake.has_minor_children || '',
-                            referral_source: intake.referral_source || '',
-                            referral_source_other: intake.referral_source_other || '',
-                            legal_status: parseJsonb(intake.legal_status),
-                            legal_officers: parseJsonb(intake.legal_officers),
-                            emergency_contact_2_name: intake.emergency_contact_2_name || '',
-                            emergency_contact_2_relationship: intake.emergency_contact_2_relationship || '',
-                            emergency_contact_2_phone: intake.emergency_contact_2_phone || '',
-                            physical_health_conditions: parseJsonb(intake.physical_health_conditions),
-                            physical_health_other: intake.physical_health_other || '',
-                            takes_physical_medications: intake.takes_physical_medications ?? null,
-                            physical_medications: intake.physical_medications || '',
-                            mental_health_conditions: parseJsonb(intake.mental_health_conditions),
-                            mental_health_other: intake.mental_health_other || '',
-                            takes_mental_medications: intake.takes_mental_medications ?? null,
-                            mental_medications: intake.mental_medications || '',
-                            is_pregnant: intake.is_pregnant || '',
-                            pregnancy_months: intake.pregnancy_months ?? null,
-                            insurance_type: intake.insurance_type || '',
-                            insurance_other: intake.insurance_other || '',
-                            has_primary_provider: intake.has_primary_provider ?? null,
-                            provider_name: intake.provider_name || '',
-                            provider_phone: intake.provider_phone || '',
-                            education_level: intake.education_level || '',
-                            past_year_employment: intake.past_year_employment || '',
-                            currently_employed: intake.currently_employed ?? null,
-                            employer: intake.employer || '',
-                            monthly_income_pretax: intake.monthly_income_pretax ? String(intake.monthly_income_pretax) : '',
-                            employer_benefits: parseJsonb(intake.employer_benefits),
-                            income_sources: parseJsonb(intake.income_sources),
-                            income_sources_other: intake.income_sources_other || '',
-                            supportive_people_count: intake.supportive_people_count != null ? String(intake.supportive_people_count) : '',
-                            is_dv_survivor: intake.is_dv_survivor ?? null,
-                            last_dv_episode: intake.last_dv_episode || '',
-                            is_currently_fleeing: intake.is_currently_fleeing ?? null,
-                            age_first_use: intake.age_first_use != null ? String(intake.age_first_use) : '',
-                            substances_used: parseJsonb(intake.substances_used),
-                            substances_other: intake.substances_other || '',
-                            has_overdosed: intake.has_overdosed ?? null,
-                            overdose_count: intake.overdose_count != null ? String(intake.overdose_count) : '',
-                            is_first_recovery_attempt: intake.is_first_recovery_attempt ?? null,
-                            previous_attempt_count: intake.previous_attempt_count != null ? String(intake.previous_attempt_count) : '',
-                            has_received_treatment: intake.has_received_treatment ?? null,
-                            treatment_types: intake.treatment_types || '',
-                            recovery_notes: intake.recovery_notes || '',
-                        });
+                        setForm(fromDatabase(intake));
                         if (intake.intake_date) {
                             setIntakeDate(intake.intake_date.split('T')[0]);
+                        }
+                        // Check if manual dx entry is needed
+                        if (intake.primary_diagnosis_code && !COMMON_DIAGNOSIS_OPTIONS.some(o => o.value === intake.primary_diagnosis_code)) {
+                            setManualDxEntry(true);
+                        }
+                        if (intake.secondary_diagnosis_code) {
+                            setManualSecondaryDxEntry(true);
                         }
                         setStep(1); // Skip participant selection in edit mode
                         setEditLoaded(true);
@@ -625,6 +475,35 @@ function IntakeContent() {
                 .catch(() => setParticipants([]));
         }
     }, [participantSearch, currentOrg?.id]);
+
+    // Fetch MCO payers from payers table filtered by state
+    useEffect(() => {
+        if (!mcoState) {
+            setMcoOptions([]);
+            return;
+        }
+        setMcoLoading(true);
+        fetch(`/api/payers?state=${mcoState}&type=medicaid_mco`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.payers && data.payers.length > 0) {
+                    setMcoOptions(data.payers.map((p: any) => ({
+                        value: p.payer_name,
+                        label: p.payer_name,
+                    })));
+                    setMcoManualEntry(false);
+                } else {
+                    // No payers for this state — fall back to text input
+                    setMcoOptions([]);
+                    setMcoManualEntry(true);
+                }
+            })
+            .catch(() => {
+                setMcoOptions([]);
+                setMcoManualEntry(true);
+            })
+            .finally(() => setMcoLoading(false));
+    }, [mcoState]);
 
     const selectParticipant = (p: Participant) => {
         setSelectedParticipant(p);
@@ -655,26 +534,41 @@ function IntakeContent() {
 
     const canProceedFromSelect = selectedParticipant !== null;
 
+    // Cancel handler — confirms before discarding
+    const handleCancel = () => {
+        const hasData = Object.entries(form).some(([key, val]) => {
+            const initial = INITIAL_FORM[key as keyof IntakeFormData];
+            if (Array.isArray(val)) return val.length > 0 && JSON.stringify(val) !== JSON.stringify(initial);
+            if (typeof val === 'boolean') return val !== initial;
+            return val !== null && val !== '' && val !== initial;
+        });
+
+        if (hasData) {
+            if (!window.confirm('Are you sure you want to cancel? Unsaved data will be lost.')) return;
+        }
+
+        // Navigate back to where they came from
+        if (paramParticipantId) {
+            router.push(`/participants/${paramParticipantId}`);
+        } else {
+            router.push('/');
+        }
+    };
+
+    // Submit — uses toPayload()
     const handleSubmit = async () => {
         if (!selectedParticipant || !currentOrg?.id) return;
         setSaving(true);
         setError('');
 
         try {
-            const payload = {
+            const payload = toPayload(form, {
                 ...(isEditMode && editIntakeId ? { id: editIntakeId } : {}),
                 organization_id: currentOrg.id,
                 participant_id: selectedParticipant.id,
                 intake_date: intakeDate,
                 status: 'completed',
-                ...form,
-                pregnancy_months: form.pregnancy_months,
-                monthly_income_pretax: form.monthly_income_pretax ? parseFloat(form.monthly_income_pretax) : null,
-                supportive_people_count: form.supportive_people_count ? parseInt(form.supportive_people_count) : null,
-                age_first_use: form.age_first_use ? parseInt(form.age_first_use) : null,
-                overdose_count: form.overdose_count ? parseInt(form.overdose_count) : null,
-                previous_attempt_count: form.previous_attempt_count ? parseInt(form.previous_attempt_count) : null,
-            };
+            });
 
             const res = await fetch('/api/intake', {
                 method: isEditMode && editIntakeId ? 'PUT' : 'POST',
@@ -684,6 +578,7 @@ function IntakeContent() {
 
             const data = await res.json();
             if (data.success) {
+                setBillingResult(data.billingReadiness || null);
                 setSaved(true);
             } else {
                 setError(data.error || 'Failed to save intake');
@@ -702,7 +597,7 @@ function IntakeContent() {
         );
     }
 
-    // Success screen
+    // Success screen — now includes billing readiness summary
     if (saved) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 flex items-center justify-center p-6">
@@ -713,9 +608,46 @@ function IntakeContent() {
                     <h2 className="text-2xl font-bold text-[#0E2235] mb-2">
                         {isEditMode ? 'Intake Updated' : 'Intake Complete'}
                     </h2>
-                    <p className="text-gray-600 mb-6">
+                    <p className="text-gray-600 mb-4">
                         Intake form {isEditMode ? 'updated' : 'saved'} for {selectedParticipant?.preferred_name || selectedParticipant?.first_name} {selectedParticipant?.last_name}.
                     </p>
+
+                    {/* Billing Readiness Summary */}
+                    {billingResult && (
+                        <div className={`rounded-lg p-4 mb-6 text-left ${
+                            billingResult.ready
+                                ? 'bg-green-50 border border-green-200'
+                                : 'bg-amber-50 border border-amber-200'
+                        }`}>
+                            <div className="flex items-center gap-2 mb-2">
+                                {billingResult.ready
+                                    ? <FileCheck className="w-4 h-4 text-green-600" />
+                                    : <AlertTriangle className="w-4 h-4 text-amber-600" />
+                                }
+                                <span className={`text-sm font-semibold ${billingResult.ready ? 'text-green-800' : 'text-amber-800'}`}>
+                                    {billingResult.summary}
+                                </span>
+                            </div>
+                            {billingResult.holds.length > 0 && (
+                                <ul className="space-y-1 mt-2">
+                                    {billingResult.holds.slice(0, 5).map((hold, i) => (
+                                        <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
+                                            <span className={`mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                                hold.severity === 'blocker' ? 'bg-red-500' : 'bg-amber-400'
+                                            }`} />
+                                            {hold.message}
+                                        </li>
+                                    ))}
+                                    {billingResult.holds.length > 5 && (
+                                        <li className="text-xs text-gray-500 pl-3">
+                                            + {billingResult.holds.length - 5} more
+                                        </li>
+                                    )}
+                                </ul>
+                            )}
+                        </div>
+                    )}
+
                     <div className="flex gap-3">
                         <button
                             onClick={() => router.push(`/participants/${selectedParticipant?.id}`)}
@@ -730,6 +662,7 @@ function IntakeContent() {
                                     setSelectedParticipant(null);
                                     setStep(0);
                                     setSaved(false);
+                                    setBillingResult(null);
                                 }}
                                 className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200"
                             >
@@ -869,8 +802,88 @@ function IntakeContent() {
                         </div>
                     )}
 
-                    {/* ===== STEP 1: BACKGROUND ===== */}
+                    {/* ===== STEP 1: CONSENT & AUTHORIZATION (NEW) ===== */}
                     {step === 1 && (
+                        <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
+                            <SectionNote text="These consents are required before billable services can begin. Ensure signed forms are stored in the participant's file." />
+
+                            <div>
+                                <YesNoToggle label="Consent to Treat" value={form.consent_to_treat} onChange={v => updateForm('consent_to_treat', v)} />
+                                {form.consent_to_treat && (
+                                    <div className="mt-3">
+                                        <TextInput label="Date signed" value={form.consent_to_treat_date} onChange={v => updateForm('consent_to_treat_date', v)} type="date" />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <YesNoToggle
+                                    label="Consent to Bill Insurance"
+                                    value={form.consent_to_bill_insurance}
+                                    onChange={v => updateForm('consent_to_bill_insurance', v)}
+                                    infoText="Required before any claims can be submitted on this participant's behalf."
+                                />
+                                {form.consent_to_bill_insurance && (
+                                    <div className="mt-3">
+                                        <TextInput label="Date signed" value={form.consent_to_bill_date} onChange={v => updateForm('consent_to_bill_date', v)} type="date" />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <YesNoToggle
+                                    label="Release of Information (ROI)"
+                                    value={form.consent_to_release_info}
+                                    onChange={v => updateForm('consent_to_release_info', v)}
+                                    infoText="Authorizes sharing clinical information with specified parties."
+                                />
+                                {form.consent_to_release_info && (
+                                    <div className="mt-3 space-y-3">
+                                        <TextInput label="Date signed" value={form.consent_to_release_date} onChange={v => updateForm('consent_to_release_date', v)} type="date" />
+                                        <CheckboxGroup
+                                            label="Authorized parties"
+                                            options={RELEASE_PARTY_OPTIONS}
+                                            selected={form.consent_to_release_parties}
+                                            onChange={v => updateForm('consent_to_release_parties', v)}
+                                        />
+                                    </div>
+                                )}
+                                {form.consent_to_release_info === false && (
+                                    <SectionNote text="Without ROI, services can still be provided but cannot be billed to insurance." type="warning" />
+                                )}
+                            </div>
+
+                            <SectionDivider label="Signature" />
+
+                            <div>
+                                <YesNoToggle
+                                    label="Signature on File"
+                                    value={form.consent_signature_on_file ? true : form.consent_signature_on_file === false ? false : null}
+                                    onChange={v => updateForm('consent_signature_on_file', v)}
+                                    infoText="Confirms the participant's signed consent forms are on file. Required for claim submission."
+                                />
+                                {form.consent_signature_on_file === false && (
+                                    <SectionNote text="Claims cannot be submitted without a signature on file." type="warning" />
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Notes / Limitations
+                                </label>
+                                <textarea
+                                    value={form.consent_notes}
+                                    onChange={(e) => updateForm('consent_notes', e.target.value)}
+                                    rows={3}
+                                    placeholder="Any consent limitations, conditions, or notes..."
+                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A73A8]/30 outline-none resize-none"
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ===== STEP 2: BACKGROUND (was Step 1) ===== */}
+                    {step === 2 && (
                         <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
                             <SectionNote text="This supplements what's already on the participant record (name, DOB, contact)." />
                             <TextInput label="Other Names / Aliases" value={form.other_names} onChange={v => updateForm('other_names', v)} placeholder="Any other names used" />
@@ -889,14 +902,7 @@ function IntakeContent() {
                                 )}
                             </div>
                             <SelectInput label="Marital Status" value={form.marital_status} onChange={v => updateForm('marital_status', v)} options={MARITAL_OPTIONS} />
-                            <CheckboxGroup
-                                label="Race — select all that apply"
-                                options={RACE_OPTIONS}
-                                selected={form.race}
-                                onChange={v => updateForm('race', v)}
-                                otherValue={form.race_other}
-                                onOtherChange={v => updateForm('race_other', v)}
-                            />
+                            <CheckboxGroup label="Race — select all that apply" options={RACE_OPTIONS} selected={form.race} onChange={v => updateForm('race', v)} otherValue={form.race_other} onOtherChange={v => updateForm('race_other', v)} />
                             <SelectInput label="Ethnicity" value={form.ethnicity} onChange={v => updateForm('ethnicity', v)} options={[
                                 { value: 'hispanic_latinx', label: 'Hispanic / Latino/a/x' },
                                 { value: 'non_hispanic', label: 'Not Hispanic / Latino/a/x' },
@@ -904,22 +910,16 @@ function IntakeContent() {
                             <div>
                                 <SelectInput label="Gender Identity" value={form.gender_identity} onChange={v => updateForm('gender_identity', v)} options={GENDER_OPTIONS} />
                                 {form.gender_identity === 'other' && (
-                                    <div className="mt-2">
-                                        <TextInput label="Please specify" value={form.gender_other} onChange={v => updateForm('gender_other', v)} />
-                                    </div>
+                                    <div className="mt-2"><TextInput label="Please specify" value={form.gender_other} onChange={v => updateForm('gender_other', v)} /></div>
                                 )}
                             </div>
                             <SelectInput label="Minor Children" value={form.has_minor_children} onChange={v => updateForm('has_minor_children', v)} options={[
-                                { value: 'no', label: 'No' },
-                                { value: 'yes_living', label: 'Yes — living with me' },
-                                { value: 'yes_not_living', label: 'Yes — not living with me' },
+                                { value: 'no', label: 'No' }, { value: 'yes_living', label: 'Yes — living with me' }, { value: 'yes_not_living', label: 'Yes — not living with me' },
                             ]} />
                             <div>
                                 <SelectInput label="Referral Source" value={form.referral_source} onChange={v => updateForm('referral_source', v)} options={REFERRAL_OPTIONS} />
                                 {form.referral_source === 'other' && (
-                                    <div className="mt-2">
-                                        <TextInput label="Please specify" value={form.referral_source_other} onChange={v => updateForm('referral_source_other', v)} />
-                                    </div>
+                                    <div className="mt-2"><TextInput label="Please specify" value={form.referral_source_other} onChange={v => updateForm('referral_source_other', v)} /></div>
                                 )}
                             </div>
                             <CheckboxGroup label="Legal Status" options={LEGAL_STATUS_OPTIONS} selected={form.legal_status} onChange={v => updateForm('legal_status', v)} />
@@ -927,8 +927,8 @@ function IntakeContent() {
                         </div>
                     )}
 
-                    {/* ===== STEP 2: EMERGENCY CONTACT ===== */}
-                    {step === 2 && (
+                    {/* ===== STEP 3: EMERGENCY CONTACT (was Step 2) ===== */}
+                    {step === 3 && (
                         <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
                             <SectionNote text="Primary emergency contact is stored on the participant record. This is for a second emergency contact." />
                             <TextInput label="Name" value={form.emergency_contact_2_name} onChange={v => updateForm('emergency_contact_2_name', v)} placeholder="Full name" />
@@ -937,67 +937,231 @@ function IntakeContent() {
                         </div>
                     )}
 
-                    {/* ===== STEP 3: HEALTH ===== */}
-                    {step === 3 && (
+                    {/* ===== STEP 4: HEALTH (was Step 3) ===== */}
+                    {step === 4 && (
                         <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
-                            <CheckboxGroup
-                                label="Physical Health Conditions"
-                                options={PHYSICAL_HEALTH_OPTIONS}
-                                selected={form.physical_health_conditions}
-                                onChange={v => updateForm('physical_health_conditions', v)}
-                                otherValue={form.physical_health_other}
-                                onOtherChange={v => updateForm('physical_health_other', v)}
-                            />
+                            <CheckboxGroup label="Physical Health Conditions" options={PHYSICAL_HEALTH_OPTIONS} selected={form.physical_health_conditions} onChange={v => updateForm('physical_health_conditions', v)} otherValue={form.physical_health_other} onOtherChange={v => updateForm('physical_health_other', v)} />
                             <div>
                                 <YesNoToggle label="Currently taking physical health medications?" value={form.takes_physical_medications} onChange={v => updateForm('takes_physical_medications', v)} />
                                 {form.takes_physical_medications && (
-                                    <div className="mt-3">
-                                        <TextInput label="List medications" value={form.physical_medications} onChange={v => updateForm('physical_medications', v)} placeholder="Medication names and dosages" />
-                                    </div>
+                                    <div className="mt-3"><TextInput label="List medications" value={form.physical_medications} onChange={v => updateForm('physical_medications', v)} placeholder="Medication names and dosages" /></div>
                                 )}
                             </div>
-                            <CheckboxGroup
-                                label="Mental Health Conditions"
-                                options={MENTAL_HEALTH_OPTIONS}
-                                selected={form.mental_health_conditions}
-                                onChange={v => updateForm('mental_health_conditions', v)}
-                                otherValue={form.mental_health_other}
-                                onOtherChange={v => updateForm('mental_health_other', v)}
-                            />
+                            <CheckboxGroup label="Mental Health Conditions" options={MENTAL_HEALTH_OPTIONS} selected={form.mental_health_conditions} onChange={v => updateForm('mental_health_conditions', v)} otherValue={form.mental_health_other} onOtherChange={v => updateForm('mental_health_other', v)} />
                             <div>
                                 <YesNoToggle label="Currently taking mental health medications?" value={form.takes_mental_medications} onChange={v => updateForm('takes_mental_medications', v)} />
                                 {form.takes_mental_medications && (
-                                    <div className="mt-3">
-                                        <TextInput label="List medications" value={form.mental_medications} onChange={v => updateForm('mental_medications', v)} placeholder="Medication names and dosages" />
-                                    </div>
+                                    <div className="mt-3"><TextInput label="List medications" value={form.mental_medications} onChange={v => updateForm('mental_medications', v)} placeholder="Medication names and dosages" /></div>
                                 )}
                             </div>
                             <div>
                                 <SelectInput label="Pregnancy Status" value={form.is_pregnant} onChange={v => updateForm('is_pregnant', v)} options={[
-                                    { value: 'no', label: 'No' },
-                                    { value: 'yes', label: 'Yes' },
-                                    { value: 'not_applicable', label: 'Not Applicable' },
+                                    { value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }, { value: 'not_applicable', label: 'Not Applicable' },
                                 ]} />
                                 {form.is_pregnant === 'yes' && (
-                                    <div className="mt-2">
-                                        <TextInput label="How many months?" value={form.pregnancy_months?.toString() || ''} onChange={v => updateForm('pregnancy_months', v ? parseInt(v) : null)} type="number" />
-                                    </div>
+                                    <div className="mt-2"><TextInput label="How many months?" value={form.pregnancy_months?.toString() || ''} onChange={v => updateForm('pregnancy_months', v ? parseInt(v) : null)} type="number" /></div>
                                 )}
                             </div>
                         </div>
                     )}
 
-                    {/* ===== STEP 4: INSURANCE ===== */}
-                    {step === 4 && (
+                    {/* ===== STEP 5: INSURANCE & ELIGIBILITY (EXPANDED — was Step 4) ===== */}
+                    {step === 5 && (
                         <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
+
+                            {/* ── Primary Insurance ── */}
+                            <SectionDivider label="Primary Insurance" />
+
+                            <SelectInput
+                                label="Insurance Type"
+                                value={form.primary_insurance_type}
+                                onChange={v => {
+                                    updateForm('primary_insurance_type', v);
+                                    updateForm('insurance_type', v); // backward compat
+                                }}
+                                options={INSURANCE_TYPE_OPTIONS}
+                            />
+
+                            {/* Medicaid MCO — dynamic, multi-state */}
+                            {(form.primary_insurance_type === 'medicaid' || form.primary_insurance_type === 'dual') && (
+                                <div className="space-y-3">
+                                    <SelectInput
+                                        label="Medicaid State"
+                                        value={mcoState}
+                                        onChange={v => {
+                                            setMcoState(v);
+                                            // Clear MCO selection when state changes
+                                            if (v !== mcoState) updateForm('medicaid_mco', '');
+                                        }}
+                                        options={[
+                                            { value: 'KY', label: 'Kentucky' },
+                                            { value: 'TN', label: 'Tennessee' },
+                                            { value: 'OH', label: 'Ohio' },
+                                            { value: 'FL', label: 'Florida' },
+                                            { value: 'WV', label: 'West Virginia' },
+                                            { value: 'NC', label: 'North Carolina' },
+                                            { value: 'other', label: 'Other State' },
+                                        ]}
+                                        placeholder="Select state..."
+                                    />
+                                    {mcoState && (
+                                        <>
+                                            {mcoLoading ? (
+                                                <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                    Loading managed care organizations...
+                                                </div>
+                                            ) : mcoManualEntry || mcoOptions.length === 0 ? (
+                                                <div>
+                                                    <TextInput
+                                                        label="Managed Care Organization"
+                                                        value={form.medicaid_mco}
+                                                        onChange={v => updateForm('medicaid_mco', v)}
+                                                        placeholder="Enter MCO name"
+                                                    />
+                                                    {mcoOptions.length === 0 && !mcoLoading && (
+                                                        <p className="text-xs text-gray-500 mt-1">
+                                                            No MCOs configured for this state yet. Enter the name manually.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <SelectInput
+                                                        label="Managed Care Organization"
+                                                        value={form.medicaid_mco}
+                                                        onChange={v => updateForm('medicaid_mco', v)}
+                                                        options={mcoOptions}
+                                                        placeholder="Select MCO..."
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setMcoManualEntry(true)}
+                                                        className="text-xs text-[#1A73A8] hover:underline mt-1"
+                                                    >
+                                                        MCO not listed? Enter manually
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Insurance detail fields — shown when any insurance is selected */}
+                            {form.primary_insurance_type && form.primary_insurance_type !== 'none' && (
+                                <div className="space-y-4">
+                                    <TextInput label="Member / Subscriber ID" value={form.primary_member_id} onChange={v => updateForm('primary_member_id', v)} placeholder="ID from insurance card" />
+
+                                    {/* Commercial-specific fields */}
+                                    {(form.primary_insurance_type === 'private' || form.primary_insurance_type === 'marketplace') && (
+                                        <>
+                                            <TextInput label="Payer / Plan Name" value={form.primary_payer_name} onChange={v => updateForm('primary_payer_name', v)} placeholder="e.g., Anthem, UnitedHealthcare" />
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <TextInput label="Group Number" value={form.primary_group_number} onChange={v => updateForm('primary_group_number', v)} placeholder="Group #" />
+                                                <TextInput label="Plan Name" value={form.primary_plan_name} onChange={v => updateForm('primary_plan_name', v)} placeholder="Plan name" />
+                                            </div>
+                                        </>
+                                    )}
+
+                                    <SelectInput label="Participant's Relationship to Subscriber" value={form.primary_subscriber_relationship} onChange={v => updateForm('primary_subscriber_relationship', v)} options={SUBSCRIBER_RELATIONSHIP_OPTIONS} />
+
+                                    {/* Subscriber info when not self */}
+                                    {form.primary_subscriber_relationship && form.primary_subscriber_relationship !== 'self' && (
+                                        <div className="ml-4 pl-4 border-l-2 border-blue-100 space-y-3">
+                                            <SectionNote text="The subscriber is the person who holds the insurance policy." />
+                                            <TextInput label="Subscriber Name" value={form.primary_subscriber_name} onChange={v => updateForm('primary_subscriber_name', v)} placeholder="Full name" />
+                                            <TextInput label="Subscriber Date of Birth" value={form.primary_subscriber_dob} onChange={v => updateForm('primary_subscriber_dob', v)} type="date" />
+                                            <TextInput label="Subscriber Address (if different)" value={form.primary_subscriber_address} onChange={v => updateForm('primary_subscriber_address', v)} placeholder="Only if different from participant" />
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <TextInput label="Coverage Effective Date" value={form.primary_effective_date} onChange={v => updateForm('primary_effective_date', v)} type="date" />
+                                        <TextInput label="Insurance Phone" value={form.primary_insurance_phone} onChange={v => updateForm('primary_insurance_phone', v)} placeholder="Customer service #" type="tel" />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <SelectInput label="Verified From" value={form.primary_insurance_verified_from} onChange={v => updateForm('primary_insurance_verified_from', v)} options={INSURANCE_VERIFIED_FROM_OPTIONS} />
+                                        <div className="flex items-end pb-1">
+                                            <YesNoToggle label="Insurance Card on File?" value={form.insurance_card_on_file ? true : form.insurance_card_on_file === false ? false : null} onChange={v => updateForm('insurance_card_on_file', v)} />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ── Secondary Insurance ── */}
+                            <SectionDivider label="Secondary Insurance" />
+
+                            <YesNoToggle label="Has secondary insurance?" value={form.has_secondary_insurance} onChange={v => updateForm('has_secondary_insurance', v)} />
+                            {form.has_secondary_insurance && (
+                                <div className="space-y-4">
+                                    <SelectInput label="Secondary Insurance Type" value={form.secondary_insurance_type} onChange={v => updateForm('secondary_insurance_type', v)} options={INSURANCE_TYPE_OPTIONS} />
+                                    {form.secondary_insurance_type && form.secondary_insurance_type !== 'none' && (
+                                        <>
+                                            <TextInput label="Payer Name" value={form.secondary_payer_name} onChange={v => updateForm('secondary_payer_name', v)} placeholder="Payer name" />
+                                            <TextInput label="Member ID" value={form.secondary_member_id} onChange={v => updateForm('secondary_member_id', v)} placeholder="Member ID" />
+                                            <TextInput label="Group Number" value={form.secondary_group_number} onChange={v => updateForm('secondary_group_number', v)} placeholder="Group # (if applicable)" />
+                                            <SelectInput label="Subscriber Relationship" value={form.secondary_subscriber_relationship} onChange={v => updateForm('secondary_subscriber_relationship', v)} options={SUBSCRIBER_RELATIONSHIP_OPTIONS} />
+                                            {form.secondary_subscriber_relationship && form.secondary_subscriber_relationship !== 'self' && (
+                                                <div className="ml-4 pl-4 border-l-2 border-blue-100 space-y-3">
+                                                    <TextInput label="Subscriber Name" value={form.secondary_subscriber_name} onChange={v => updateForm('secondary_subscriber_name', v)} placeholder="Full name" />
+                                                    <TextInput label="Subscriber DOB" value={form.secondary_subscriber_dob} onChange={v => updateForm('secondary_subscriber_dob', v)} type="date" />
+                                                </div>
+                                            )}
+                                            <TextInput label="Effective Date" value={form.secondary_effective_date} onChange={v => updateForm('secondary_effective_date', v)} type="date" />
+                                        </>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* ── Eligibility Verification ── */}
+                            <SectionDivider label="Eligibility Verification" />
+
                             <div>
-                                <SelectInput label="Insurance Type" value={form.insurance_type} onChange={v => updateForm('insurance_type', v)} options={INSURANCE_OPTIONS} />
-                                {form.insurance_type === 'other' && (
-                                    <div className="mt-2">
-                                        <TextInput label="Please specify" value={form.insurance_other} onChange={v => updateForm('insurance_other', v)} />
+                                <YesNoToggle label="Eligibility verified?" value={form.eligibility_verified} onChange={v => updateForm('eligibility_verified', v)} />
+                                {form.eligibility_verified && (
+                                    <div className="mt-3 space-y-3">
+                                        <SelectInput label="Status" value={form.eligibility_status} onChange={v => updateForm('eligibility_status', v)} options={ELIGIBILITY_STATUS_OPTIONS} />
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <TextInput label="Date Verified" value={form.eligibility_verified_date} onChange={v => updateForm('eligibility_verified_date', v)} type="date" />
+                                            <SelectInput label="Verification Method" value={form.eligibility_verified_method} onChange={v => updateForm('eligibility_verified_method', v)} options={ELIGIBILITY_METHOD_OPTIONS} />
+                                        </div>
+                                        <TextInput label="Verified By" value={form.eligibility_verified_by} onChange={v => updateForm('eligibility_verified_by', v)} placeholder="Staff name" />
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Eligibility Notes</label>
+                                            <textarea
+                                                value={form.eligibility_notes}
+                                                onChange={(e) => updateForm('eligibility_notes', e.target.value)}
+                                                rows={2}
+                                                placeholder="Coverage details, limitations, copay info..."
+                                                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A73A8]/30 outline-none resize-none"
+                                            />
+                                        </div>
                                     </div>
                                 )}
                             </div>
+
+                            {/* ── Prior Authorization ── */}
+                            <SectionDivider label="Prior Authorization" />
+
+                            <div>
+                                <YesNoToggle label="Prior authorization required?" value={form.prior_auth_required} onChange={v => updateForm('prior_auth_required', v)} />
+                                {form.prior_auth_required && (
+                                    <div className="mt-3 space-y-3">
+                                        <TextInput label="Authorization Number" value={form.prior_auth_number} onChange={v => updateForm('prior_auth_number', v)} placeholder="Auth #" />
+                                        <div className="grid grid-cols-3 gap-4">
+                                            <TextInput label="Start Date" value={form.prior_auth_start_date} onChange={v => updateForm('prior_auth_start_date', v)} type="date" />
+                                            <TextInput label="End Date" value={form.prior_auth_end_date} onChange={v => updateForm('prior_auth_end_date', v)} type="date" />
+                                            <TextInput label="Units Approved" value={form.prior_auth_units_approved} onChange={v => updateForm('prior_auth_units_approved', v)} type="number" placeholder="# of 15-min units" />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* ── Primary Care Provider (existing) ── */}
+                            <SectionDivider label="Primary Care Provider" />
+
                             <div>
                                 <YesNoToggle label="Has primary care provider?" value={form.has_primary_provider} onChange={v => updateForm('has_primary_provider', v)} />
                                 {form.has_primary_provider && (
@@ -1007,11 +1171,116 @@ function IntakeContent() {
                                     </div>
                                 )}
                             </div>
+
+                            {/* ── Referring Provider & Diagnosis ── */}
+                            <SectionDivider label="Clinical Reference" />
+
+                            <SectionNote text="The referring provider is the clinician who ordered or recommended peer support services. This may or may not be the participant's primary care provider." />
+
+                            <div className="space-y-3">
+                                <TextInput label="Referring Provider Name" value={form.referring_provider_name} onChange={v => updateForm('referring_provider_name', v)} placeholder="Provider who referred to peer support" />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <TextInput label="NPI (10 digits)" value={form.referring_provider_npi} onChange={v => updateForm('referring_provider_npi', v)} placeholder="1234567890" maxLength={10} />
+                                    <SelectInput label="Credential" value={form.referring_provider_credential} onChange={v => updateForm('referring_provider_credential', v)} options={CREDENTIAL_OPTIONS} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <TextInput label="Organization" value={form.referring_provider_org} onChange={v => updateForm('referring_provider_org', v)} placeholder="Practice or facility name" />
+                                    <TextInput label="Phone" value={form.referring_provider_phone} onChange={v => updateForm('referring_provider_phone', v)} placeholder="(555) 555-5555" type="tel" />
+                                </div>
+                                <YesNoToggle label="Referral / order on file?" value={form.referral_order_on_file ? true : form.referral_order_on_file === false ? false : null} onChange={v => updateForm('referral_order_on_file', v)} />
+                            </div>
+
+                            <SectionDivider label="Diagnosis on File" />
+
+                            <SectionNote text="This is NOT a peer specialist diagnosis. Record the diagnosis from the referring provider or treatment record. Required for billing." />
+
+                            {/* Primary Diagnosis */}
+                            <div className="space-y-3">
+                                <label className="block text-sm font-medium text-gray-700">Primary Diagnosis</label>
+
+                                {!manualDxEntry ? (
+                                    <div>
+                                        <SelectInput
+                                            label=""
+                                            value={form.primary_diagnosis_code}
+                                            onChange={v => {
+                                                if (v === 'manual') {
+                                                    setManualDxEntry(true);
+                                                    updateForm('primary_diagnosis_code', '');
+                                                    updateForm('primary_diagnosis_description', '');
+                                                } else {
+                                                    updateForm('primary_diagnosis_code', v);
+                                                    const match = COMMON_DIAGNOSIS_OPTIONS.find(o => o.value === v);
+                                                    updateForm('primary_diagnosis_description', match ? match.label.split(' — ')[1] || '' : '');
+                                                }
+                                            }}
+                                            options={COMMON_DIAGNOSIS_OPTIONS}
+                                            placeholder="Select common diagnosis or enter manually..."
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <div className="grid grid-cols-3 gap-4">
+                                            <TextInput label="ICD-10 Code" value={form.primary_diagnosis_code} onChange={v => updateForm('primary_diagnosis_code', v)} placeholder="F10.20" />
+                                            <div className="col-span-2">
+                                                <TextInput label="Description" value={form.primary_diagnosis_description} onChange={v => updateForm('primary_diagnosis_description', v)} placeholder="Alcohol use disorder, moderate" />
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setManualDxEntry(false)}
+                                            className="text-xs text-[#1A73A8] hover:underline"
+                                        >
+                                            Switch to dropdown
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Secondary Diagnosis */}
+                                <label className="block text-sm font-medium text-gray-700 mt-4">Secondary Diagnosis (optional)</label>
+                                {!manualSecondaryDxEntry ? (
+                                    <SelectInput
+                                        label=""
+                                        value={form.secondary_diagnosis_code}
+                                        onChange={v => {
+                                            if (v === 'manual') {
+                                                setManualSecondaryDxEntry(true);
+                                                updateForm('secondary_diagnosis_code', '');
+                                                updateForm('secondary_diagnosis_description', '');
+                                            } else {
+                                                updateForm('secondary_diagnosis_code', v);
+                                                const match = COMMON_DIAGNOSIS_OPTIONS.find(o => o.value === v);
+                                                updateForm('secondary_diagnosis_description', match ? match.label.split(' — ')[1] || '' : '');
+                                            }
+                                        }}
+                                        options={COMMON_DIAGNOSIS_OPTIONS}
+                                        placeholder="Select or enter manually..."
+                                    />
+                                ) : (
+                                    <div className="space-y-2">
+                                        <div className="grid grid-cols-3 gap-4">
+                                            <TextInput label="ICD-10 Code" value={form.secondary_diagnosis_code} onChange={v => updateForm('secondary_diagnosis_code', v)} placeholder="F41.1" />
+                                            <div className="col-span-2">
+                                                <TextInput label="Description" value={form.secondary_diagnosis_description} onChange={v => updateForm('secondary_diagnosis_description', v)} placeholder="Generalized anxiety disorder" />
+                                            </div>
+                                        </div>
+                                        <button type="button" onClick={() => setManualSecondaryDxEntry(false)} className="text-xs text-[#1A73A8] hover:underline">
+                                            Switch to dropdown
+                                        </button>
+                                    </div>
+                                )}
+
+                                <SelectInput label="Diagnosis Source" value={form.diagnosis_source} onChange={v => updateForm('diagnosis_source', v)} options={DIAGNOSIS_SOURCE_OPTIONS} />
+                                {form.diagnosis_source === 'self_report' && (
+                                    <SectionNote text="Self-reported diagnosis must be verified by a provider before claims can be submitted." type="warning" />
+                                )}
+                                <TextInput label="Date Established" value={form.diagnosis_date} onChange={v => updateForm('diagnosis_date', v)} type="date" />
+                            </div>
                         </div>
                     )}
 
-                    {/* ===== STEP 5: EDUCATION & EMPLOYMENT ===== */}
-                    {step === 5 && (
+                    {/* ===== STEP 6: EDUCATION & EMPLOYMENT (was Step 5) ===== */}
+                    {step === 6 && (
                         <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
                             <SelectInput label="Highest Education Level" value={form.education_level} onChange={v => updateForm('education_level', v)} options={EDUCATION_OPTIONS} />
                             <SelectInput label="Past Year Employment Status" value={form.past_year_employment} onChange={v => updateForm('past_year_employment', v)} options={EMPLOYMENT_OPTIONS} />
@@ -1025,27 +1294,14 @@ function IntakeContent() {
                                     </div>
                                 )}
                             </div>
-                            <CheckboxGroup
-                                label="Income Sources"
-                                options={INCOME_SOURCE_OPTIONS}
-                                selected={form.income_sources}
-                                onChange={v => updateForm('income_sources', v)}
-                                otherValue={form.income_sources_other}
-                                onOtherChange={v => updateForm('income_sources_other', v)}
-                            />
+                            <CheckboxGroup label="Income Sources" options={INCOME_SOURCE_OPTIONS} selected={form.income_sources} onChange={v => updateForm('income_sources', v)} otherValue={form.income_sources_other} onOtherChange={v => updateForm('income_sources_other', v)} />
                         </div>
                     )}
 
-                    {/* ===== STEP 6: SOCIAL & SAFETY ===== */}
-                    {step === 6 && (
+                    {/* ===== STEP 7: SOCIAL & SAFETY (was Step 6) ===== */}
+                    {step === 7 && (
                         <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
-                            <TextInput
-                                label="How many supportive people in your life?"
-                                value={form.supportive_people_count}
-                                onChange={v => updateForm('supportive_people_count', v)}
-                                placeholder="0"
-                                type="number"
-                            />
+                            <TextInput label="How many supportive people in your life?" value={form.supportive_people_count} onChange={v => updateForm('supportive_people_count', v)} placeholder="0" type="number" />
                             <SectionNote text="The following questions are about domestic violence. Approach with sensitivity." type="warning" />
                             <div>
                                 <YesNoToggle label="Have you ever been a survivor of domestic violence?" value={form.is_dv_survivor} onChange={v => updateForm('is_dv_survivor', v)} />
@@ -1062,52 +1318,37 @@ function IntakeContent() {
                         </div>
                     )}
 
-                    {/* ===== STEP 7: SUBSTANCE USE ===== */}
-                    {step === 7 && (
+                    {/* ===== STEP 8: SUBSTANCE USE (was Step 7) ===== */}
+                    {step === 8 && (
                         <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
                             <TextInput label="Age of first substance use" value={form.age_first_use} onChange={v => updateForm('age_first_use', v)} type="number" placeholder="14" />
-                            <CheckboxGroup
-                                label="Substances used — select all that apply"
-                                options={SUBSTANCE_OPTIONS}
-                                selected={form.substances_used}
-                                onChange={v => updateForm('substances_used', v)}
-                                otherValue={form.substances_other}
-                                onOtherChange={v => updateForm('substances_other', v)}
-                            />
+                            <CheckboxGroup label="Substances used — select all that apply" options={SUBSTANCE_OPTIONS} selected={form.substances_used} onChange={v => updateForm('substances_used', v)} otherValue={form.substances_other} onOtherChange={v => updateForm('substances_other', v)} />
                             <div>
                                 <YesNoToggle label="Have you ever overdosed?" value={form.has_overdosed} onChange={v => updateForm('has_overdosed', v)} />
                                 {form.has_overdosed && (
-                                    <div className="mt-3">
-                                        <TextInput label="How many times?" value={form.overdose_count} onChange={v => updateForm('overdose_count', v)} type="number" placeholder="1" />
-                                    </div>
+                                    <div className="mt-3"><TextInput label="How many times?" value={form.overdose_count} onChange={v => updateForm('overdose_count', v)} type="number" placeholder="1" /></div>
                                 )}
                             </div>
                         </div>
                     )}
 
-                    {/* ===== STEP 8: RECOVERY HISTORY (Simplified) ===== */}
-                    {step === 8 && (
+                    {/* ===== STEP 9: RECOVERY HISTORY (was Step 8) ===== */}
+                    {step === 9 && (
                         <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
                             <div>
                                 <YesNoToggle label="Is this your first recovery attempt?" value={form.is_first_recovery_attempt} onChange={v => updateForm('is_first_recovery_attempt', v)} />
                                 {form.is_first_recovery_attempt === false && (
-                                    <div className="mt-3">
-                                        <TextInput label="How many previous attempts?" value={form.previous_attempt_count} onChange={v => updateForm('previous_attempt_count', v)} type="number" />
-                                    </div>
+                                    <div className="mt-3"><TextInput label="How many previous attempts?" value={form.previous_attempt_count} onChange={v => updateForm('previous_attempt_count', v)} type="number" /></div>
                                 )}
                             </div>
                             <div>
                                 <YesNoToggle label="Have you previously received treatment or recovery support services?" value={form.has_received_treatment} onChange={v => updateForm('has_received_treatment', v)} />
                                 {form.has_received_treatment && (
-                                    <div className="mt-3">
-                                        <TextInput label="What types of treatment or support?" value={form.treatment_types} onChange={v => updateForm('treatment_types', v)} placeholder="Inpatient, outpatient, peer support, recovery housing, MAT, etc." />
-                                    </div>
+                                    <div className="mt-3"><TextInput label="What types of treatment or support?" value={form.treatment_types} onChange={v => updateForm('treatment_types', v)} placeholder="Inpatient, outpatient, peer support, recovery housing, MAT, etc." /></div>
                                 )}
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Anything else you'd like us to know about your recovery journey?
-                                </label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Anything else you'd like us to know about your recovery journey?</label>
                                 <textarea
                                     value={form.recovery_notes}
                                     onChange={(e) => updateForm('recovery_notes', e.target.value)}
@@ -1159,6 +1400,16 @@ function IntakeContent() {
                             {saving ? 'Saving...' : isEditMode ? 'Update Intake' : 'Complete Intake'}
                         </button>
                     )}
+                </div>
+
+                {/* Cancel link */}
+                <div className="mt-3 text-center">
+                    <button
+                        onClick={handleCancel}
+                        className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                        Cancel Intake
+                    </button>
                 </div>
 
                 {/* Step list (compact, below navigation) */}

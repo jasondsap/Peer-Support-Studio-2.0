@@ -20,6 +20,7 @@ import {
 import AssessmentDetailModal from '@/app/components/AssessmentDetailModal';
 import ReadinessChecklist from '@/app/components/ReadinessChecklist';
 import ParticipantSnapshotModal from '@/app/components/ParticipantSnapshotModal';
+import BillingReadinessCard, { BillingStatusBadge } from '@/app/components/BillingReadinessCard';
 
 // ============================================================================
 // Types
@@ -554,7 +555,7 @@ export default function ParticipantDetailPage() {
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
                 <div className="bg-white rounded-xl p-4 border border-gray-200">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
@@ -610,6 +611,7 @@ export default function ParticipantDetailPage() {
                         </div>
                     </div>
                 </div>
+                <BillingStatusBadge intake={intake} />
             </div>
 
             {/* Tabs */}
@@ -636,7 +638,9 @@ export default function ParticipantDetailPage() {
             {/* OVERVIEW TAB */}
             {/* ================================================================ */}
             {activeTab === 'overview' && (
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-6">
+                    <BillingReadinessCard intake={intake} participantId={params.id as string} />
+                    <div className="grid md:grid-cols-2 gap-6">
                     {/* Contact Information */}
                     <div className="bg-white rounded-xl p-6 border border-gray-200">
                         <h3 className="text-lg font-semibold text-[#0E2235] mb-4">Contact Information</h3>
@@ -787,6 +791,7 @@ export default function ParticipantDetailPage() {
                         participantName={displayName}
                         organizationId={currentOrg?.id || ''}
                     />
+                    </div>
                 </div>
             )}
 
