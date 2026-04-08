@@ -1,23 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession, getInternalUserId } from '@/lib/auth';
-import { sql } from '@/lib/db';
-
-// ============================================================================
-// RC-PLANS API — 4-level recovery plan hierarchy
-// File: app/api/rc-plans/route.ts
-// Tables: rc_plans → rc_plan_domains → rc_plan_goals → rc_plan_activities
-//         + rc_plan_outcomes
-// ============================================================================
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { query } from '@/lib/db';
 
 // ============================================================================
 // GET /api/rc-plans
 // ============================================================================
 export async function GET(req: NextRequest) {
     try {
-        const session = await getSession();
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const session = await getServerSession(authOptions);
+        if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const { searchParams } = new URL(req.url);
         const organizationId = searchParams.get('organization_id');
@@ -30,82 +22,77 @@ export async function GET(req: NextRequest) {
 
         // ── Single plan with full nested data ──
         if (planId) {
-            const plans = await sql`
-                SELECT rp.*,
+            const plans = await query(
+                `SELECT rp.*,
                     p.first_name as participant_first_name,
                     p.last_name as participant_last_name,
                     p.preferred_name as participant_preferred_name
                 FROM rc_plans rp
                 LEFT JOIN participants p ON rp.participant_id = p.id
-                WHERE rp.id = ${planId}::uuid
-                AND rp.organization_id = ${organizationId}::uuid
-            `;
+                WHERE rp.id = $1 AND rp.organization_id = $2`,
+                [planId, organizationId]
+            ) as any[];
 
-            if (plans.length === 0) {
-                return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
-            }
+            if (plans.length === 0) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
             const plan = plans[0];
 
-            // Fetch domains
-            const domains = await sql`
-                SELECT * FROM rc_plan_domains
-                WHERE plan_id = ${planId}::uuid
-                ORDER BY sort_order, created_at
-            `;
+            const domains = await query(
+                `SELECT * FROM rc_plan_domains WHERE plan_id = $1 ORDER BY sort_order, created_at`,
+                [planId]
+            ) as any[];
 
-            // Fetch goals for all domains
             const domainIds = domains.map((d: any) => d.id);
             let goals: any[] = [];
             if (domainIds.length > 0) {
-                goals = await sql`
-                    SELECT * FROM rc_plan_goals
-                    WHERE domain_entry_id = ANY(${domainIds}::uuid[])
-                    ORDER BY sort_order, created_at
-                `;
+                goals = await query(
+                    `SELECT * FROM rc_plan_goals WHERE domain_entry_id = ANY($1) ORDER BY sort_order, created_at`,
+                    [domainIds]
+                ) as any[];
             }
 
-            // Fetch activities for all goals
             const goalIds = goals.map((g: any) => g.id);
             let activities: any[] = [];
             if (goalIds.length > 0) {
-                activities = await sql`
-                    SELECT * FROM rc_plan_activities
-                    WHERE goal_entry_id = ANY(${goalIds}::uuid[])
-                    ORDER BY sort_order, created_at
-                `;
+                activities = await query(
+                    `SELECT * FROM rc_plan_activities WHERE goal_entry_id = ANY($1) ORDER BY sort_order, created_at`,
+                    [goalIds]
+                ) as any[];
             }
+
+            const goalsWithActivities = goals.map((g: any) => ({
+                ...g,
+                activities: activities.filter((a: any) => a.goal_entry_id === g.id)
+            }));
 
             // Fetch outcomes for all domains
             let outcomes: any[] = [];
             if (domainIds.length > 0) {
-                outcomes = await sql`
-                    SELECT o.*,
-                        u.first_name as recorded_by_first_name,
-                        u.last_name as recorded_by_last_name
-                    FROM rc_plan_outcomes o
-                    LEFT JOIN users u ON o.recorded_by = u.id
-                    WHERE o.domain_entry_id = ANY(${domainIds}::uuid[])
-                    ORDER BY o.recorded_at DESC
-                `;
+                outcomes = await query(
+                    `SELECT o.*, u.first_name as recorded_by_first_name, u.last_name as recorded_by_last_name
+                     FROM rc_plan_outcomes o
+                     LEFT JOIN users u ON o.recorded_by = u.id
+                     WHERE o.domain_entry_id = ANY($1) ORDER BY o.recorded_at DESC`,
+                    [domainIds]
+                ) as any[];
             }
-
-            // Assemble hierarchy
-            const goalsWithActivities = goals.map((g: any) => ({
-                ...g,
-                activities: activities.filter((a: any) => a.goal_entry_id === g.id),
-            }));
 
             const domainsWithGoals = domains.map((d: any) => ({
                 ...d,
                 goals: goalsWithActivities.filter((g: any) => g.domain_entry_id === d.id),
-                outcomes: outcomes.filter((o: any) => o.domain_entry_id === d.id),
+                outcomes: outcomes.filter((o: any) => o.domain_entry_id === d.id)
             }));
 
-            return NextResponse.json({ plan: { ...plan, domains: domainsWithGoals } });
+            // Fetch signatures
+            const signatures = await query(
+                `SELECT * FROM rc_plan_signatures WHERE plan_id = $1 ORDER BY signed_at ASC`,
+                [planId]
+            ) as any[];
+
+            return NextResponse.json({ plan: { ...plan, domains: domainsWithGoals, signatures } });
         }
 
-        // ── List plans (dynamic query for optional participant filter) ──
-        let queryText = `
+        // ── List plans ──
+        let sql = `
             SELECT rp.*,
                 p.first_name as participant_first_name,
                 p.last_name as participant_last_name,
@@ -121,14 +108,14 @@ export async function GET(req: NextRequest) {
         let idx = 2;
 
         if (participantId) {
-            queryText += ` AND rp.participant_id = $${idx}`;
+            sql += ` AND rp.participant_id = $${idx}`;
             params.push(participantId);
             idx++;
         }
 
-        queryText += ` ORDER BY rp.updated_at DESC`;
+        sql += ` ORDER BY rp.updated_at DESC`;
 
-        const plans = await sql(queryText, params);
+        const plans = await query(sql, params);
         return NextResponse.json({ plans });
     } catch (error) {
         console.error('Error fetching rc-plans:', error);
@@ -141,15 +128,19 @@ export async function GET(req: NextRequest) {
 // ============================================================================
 export async function POST(req: NextRequest) {
     try {
-        const session = await getSession();
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const session = await getServerSession(authOptions);
+        if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-        const userId = await getInternalUserId(session.user.id, session.user.email);
-        if (!userId) {
+        // Get user ID
+        const userResult = await query(
+            'SELECT id FROM users WHERE cognito_sub = $1',
+            [(session.user as any).sub || session.user.id]
+        ) as { id: string }[];
+
+        if (userResult.length === 0) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
+        const userId = userResult[0].id;
 
         const body = await req.json();
         const { organization_id, participant_id, plan_name, notes, domains } = body;
@@ -159,67 +150,43 @@ export async function POST(req: NextRequest) {
         }
 
         // Create plan
-        const planResult = await sql`
-            INSERT INTO rc_plans (participant_id, organization_id, user_id, plan_name, notes)
-            VALUES (
-                ${participant_id}::uuid,
-                ${organization_id}::uuid,
-                ${userId}::uuid,
-                ${plan_name || 'Recovery Plan'},
-                ${notes || null}
-            )
-            RETURNING *
-        `;
+        const planResult = await query(
+            `INSERT INTO rc_plans (participant_id, organization_id, user_id, plan_name, notes)
+             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [participant_id, organization_id, userId, plan_name || 'Recovery Plan', notes || null]
+        ) as any[];
+
         const planId = planResult[0].id;
 
         // Insert domains → goals → activities
         if (domains && Array.isArray(domains)) {
             for (let di = 0; di < domains.length; di++) {
                 const domain = domains[di];
-                const domainResult = await sql`
-                    INSERT INTO rc_plan_domains (plan_id, domain_key, importance_rating, confidence_rating, notes, sort_order)
-                    VALUES (
-                        ${planId}::uuid,
-                        ${domain.domain_key},
-                        ${domain.importance_rating || null},
-                        ${domain.confidence_rating || null},
-                        ${domain.notes || null},
-                        ${di}
-                    )
-                    RETURNING id
-                `;
+                const domainResult = await query(
+                    `INSERT INTO rc_plan_domains (plan_id, domain_key, importance_rating, confidence_rating, notes, sort_order)
+                     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+                    [planId, domain.domain_key, domain.importance_rating || null, domain.confidence_rating || null, domain.notes || null, di]
+                ) as any[];
                 const domainId = domainResult[0].id;
 
                 if (domain.goals && Array.isArray(domain.goals)) {
                     for (let gi = 0; gi < domain.goals.length; gi++) {
                         const goal = domain.goals[gi];
-                        const goalResult = await sql`
-                            INSERT INTO rc_plan_goals (domain_entry_id, goal_text, is_custom, target_date, sort_order)
-                            VALUES (
-                                ${domainId}::uuid,
-                                ${goal.goal_text},
-                                ${goal.is_custom || false},
-                                ${goal.target_date || null},
-                                ${gi}
-                            )
-                            RETURNING id
-                        `;
+                        const goalResult = await query(
+                            `INSERT INTO rc_plan_goals (domain_entry_id, goal_text, is_custom, target_date, sort_order)
+                             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+                            [domainId, goal.goal_text, goal.is_custom || false, goal.target_date || null, gi]
+                        ) as any[];
                         const goalId = goalResult[0].id;
 
                         if (goal.activities && Array.isArray(goal.activities)) {
                             for (let ai = 0; ai < goal.activities.length; ai++) {
                                 const act = goal.activities[ai];
-                                await sql`
-                                    INSERT INTO rc_plan_activities (goal_entry_id, activity_text, frequency, duration, is_custom, sort_order)
-                                    VALUES (
-                                        ${goalId}::uuid,
-                                        ${act.activity_text},
-                                        ${act.frequency || null},
-                                        ${act.duration || null},
-                                        ${act.is_custom || false},
-                                        ${ai}
-                                    )
-                                `;
+                                await query(
+                                    `INSERT INTO rc_plan_activities (goal_entry_id, activity_text, frequency, duration, is_custom, sort_order)
+                                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                                    [goalId, act.activity_text, act.frequency || null, act.duration || null, act.is_custom || false, ai]
+                                );
                             }
                         }
                     }
@@ -235,21 +202,17 @@ export async function POST(req: NextRequest) {
 }
 
 // ============================================================================
-// PUT /api/rc-plans — Dynamic field updates via sql() call pattern
+// PUT /api/rc-plans
 // ============================================================================
 export async function PUT(req: NextRequest) {
     try {
-        const session = await getSession();
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const session = await getServerSession(authOptions);
+        if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const body = await req.json();
         const { type, id, _plan_id, ...data } = body;
 
-        if (!type || !id) {
-            return NextResponse.json({ error: 'type and id required' }, { status: 400 });
-        }
+        if (!type || !id) return NextResponse.json({ error: 'type and id required' }, { status: 400 });
 
         switch (type) {
             case 'plan': {
@@ -261,7 +224,7 @@ export async function PUT(req: NextRequest) {
                 if (data.notes !== undefined) { fields.push(`notes = $${pi++}`); values.push(data.notes); }
                 fields.push('updated_at = NOW()');
                 values.push(id);
-                await sql(`UPDATE rc_plans SET ${fields.join(', ')} WHERE id = $${pi}`, values);
+                await query(`UPDATE rc_plans SET ${fields.join(', ')} WHERE id = $${pi}`, values);
                 break;
             }
             case 'domain': {
@@ -273,7 +236,7 @@ export async function PUT(req: NextRequest) {
                 if (data.confidence_rating !== undefined) { fields.push(`confidence_rating = $${pi++}`); values.push(data.confidence_rating); }
                 if (data.notes !== undefined) { fields.push(`notes = $${pi++}`); values.push(data.notes); }
                 values.push(id);
-                await sql(`UPDATE rc_plan_domains SET ${fields.join(', ')} WHERE id = $${pi}`, values);
+                await query(`UPDATE rc_plan_domains SET ${fields.join(', ')} WHERE id = $${pi}`, values);
                 break;
             }
             case 'goal': {
@@ -284,7 +247,7 @@ export async function PUT(req: NextRequest) {
                 if (data.goal_text !== undefined) { fields.push(`goal_text = $${pi++}`); values.push(data.goal_text); }
                 if (data.target_date !== undefined) { fields.push(`target_date = $${pi++}`); values.push(data.target_date); }
                 values.push(id);
-                await sql(`UPDATE rc_plan_goals SET ${fields.join(', ')} WHERE id = $${pi}`, values);
+                await query(`UPDATE rc_plan_goals SET ${fields.join(', ')} WHERE id = $${pi}`, values);
                 break;
             }
             case 'activity': {
@@ -297,7 +260,7 @@ export async function PUT(req: NextRequest) {
                 if (data.duration !== undefined) { fields.push(`duration = $${pi++}`); values.push(data.duration); }
                 if (data.notes !== undefined) { fields.push(`notes = $${pi++}`); values.push(data.notes); }
                 values.push(id);
-                await sql(`UPDATE rc_plan_activities SET ${fields.join(', ')} WHERE id = $${pi}`, values);
+                await query(`UPDATE rc_plan_activities SET ${fields.join(', ')} WHERE id = $${pi}`, values);
                 break;
             }
             case 'outcome': {
@@ -306,18 +269,28 @@ export async function PUT(req: NextRequest) {
                 let pi = 1;
                 if (data.value !== undefined) { fields.push(`value = $${pi++}`); values.push(data.value); }
                 if (data.notes !== undefined) { fields.push(`notes = $${pi++}`); values.push(data.notes); }
-                fields.push('recorded_at = NOW()');
+                fields.push(`recorded_at = NOW()`);
                 values.push(id);
-                await sql(`UPDATE rc_plan_outcomes SET ${fields.join(', ')} WHERE id = $${pi}`, values);
+                await query(`UPDATE rc_plan_outcomes SET ${fields.join(', ')} WHERE id = $${pi}`, values);
+                break;
+            }
+            case 'add_signature': {
+                if (!data.signer_role || !data.signer_name || !data.organization_id) {
+                    return NextResponse.json({ error: 'signer_role, signer_name, and organization_id required' }, { status: 400 });
+                }
+                await query(
+                    `INSERT INTO rc_plan_signatures (plan_id, signer_role, signer_name, organization_id)
+                     VALUES ($1, $2, $3, $4)`,
+                    [id, data.signer_role, data.signer_name, data.organization_id]
+                );
                 break;
             }
             default:
                 return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
         }
 
-        // Cascade updated_at to parent plan
         if (type !== 'plan' && _plan_id) {
-            await sql`UPDATE rc_plans SET updated_at = NOW() WHERE id = ${_plan_id}::uuid`;
+            await query('UPDATE rc_plans SET updated_at = NOW() WHERE id = $1', [_plan_id]);
         }
 
         return NextResponse.json({ success: true });
@@ -332,33 +305,22 @@ export async function PUT(req: NextRequest) {
 // ============================================================================
 export async function DELETE(req: NextRequest) {
     try {
-        const session = await getSession();
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const session = await getServerSession(authOptions);
+        if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const { searchParams } = new URL(req.url);
         const type = searchParams.get('type') || 'plan';
         const id = searchParams.get('id');
+        if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
-        if (!id) {
-            return NextResponse.json({ error: 'id required' }, { status: 400 });
+        switch (type) {
+            case 'plan': await query('DELETE FROM rc_plans WHERE id = $1', [id]); break;
+            case 'domain': await query('DELETE FROM rc_plan_domains WHERE id = $1', [id]); break;
+            case 'goal': await query('DELETE FROM rc_plan_goals WHERE id = $1', [id]); break;
+            case 'activity': await query('DELETE FROM rc_plan_activities WHERE id = $1', [id]); break;
+            case 'outcome': await query('DELETE FROM rc_plan_outcomes WHERE id = $1', [id]); break;
+            case 'signature': await query('DELETE FROM rc_plan_signatures WHERE id = $1', [id]); break;
         }
-
-        const tableMap: Record<string, string> = {
-            plan: 'rc_plans',
-            domain: 'rc_plan_domains',
-            goal: 'rc_plan_goals',
-            activity: 'rc_plan_activities',
-            outcome: 'rc_plan_outcomes',
-        };
-
-        const table = tableMap[type];
-        if (!table) {
-            return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
-        }
-
-        await sql(`DELETE FROM ${table} WHERE id = $1`, [id]);
 
         return NextResponse.json({ success: true });
     } catch (error) {

@@ -8,11 +8,11 @@ import {
     CheckCircle2, Clock, ChevronDown, ChevronUp, Edit3, Trash2,
     Users, Shield, Heart, Brain, Home, Compass, Activity, Star,
     Briefcase, AlertTriangle, Coffee, BookOpen, ChevronRight, Sparkles,
-    BarChart3
+    BarChart3, FileSignature, ExternalLink
 } from 'lucide-react';
 
 // ============================================================================
-// 10-DOMAIN RECOVERY PLAN TEMPLATE
+// 10-DOMAIN RECOVERY PLAN TEMPLATE (Fletcher Group Model)
 // ============================================================================
 
 const DOMAIN_TEMPLATE = [
@@ -28,7 +28,7 @@ const DOMAIN_TEMPLATE = [
             'Abstain from use of alcohol',
         ],
         activities: [
-            'Participate in recovery support programs',
+            'Participate in recovery housing programs',
             'Participate in an IOP',
             'Participate in OP counseling',
             'Participate in intensive residential treatment',
@@ -39,9 +39,9 @@ const DOMAIN_TEMPLATE = [
         ],
         outcomes: [
             { key: 'sessions_attended', label: 'Number of sessions attended', type: 'number' },
-            { key: 'participation_rating', label: 'Rating of degree of participation', type: 'rating_10' },
-            { key: 'program_satisfaction', label: 'Program Satisfaction Rating', type: 'rating_10' },
-            { key: 'alliance_measure', label: 'Alliance Measure', type: 'rating_10' },
+            { key: 'participation_rating', label: 'Degree of Participation', type: 'rating_10' },
+            { key: 'program_satisfaction', label: 'Program Satisfaction', type: 'assessment_link', assessment_type: 'satisfaction_scale' },
+            { key: 'alliance_measure', label: 'Therapeutic Alliance', type: 'assessment_link', assessment_type: 'alliance_scale' },
         ],
         instruments: ['SoDU', 'Craving', 'Motivation', 'AUDIT-C'],
         scalingQuestions: [
@@ -61,7 +61,7 @@ const DOMAIN_TEMPLATE = [
             'Decrease Anxiety',
         ],
         activities: [
-            'Participation in recovery support programs/sessions',
+            'Participation in RH Programs/sessions',
             'Manage co-occurring disorders',
             'Keep counseling appointments',
             'Take medications as directed',
@@ -121,7 +121,7 @@ const DOMAIN_TEMPLATE = [
             'Address any legal issues',
         ],
         activities: [
-            'Participate in recovery support programs',
+            'RH Program participation',
             'Engage in a community group(s)',
             'Assist with service opportunities with mutual aid groups',
             'List possible volunteer/community activities',
@@ -239,7 +239,7 @@ const DOMAIN_TEMPLATE = [
             'Manage the potential for a return to use',
         ],
         activities: [
-            'Participation in recovery support programs/groups',
+            'Participation in RH Programs/Groups',
             'Share thoughts and feelings in recovery sessions',
             'Practice problem-solving skills that enhance resiliency',
             'Enhance decision-making abilities to reduce impulsivity',
@@ -267,7 +267,7 @@ const DOMAIN_TEMPLATE = [
             'Improve readiness to change',
         ],
         activities: [
-            'Participation in recovery support programs/groups',
+            'Participation in RH Programs/Groups',
             'Develop a recovery support network',
             'Develop habits that support recovery (daily meditation, recovery journal, text/call support group, pray/meditate)',
             'Identify strengths supporting ongoing recovery',
@@ -300,7 +300,7 @@ const DOMAIN_TEMPLATE = [
             'Increase number of meaningful friendships',
         ],
         activities: [
-            'Participation in recovery support programs/groups',
+            'Participation in RH Programs/Groups',
             'Engage with a sponsor/mentor',
             'Develop a support group of like-minded individuals',
             'Improve family relationships if appropriate',
@@ -345,12 +345,16 @@ interface PlanDomain {
     notes: string; sort_order: number; goals: PlanGoal[];
     outcomes?: PlanOutcome[];
 }
+interface PlanSignature {
+    id: string; plan_id: string; signer_role: 'staff' | 'resident';
+    signer_name: string; signed_at: string; organization_id: string;
+}
 interface Plan {
     id: string; participant_id: string; organization_id: string; user_id: string;
     plan_name: string; status: string; notes: string; created_at: string; updated_at: string;
     participant_first_name?: string; participant_last_name?: string; participant_preferred_name?: string;
     domains?: PlanDomain[]; domain_count?: number; completed_goals?: number; total_goals?: number;
-    plan_summary?: string;
+    plan_summary?: string; signatures?: PlanSignature[];
 }
 
 type ViewState = 'list' | 'create_select_participant' | 'create_select_domains' | 'create_configure' | 'detail';
@@ -361,7 +365,7 @@ type ViewState = 'list' | 'create_select_participant' | 'create_select_domains' 
 
 export default function RecoveryPlansPage() {
     return (
-        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50"><Loader2 className="w-8 h-8 animate-spin text-[#1A73A8]" /></div>}>
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center" style={{ background: '#F2F0EF' }}><Loader2 className="w-8 h-8 animate-spin text-gray-500" /></div>}>
             <RecoveryPlansContent />
         </Suspense>
     );
@@ -370,10 +374,11 @@ export default function RecoveryPlansPage() {
 function RecoveryPlansContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { data: session, status: authStatus } = useSession();
-    const currentOrg = (session as any)?.currentOrganization;
+    const { data: session } = useSession();
 
-    
+    const [currentOrg, setCurrentOrg] = useState<{ id: string; name: string } | null>(null);
+    const [authLoading, setAuthLoading] = useState(true);
+
     const [plans, setPlans] = useState<Plan[]>([]);
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [loading, setLoading] = useState(true);
@@ -387,7 +392,7 @@ function RecoveryPlansContent() {
     const [participantSearch, setParticipantSearch] = useState('');
     const [showDropdown, setShowDropdown] = useState(false);
     const [selectedDomainKeys, setSelectedDomainKeys] = useState<Set<string>>(new Set());
-    const [domainConfigs, setDomainConfigs] = useState<Map<string, { goals: Set<number>; activities: Map<number, Set<number>>; customGoals: string[]; importance: number | null; confidence: number | null }>>(new Map());
+    const [domainConfigs, setDomainConfigs] = useState<Map<string, { goals: Set<number>; activities: Map<number, Set<number>>; customGoals: string[]; importance: number | null; confidence: number | null; activityFrequency: Map<number, string>; activityDuration: Map<number, string> }>>(new Map());
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
@@ -403,8 +408,16 @@ function RecoveryPlansContent() {
     // Init & Data
     // ========================================================================
     useEffect(() => {
-        if (authStatus === 'unauthenticated') router.push('/auth/signin');
-    }, [authStatus, router]);
+        async function init() {
+            try {
+                const orgRes = await fetch('/api/user/organizations');
+                const orgData = await orgRes.json();
+                if (orgData.organizations?.length > 0) setCurrentOrg(orgData.organizations[0]);
+            } catch (e) { console.error(e); }
+            finally { setAuthLoading(false); }
+        }
+        init();
+    }, []);
 
     useEffect(() => {
         if (!currentOrg?.id) return;
@@ -475,14 +488,14 @@ function RecoveryPlansContent() {
     };
 
     const initDomainConfigs = () => {
-        const configs = new Map<string, { goals: Set<number>; activities: Map<number, Set<number>>; customGoals: string[]; importance: number | null; confidence: number | null }>();
+        const configs = new Map<string, { goals: Set<number>; activities: Map<number, Set<number>>; customGoals: string[]; importance: number | null; confidence: number | null; activityFrequency: Map<number, string>; activityDuration: Map<number, string> }>();
         selectedDomainKeys.forEach(key => {
             const tpl = DOMAIN_TEMPLATE.find(d => d.key === key);
             if (!tpl) return;
-            const goalSet = new Set(tpl.goals.map((_, i) => i));
+            const goalSet = new Set<number>();
             const actMap = new Map<number, Set<number>>();
-            tpl.goals.forEach((_, gi) => actMap.set(gi, new Set(tpl.activities.map((_, ai) => ai))));
-            configs.set(key, { goals: goalSet, activities: actMap, customGoals: [], importance: null, confidence: null });
+            tpl.goals.forEach((_, gi) => actMap.set(gi, new Set<number>()));
+            configs.set(key, { goals: goalSet, activities: actMap, customGoals: [], importance: null, confidence: null, activityFrequency: new Map<number, string>(), activityDuration: new Map<number, string>() });
         });
         setDomainConfigs(configs);
     };
@@ -513,11 +526,47 @@ function RecoveryPlansContent() {
         });
     };
 
+    const setActivityFrequency = (domainKey: string, actIdx: number, value: string) => {
+        setDomainConfigs(prev => {
+            const next = new Map(prev);
+            const cfg = { ...next.get(domainKey)! };
+            const freqMap = new Map(cfg.activityFrequency);
+            freqMap.set(actIdx, value);
+            cfg.activityFrequency = freqMap;
+            next.set(domainKey, cfg);
+            return next;
+        });
+    };
+
+    const setActivityDuration = (domainKey: string, actIdx: number, value: string) => {
+        setDomainConfigs(prev => {
+            const next = new Map(prev);
+            const cfg = { ...next.get(domainKey)! };
+            const durMap = new Map(cfg.activityDuration);
+            durMap.set(actIdx, value);
+            cfg.activityDuration = durMap;
+            next.set(domainKey, cfg);
+            return next;
+        });
+    };
+
     // ========================================================================
     // Save plan
     // ========================================================================
     const handleSavePlan = async () => {
         if (!selectedParticipant || selectedDomainKeys.size === 0) return;
+
+        // Validate at least one goal is selected across all domains
+        let hasAnyGoal = false;
+        for (const key of selectedDomainKeys) {
+            const cfg = domainConfigs.get(key);
+            if (cfg && cfg.goals.size > 0) { hasAnyGoal = true; break; }
+        }
+        if (!hasAnyGoal) {
+            setError('Please select at least one goal before creating the plan.');
+            return;
+        }
+
         setSaving(true); setError('');
 
         const domains = Array.from(selectedDomainKeys).map((key, di) => {
@@ -525,7 +574,7 @@ function RecoveryPlansContent() {
             const cfg = domainConfigs.get(key);
             const selectedGoals = tpl.goals
                 .map((g, i) => ({ text: g, idx: i }))
-                .filter((_, i) => cfg?.goals.has(i) ?? true);
+                .filter((_, i) => cfg?.goals.has(i) ?? false);
 
             return {
                 domain_key: key,
@@ -535,7 +584,7 @@ function RecoveryPlansContent() {
                 goals: selectedGoals.map((g, gi) => {
                     const selectedActs = tpl.activities
                         .map((a, i) => ({ text: a, idx: i }))
-                        .filter((_, i) => cfg?.activities.get(g.idx)?.has(i) ?? true);
+                        .filter((_, i) => cfg?.activities.get(g.idx)?.has(i) ?? false);
 
                     return {
                         goal_text: g.text,
@@ -545,6 +594,8 @@ function RecoveryPlansContent() {
                             activity_text: a.text,
                             is_custom: false,
                             sort_order: ai,
+                            frequency: cfg?.activityFrequency.get(a.idx) || '',
+                            duration: cfg?.activityDuration.get(a.idx) ? `${cfg.activityDuration.get(a.idx)} min` : '',
                         })),
                     };
                 }),
@@ -689,6 +740,7 @@ function RecoveryPlansContent() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to generate summary');
+            // Update the local plan state with the new summary
             setSelectedPlan(prev => prev ? { ...prev, plan_summary: data.summary } : prev);
         } catch (e: any) {
             setSummaryError(e.message || 'Failed to generate summary');
@@ -747,10 +799,65 @@ function RecoveryPlansContent() {
         finally { setUpdatingId(null); }
     };
 
+    const deletePlan = async () => {
+        if (!selectedPlan) return;
+        if (!confirm('Delete this entire recovery plan? This will remove all domains, goals, activities, and outcomes. This cannot be undone.')) return;
+        try {
+            await fetch(`/api/rc-plans?type=plan&id=${selectedPlan.id}`, { method: 'DELETE' });
+            setSelectedPlan(null);
+            setView('list');
+            await fetchPlans();
+        } catch (e) { console.error(e); }
+    };
+
+    // ========================================================================
+    // Signatures
+    // ========================================================================
+    const [staffSignName, setStaffSignName] = useState('');
+    const [residentSignName, setResidentSignName] = useState('');
+    const [signingLoading, setSigningLoading] = useState(false);
+
+    const addSignature = async (role: 'staff' | 'resident', name: string) => {
+        if (!name.trim() || !selectedPlan || !currentOrg) return;
+        setSigningLoading(true);
+        try {
+            await fetch('/api/rc-plans', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'add_signature',
+                    id: selectedPlan.id,
+                    _plan_id: selectedPlan.id,
+                    signer_role: role,
+                    signer_name: name.trim(),
+                    organization_id: currentOrg.id,
+                }),
+            });
+            if (role === 'staff') setStaffSignName(''); else setResidentSignName('');
+            await fetchPlanDetail(selectedPlan.id);
+        } catch (e) { console.error(e); }
+        finally { setSigningLoading(false); }
+    };
+
+    const deleteSignature = async (signatureId: string) => {
+        if (!confirm('Remove this signature?')) return;
+        setUpdatingId(signatureId);
+        try {
+            await fetch(`/api/rc-plans?type=signature&id=${signatureId}`, { method: 'DELETE' });
+            if (selectedPlan) await fetchPlanDetail(selectedPlan.id);
+        } catch (e) { console.error(e); }
+        finally { setUpdatingId(null); }
+    };
+
     // ========================================================================
     // Helpers
     // ========================================================================
     const getDomainTemplate = (key: string) => DOMAIN_TEMPLATE.find(d => d.key === key);
+
+    const frequencyLabels: Record<string, string> = {
+        days_per_week: 'Days/week', weekly: 'Weekly', monthly: 'Monthly', other: 'Other',
+    };
+    const formatFrequency = (freq: string) => frequencyLabels[freq] || freq;
 
     const getParticipantName = (p: Participant | null) =>
         p ? `${p.preferred_name || p.first_name} ${p.last_name}` : '';
@@ -773,15 +880,15 @@ function RecoveryPlansContent() {
     // ========================================================================
     // Loading
     // ========================================================================
-    if (authStatus === 'loading') {
-        return <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50"><Loader2 className="w-8 h-8 animate-spin text-[#1A73A8]" /></div>;
+    if (authLoading) {
+        return <div className="min-h-screen flex items-center justify-center" style={{ background: '#F2F0EF' }}><Loader2 className="w-8 h-8 animate-spin text-gray-500" /></div>;
     }
 
     // ========================================================================
     // RENDER
     // ========================================================================
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50">
+        <div className="min-h-screen" style={{ background: '#F2F0EF' }}>
             {/* Header */}
             <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
                 <div className="max-w-6xl mx-auto px-6 py-4">
@@ -800,7 +907,7 @@ function RecoveryPlansContent() {
                                 <h1 className="text-xl font-bold text-[#0E2235]">Recovery Plans</h1>
                                 <p className="text-sm text-gray-500">
                                     {view === 'list' && 'Template-driven recovery planning'}
-                                    {view === 'create_select_participant' && 'Step 1: Select Participant'}
+                                    {view === 'create_select_participant' && 'Step 1: Select Resident'}
                                     {view === 'create_select_domains' && 'Step 2: Select Recovery Domains'}
                                     {view === 'create_configure' && 'Step 3: Customize Goals & Activities'}
                                     {view === 'detail' && (selectedPlan ? getParticipantName({ first_name: selectedPlan.participant_first_name!, last_name: selectedPlan.participant_last_name!, preferred_name: selectedPlan.participant_preferred_name, id: '', status: '' }) : '')}
@@ -886,15 +993,15 @@ function RecoveryPlansContent() {
                 {view === 'create_select_participant' && (
                     <div className="max-w-2xl mx-auto space-y-6">
                         <div className="bg-white rounded-2xl p-8 shadow-sm">
-                            <h2 className="text-lg font-bold text-[#0E2235] mb-4">Who is this plan for?</h2>
+                            <h2 className="text-lg font-bold text-[#0E2235] mb-4">Select Resident</h2>
                             <div className="relative">
                                 <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                                 <input
                                     type="text" value={participantSearch}
                                     onChange={e => { setParticipantSearch(e.target.value); setShowDropdown(true); }}
                                     onFocus={() => setShowDropdown(true)}
-                                    placeholder="Search participants..."
-                                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#1A73A8] focus:border-[#1A73A8]"
+                                    placeholder="Search residents..."
+                                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                                 {showDropdown && filteredParticipants.length > 0 && (
                                     <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
@@ -904,7 +1011,7 @@ function RecoveryPlansContent() {
                                             }}
                                                 className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3"
                                             >
-                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#1A73A8] to-[#30B27A] flex items-center justify-center text-white text-xs font-bold">
+                                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold">
                                                     {p.first_name[0]}{p.last_name[0]}
                                                 </div>
                                                 <span className="font-medium text-[#0E2235]">{p.preferred_name || p.first_name} {p.last_name}</span>
@@ -942,7 +1049,7 @@ function RecoveryPlansContent() {
                     <div className="space-y-6">
                         <div className="bg-white rounded-2xl p-6 shadow-sm">
                             <div className="flex items-center gap-3 mb-2">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#1A73A8] to-[#30B27A] flex items-center justify-center text-white text-xs font-bold">
+                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold">
                                     {selectedParticipant?.first_name[0]}{selectedParticipant?.last_name[0]}
                                 </div>
                                 <span className="font-medium text-[#0E2235]">{getParticipantName(selectedParticipant)}</span>
@@ -956,7 +1063,7 @@ function RecoveryPlansContent() {
                                 const selected = selectedDomainKeys.has(domain.key);
                                 return (
                                     <button key={domain.key} onClick={() => toggleDomain(domain.key)}
-                                        className={`text-left rounded-2xl p-5 border-2 transition-all ${selected ? 'border-[#1A73A8] bg-blue-50/50 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                                        className={`text-left rounded-2xl p-5 border-2 transition-all ${selected ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'}`}
                                     >
                                         <div className="flex items-start gap-3">
                                             <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: domain.bgColor }}>
@@ -969,7 +1076,7 @@ function RecoveryPlansContent() {
                                                 </div>
                                                 <p className="text-xs text-gray-500 mt-1">{domain.goals.length} goals · {domain.activities.length} activities</p>
                                             </div>
-                                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selected ? 'border-[#1A73A8] bg-[#1A73A8]' : 'border-gray-300'}`}>
+                                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selected ? 'border-blue-500 bg-blue-500' : 'border-gray-300'}`}>
                                                 {selected && <CheckCircle2 className="w-4 h-4 text-white" />}
                                             </div>
                                         </div>
@@ -1001,7 +1108,7 @@ function RecoveryPlansContent() {
                         <div className="bg-white rounded-2xl p-4 shadow-sm">
                             <p className="text-sm text-gray-600">
                                 <strong>{getParticipantName(selectedParticipant)}</strong> — {selectedDomainKeys.size} domains selected.
-                                Uncheck any goals or activities that don&apos;t apply.
+                                Check the goals and activities that apply to this resident&apos;s plan.
                             </p>
                         </div>
 
@@ -1054,7 +1161,7 @@ function RecoveryPlansContent() {
                                         <h4 className="text-sm font-semibold text-gray-700 mb-3">Goals</h4>
                                         <div className="space-y-2 mb-5">
                                             {tpl.goals.map((goal, gi) => {
-                                                const goalSelected = cfg?.goals.has(gi) ?? true;
+                                                const goalSelected = cfg?.goals.has(gi) ?? false;
                                                 return (
                                                     <label key={gi} className={`flex items-start gap-3 p-3 rounded-xl cursor-pointer transition-colors ${goalSelected ? 'bg-green-50' : 'bg-gray-50 opacity-60'}`}>
                                                         <input type="checkbox" checked={goalSelected} onChange={() => toggleGoal(key, gi)}
@@ -1068,14 +1175,47 @@ function RecoveryPlansContent() {
                                         <h4 className="text-sm font-semibold text-gray-700 mb-3">Activities</h4>
                                         <div className="space-y-1.5">
                                             {tpl.activities.map((act, ai) => {
-                                                // Activity is shown if any selected goal includes it
-                                                const actSelected = cfg?.activities.get(0)?.has(ai) ?? true;
+                                                const actSelected = cfg?.activities.get(0)?.has(ai) ?? false;
+                                                const freq = cfg?.activityFrequency.get(ai) || '';
+                                                const dur = cfg?.activityDuration.get(ai) || '';
                                                 return (
-                                                    <label key={ai} className={`flex items-start gap-3 p-2.5 rounded-lg cursor-pointer transition-colors ${actSelected ? 'bg-blue-50/50' : 'bg-gray-50 opacity-60'}`}>
-                                                        <input type="checkbox" checked={actSelected} onChange={() => toggleActivity(key, 0, ai)}
-                                                            className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#1A73A8] focus:ring-[#1A73A8]" />
-                                                        <span className="text-sm text-gray-700">{act}</span>
-                                                    </label>
+                                                    <div key={ai} className={`rounded-lg transition-colors ${actSelected ? 'bg-blue-50/50' : 'bg-gray-50 opacity-60'}`}>
+                                                        <label className="flex items-start gap-3 p-2.5 cursor-pointer">
+                                                            <input type="checkbox" checked={actSelected} onChange={() => toggleActivity(key, 0, ai)}
+                                                                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                                            <span className="text-sm text-gray-700">{act}</span>
+                                                        </label>
+                                                        {actSelected && (
+                                                            <div className="flex items-center gap-3 px-10 pb-3">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <label className="text-xs text-gray-500 whitespace-nowrap">Frequency:</label>
+                                                                    <select
+                                                                        value={freq}
+                                                                        onChange={e => setActivityFrequency(key, ai, e.target.value)}
+                                                                        className="text-xs border border-gray-300 rounded-lg px-2 py-1 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                                    >
+                                                                        <option value="">Select...</option>
+                                                                        <option value="days_per_week">Days per week</option>
+                                                                        <option value="weekly">Weekly</option>
+                                                                        <option value="monthly">Monthly</option>
+                                                                        <option value="other">Other</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <label className="text-xs text-gray-500 whitespace-nowrap">Duration:</label>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        value={dur}
+                                                                        onChange={e => setActivityDuration(key, ai, e.target.value)}
+                                                                        placeholder="0"
+                                                                        className="w-16 text-xs border border-gray-300 rounded-lg px-2 py-1 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                                    />
+                                                                    <span className="text-xs text-gray-400">min</span>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 );
                                             })}
                                         </div>
@@ -1146,15 +1286,23 @@ function RecoveryPlansContent() {
                                             </h2>
                                             <p className="text-sm text-gray-500">Created {new Date(selectedPlan.created_at).toLocaleDateString()}</p>
                                         </div>
-                                        <select value={selectedPlan.status}
-                                            onChange={e => updateItem('plan', selectedPlan.id, { status: e.target.value })}
-                                            className="text-sm border border-gray-300 rounded-lg px-3 py-1.5"
-                                        >
-                                            <option value="active">Active</option>
-                                            <option value="completed">Completed</option>
-                                            <option value="on_hold">On Hold</option>
-                                            <option value="archived">Archived</option>
-                                        </select>
+                                        <div className="flex items-center gap-2">
+                                            <select value={selectedPlan.status}
+                                                onChange={e => updateItem('plan', selectedPlan.id, { status: e.target.value })}
+                                                className="text-sm border border-gray-300 rounded-lg px-3 py-1.5"
+                                            >
+                                                <option value="active">Active</option>
+                                                <option value="completed">Completed</option>
+                                                <option value="on_hold">On Hold</option>
+                                                <option value="archived">Archived</option>
+                                            </select>
+                                            <button onClick={deletePlan}
+                                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                title="Delete Plan"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Domain summary chips */}
@@ -1207,7 +1355,7 @@ function RecoveryPlansContent() {
                                         </div>
 
                                         {summaryError && (
-                                            <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2">
+                                            <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                                                 <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                                                 {summaryError}
                                             </div>
@@ -1221,6 +1369,93 @@ function RecoveryPlansContent() {
                                             <p className="text-sm text-gray-400 italic">
                                                 No summary yet. Click &ldquo;Generate Summary&rdquo; to create an AI-written narrative grounded in recovery best practices.
                                             </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* ── Signatures & Acknowledgment ── */}
+                                <div className="bg-white rounded-2xl p-6 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <FileSignature className="w-5 h-5 text-[#1A73A8]" />
+                                        <h3 className="text-sm font-semibold text-[#0E2235]">Plan Acknowledgment</h3>
+                                    </div>
+
+                                    {/* Existing signatures */}
+                                    {(selectedPlan.signatures?.length ?? 0) > 0 && (
+                                        <div className="space-y-2 mb-4">
+                                            {selectedPlan.signatures!.map(sig => (
+                                                <div key={sig.id} className="flex items-center justify-between p-3 rounded-xl bg-green-50 border border-green-200 group">
+                                                    <div className="flex items-center gap-3">
+                                                        <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                                                        <div>
+                                                            <span className="text-sm font-medium text-green-800">{sig.signer_name}</span>
+                                                            <span className="text-xs text-green-600 ml-2 px-1.5 py-0.5 bg-green-100 rounded">
+                                                                {sig.signer_role === 'staff' ? 'Peer Support Specialist' : 'Resident'}
+                                                            </span>
+                                                            <p className="text-xs text-green-600 mt-0.5">
+                                                                Signed {new Date(sig.signed_at).toLocaleDateString()} at {new Date(sig.signed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <button onClick={() => deleteSignature(sig.id)}
+                                                        className="p-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Sign inputs */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* Staff signature */}
+                                        {!selectedPlan.signatures?.some(s => s.signer_role === 'staff') ? (
+                                            <div className="p-4 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50/50">
+                                                <label className="text-xs font-medium text-gray-500 block mb-2">Peer Support Specialist</label>
+                                                <div className="flex items-center gap-2">
+                                                    <input type="text" value={staffSignName}
+                                                        onChange={e => setStaffSignName(e.target.value)}
+                                                        placeholder="Type your full name to sign..."
+                                                        className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#1A73A8] focus:border-[#1A73A8]"
+                                                        onKeyDown={e => { if (e.key === 'Enter' && staffSignName.trim()) addSignature('staff', staffSignName); }}
+                                                    />
+                                                    <button onClick={() => addSignature('staff', staffSignName)}
+                                                        disabled={signingLoading || !staffSignName.trim()}
+                                                        className="px-4 py-2 bg-[#1A73A8] text-white text-sm rounded-lg disabled:opacity-50 hover:bg-[#155d88] flex items-center gap-1.5">
+                                                        {signingLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileSignature className="w-3.5 h-3.5" />}
+                                                        Sign
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 rounded-xl bg-green-50/50 border border-green-100">
+                                                <p className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Staff signed</p>
+                                            </div>
+                                        )}
+
+                                        {/* Resident signature */}
+                                        {!selectedPlan.signatures?.some(s => s.signer_role === 'resident') ? (
+                                            <div className="p-4 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50/50">
+                                                <label className="text-xs font-medium text-gray-500 block mb-2">Resident Acknowledgment</label>
+                                                <div className="flex items-center gap-2">
+                                                    <input type="text" value={residentSignName}
+                                                        onChange={e => setResidentSignName(e.target.value)}
+                                                        placeholder="Resident types full name to acknowledge..."
+                                                        className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#30B27A] focus:border-[#30B27A]"
+                                                        onKeyDown={e => { if (e.key === 'Enter' && residentSignName.trim()) addSignature('resident', residentSignName); }}
+                                                    />
+                                                    <button onClick={() => addSignature('resident', residentSignName)}
+                                                        disabled={signingLoading || !residentSignName.trim()}
+                                                        className="px-4 py-2 bg-[#30B27A] text-white text-sm rounded-lg disabled:opacity-50 hover:bg-[#289967] flex items-center gap-1.5">
+                                                        {signingLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileSignature className="w-3.5 h-3.5" />}
+                                                        Acknowledge
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 rounded-xl bg-green-50/50 border border-green-100">
+                                                <p className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Resident acknowledged</p>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
@@ -1344,7 +1579,10 @@ function RecoveryPlansContent() {
                                                                                 </button>
                                                                             )}
                                                                             {act.frequency && editingFrequency !== act.id && (
-                                                                                <span className="text-xs text-gray-400">{act.frequency}</span>
+                                                                                <span className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">{formatFrequency(act.frequency)}</span>
+                                                                            )}
+                                                                            {act.duration && (
+                                                                                <span className="text-xs px-1.5 py-0.5 bg-green-50 text-green-600 rounded">{act.duration}</span>
                                                                             )}
                                                                             {act.is_custom && (
                                                                                 <button onClick={() => deleteItem('activity', act.id!)}
@@ -1362,12 +1600,12 @@ function RecoveryPlansContent() {
                                                                         <input type="text" value={newActivityText}
                                                                             onChange={e => setNewActivityText(e.target.value)}
                                                                             placeholder="Enter custom activity..."
-                                                                            className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-[#1A73A8] focus:border-[#1A73A8]"
+                                                                            className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                                                             onKeyDown={e => { if (e.key === 'Enter') addActivityToGoal(goal.id!); }}
                                                                             autoFocus
                                                                         />
                                                                         <button onClick={() => addActivityToGoal(goal.id!)} disabled={addItemLoading || !newActivityText.trim()}
-                                                                            className="px-3 py-1.5 bg-[#1A73A8] text-white text-xs rounded-lg disabled:opacity-50 hover:bg-[#156090]">
+                                                                            className="px-3 py-1.5 bg-blue-500 text-white text-xs rounded-lg disabled:opacity-50 hover:bg-blue-600">
                                                                             {addItemLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add'}
                                                                         </button>
                                                                         <button onClick={() => { setAddingActivityToGoal(null); setNewActivityText(''); }}
@@ -1375,7 +1613,7 @@ function RecoveryPlansContent() {
                                                                     </div>
                                                                 ) : (
                                                                     <button onClick={() => { setAddingActivityToGoal(goal.id!); setNewActivityText(''); }}
-                                                                        className="w-full px-4 py-2.5 text-xs text-gray-400 hover:text-[#1A73A8] hover:bg-blue-50/50 text-left flex items-center gap-2">
+                                                                        className="w-full px-4 py-2.5 text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50/50 text-left flex items-center gap-2">
                                                                         <Plus className="w-3.5 h-3.5" /> Add Activity
                                                                     </button>
                                                                 )}
@@ -1402,7 +1640,7 @@ function RecoveryPlansContent() {
                                                         </div>
                                                     ) : (
                                                         <button onClick={() => { setAddingGoalToDomain(domain.id!); setNewGoalText(''); }}
-                                                            className="w-full py-3 text-sm text-gray-400 hover:text-[#30B27A] hover:bg-green-50/50 rounded-xl border-2 border-dashed border-gray-200 hover:border-[#30B27A]/40 flex items-center justify-center gap-2 transition-colors">
+                                                            className="w-full py-3 text-sm text-gray-400 hover:text-green-600 hover:bg-green-50/50 rounded-xl border-2 border-dashed border-gray-200 hover:border-green-300 flex items-center justify-center gap-2 transition-colors">
                                                             <Plus className="w-4 h-4" /> Add Custom Goal
                                                         </button>
                                                     )}
@@ -1485,12 +1723,53 @@ function RecoveryPlansContent() {
                                                                                                 className="px-3 py-1.5 bg-gray-300 text-gray-700 text-xs rounded-lg hover:bg-gray-400 disabled:opacity-50">No</button>
                                                                                         </div>
                                                                                     ) : measure.type === 'rating_10' ? (
-                                                                                        <div className="flex items-center gap-1 flex-wrap">
-                                                                                            {[0,1,2,3,4,5,6,7,8,9,10].map(n => (
-                                                                                                <button key={n} onClick={() => recordOutcome(domain.id!, measure.key, measure.type, measure.label, String(n))}
-                                                                                                    disabled={outcomeLoading}
-                                                                                                    className="w-7 h-7 text-xs rounded-lg border border-gray-200 hover:bg-amber-100 hover:border-amber-300 disabled:opacity-50">{n}</button>
-                                                                                            ))}
+                                                                                        <div>
+                                                                                            <div className="flex items-center gap-1 flex-wrap">
+                                                                                                <span className="text-xs text-gray-400 mr-1 font-medium">Low</span>
+                                                                                                {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                                                                                                    <button key={n} onClick={() => recordOutcome(domain.id!, measure.key, measure.type, measure.label, String(n))}
+                                                                                                        disabled={outcomeLoading}
+                                                                                                        className={`w-7 h-7 text-xs rounded-lg border disabled:opacity-50 transition-colors ${
+                                                                                                            n <= 3 ? 'border-red-200 hover:bg-red-100 hover:border-red-300' :
+                                                                                                            n <= 6 ? 'border-amber-200 hover:bg-amber-100 hover:border-amber-300' :
+                                                                                                            'border-green-200 hover:bg-green-100 hover:border-green-300'
+                                                                                                        }`}>{n}</button>
+                                                                                                ))}
+                                                                                                <span className="text-xs text-gray-400 ml-1 font-medium">High</span>
+                                                                                            </div>
+                                                                                            <div className="flex justify-between mt-1 px-6">
+                                                                                                <span className="text-[10px] text-red-400">Minimal</span>
+                                                                                                <span className="text-[10px] text-amber-400">Moderate</span>
+                                                                                                <span className="text-[10px] text-green-500">Strong</span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ) : measure.type === 'assessment_link' ? (
+                                                                                        <div className="space-y-2">
+                                                                                            <button
+                                                                                                onClick={() => {
+                                                                                                    const assessmentUrl = `/assessments?participant_id=${selectedPlan!.participant_id}&type=${measure.assessment_type || measure.key}`;
+                                                                                                    window.open(assessmentUrl, '_blank');
+                                                                                                }}
+                                                                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-colors"
+                                                                                            >
+                                                                                                <ExternalLink className="w-3 h-3" />
+                                                                                                Take {measure.label} Assessment
+                                                                                            </button>
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <span className="text-[10px] text-gray-400">or enter score manually:</span>
+                                                                                                <input type="number"
+                                                                                                    value={outcomeValues[inputKey] || ''}
+                                                                                                    onChange={e => setOutcomeValues(prev => ({ ...prev, [inputKey]: e.target.value }))}
+                                                                                                    placeholder="Score"
+                                                                                                    className="w-20 text-xs border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                                                                                    onKeyDown={e => { if (e.key === 'Enter') recordOutcome(domain.id!, measure.key, measure.type, measure.label, outcomeValues[inputKey] || ''); }}
+                                                                                                />
+                                                                                                <button onClick={() => recordOutcome(domain.id!, measure.key, measure.type, measure.label, outcomeValues[inputKey] || '')}
+                                                                                                    disabled={outcomeLoading || !(outcomeValues[inputKey] || '').trim()}
+                                                                                                    className="px-2 py-1 bg-indigo-500 text-white text-xs rounded-lg disabled:opacity-50 hover:bg-indigo-600">
+                                                                                                    {outcomeLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save'}
+                                                                                                </button>
+                                                                                            </div>
                                                                                         </div>
                                                                                     ) : (
                                                                                         <>
@@ -1576,7 +1855,7 @@ function RecoveryPlansContent() {
                                                     const Icon = tpl.icon;
                                                     return (
                                                         <button key={tpl.key} onClick={() => addDomainToPlan(tpl.key)} disabled={addItemLoading}
-                                                            className="text-left rounded-xl p-4 border border-gray-200 hover:border-[#1A73A8]/40 hover:bg-blue-50/30 transition-all flex items-center gap-3 disabled:opacity-50"
+                                                            className="text-left rounded-xl p-4 border border-gray-200 hover:border-blue-300 hover:bg-blue-50/30 transition-all flex items-center gap-3 disabled:opacity-50"
                                                         >
                                                             <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: tpl.bgColor }}>
                                                                 <Icon className="w-4 h-4" style={{ color: tpl.color }} />
@@ -1595,7 +1874,7 @@ function RecoveryPlansContent() {
                                     </div>
                                 ) : (
                                     <button onClick={() => setShowAddDomain(true)}
-                                        className="w-full py-4 text-sm text-gray-400 hover:text-[#1A73A8] hover:bg-white rounded-2xl border-2 border-dashed border-gray-300 hover:border-[#1A73A8]/40 flex items-center justify-center gap-2 transition-colors">
+                                        className="w-full py-4 text-sm text-gray-400 hover:text-blue-600 hover:bg-white rounded-2xl border-2 border-dashed border-gray-300 hover:border-blue-300 flex items-center justify-center gap-2 transition-colors">
                                         <Plus className="w-4 h-4" /> Add Recovery Domain
                                     </button>
                                 )}
