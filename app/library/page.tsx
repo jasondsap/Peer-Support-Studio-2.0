@@ -216,71 +216,71 @@ function LibraryContent() {
                 };
             }
 
-            // Call the presentation API (streaming)
-            const response = await fetch('/api/generate-gamma', {
+            // ── Phase 1: Start generation (Claude + Gamma submit, ~15-25s) ──
+            setPresentationStatus('AI is designing your slides...');
+            const startResponse = await fetch('/api/generate-gamma/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    lessonData,
-                    lessonId: lesson.id
-                })
+                body: JSON.stringify({ lessonData, lessonId: lesson.id }),
             });
 
-            if (!response.ok) {
-                throw new Error(`Server error: ${response.status}`);
+            if (!startResponse.ok) {
+                const err = await startResponse.json().catch(() => ({}));
+                throw new Error(err.details || err.error || `Server error: ${startResponse.status}`);
             }
 
-            // Read the streaming response line by line
-            const reader = response.body?.getReader();
-            if (!reader) throw new Error('No response stream available');
+            const startData = await startResponse.json();
+            const generationId: string | undefined = startData.generationId;
+            if (!generationId) {
+                throw new Error('No generation ID returned from server');
+            }
 
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let resultData: any = null;
+            // ── Phase 2: Poll for completion (up to ~3 minutes) ──
+            setPresentationStatus('Gamma is building your slides...');
+            const POLL_INTERVAL_MS = 3000;
+            const MAX_POLL_ATTEMPTS = 60; // 60 * 3s = 3 minutes
+            let gammaUrl: string | null = null;
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
+            for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+                await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
 
-                buffer += decoder.decode(value, { stream: true });
+                const params = new URLSearchParams({
+                    generationId,
+                    lessonId: lesson.id,
+                });
+                const statusResponse = await fetch(`/api/generate-gamma/status?${params}`);
 
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
+                if (!statusResponse.ok) {
+                    // Transient failure — keep polling
+                    continue;
+                }
 
-                for (const line of lines) {
-                    if (!line.trim()) continue;
+                const statusData = await statusResponse.json();
 
-                    try {
-                        const msg = JSON.parse(line);
+                if (statusData.status === 'completed' && statusData.gammaUrl) {
+                    gammaUrl = statusData.gammaUrl;
+                    break;
+                }
 
-                        switch (msg.type) {
-                            case 'ping':
-                                break;
-                            case 'status':
-                                setPresentationStatus(msg.message);
-                                break;
-                            case 'result':
-                                resultData = msg;
-                                break;
-                            case 'error':
-                                throw new Error(msg.message);
-                        }
-                    } catch (parseErr: any) {
-                        if (parseErr.message && parseErr.message !== 'Unexpected token') {
-                            throw parseErr;
-                        }
-                        console.warn('Skipping unparseable stream line:', line);
-                    }
+                if (statusData.status === 'failed') {
+                    throw new Error(statusData.error || 'Presentation generation failed');
+                }
+
+                // Light progress update every ~15s
+                if (attempt > 0 && attempt % 5 === 0) {
+                    const elapsedSec = (attempt + 1) * (POLL_INTERVAL_MS / 1000);
+                    setPresentationStatus(`Still building slides... (${elapsedSec}s)`);
                 }
             }
 
-            if (!resultData?.gammaUrl) {
-                throw new Error('No presentation URL received from server');
+            if (!gammaUrl) {
+                throw new Error(
+                    'Presentation is taking longer than expected. Check your Gamma workspace or try again.'
+                );
             }
 
-            // Open the presentation
-            window.open(resultData.gammaUrl, '_blank');
-            // Refresh lessons to show updated gamma_presentation_url
+            // Open the presentation and refresh library
+            window.open(gammaUrl, '_blank');
             fetchLessons();
 
         } catch (error) {
