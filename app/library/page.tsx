@@ -7,6 +7,7 @@ import { generateLessonPDF } from '../utils/generatePDF';
 import {
     ArrowLeft,
     ChevronRight,
+    ChevronLeft,
     Search,
     FileText,
     Presentation,
@@ -91,6 +92,10 @@ function LibraryContent() {
     const [isGeneratingPresentation, setIsGeneratingPresentation] = useState(false);
     const [generatingLessonId, setGeneratingLessonId] = useState<string | null>(null);
     const [presentationStatus, setPresentationStatus] = useState('');
+
+    // Pagination state (-1 means "All")
+    const [pageSize, setPageSize] = useState<number>(50);
+    const [currentPage, setCurrentPage] = useState(1);
 
     // Survey-related state
     const [sendSurveyLesson, setSendSurveyLesson] = useState<SavedLesson | null>(null);
@@ -519,6 +524,37 @@ function LibraryContent() {
         (lesson.title || lesson.topic).toLowerCase().includes(searchQuery.toLowerCase())
     );
 
+    // Pagination calculations
+    const totalLessons = filteredLessons.length;
+    const totalPages = pageSize === -1 ? 1 : Math.max(1, Math.ceil(totalLessons / pageSize));
+    const safeCurrentPage = Math.min(currentPage, totalPages);
+    const startIdx = pageSize === -1 ? 0 : (safeCurrentPage - 1) * pageSize;
+    const endIdx = pageSize === -1 ? totalLessons : Math.min(startIdx + pageSize, totalLessons);
+    const paginatedLessons = pageSize === -1
+        ? filteredLessons
+        : filteredLessons.slice(startIdx, endIdx);
+
+    // Reset to page 1 when search, page size, or tab changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, pageSize, activeTab]);
+
+    // Build list of page numbers to display (with ellipsis for large ranges)
+    const getPageNumbers = (): (number | '...')[] => {
+        if (totalPages <= 7) {
+            return Array.from({ length: totalPages }, (_, i) => i + 1);
+        }
+        const pages: (number | '...')[] = [1];
+        const cp = safeCurrentPage;
+        if (cp > 3) pages.push('...');
+        const start = Math.max(2, cp - 1);
+        const end = Math.min(totalPages - 1, cp + 1);
+        for (let i = start; i <= end; i++) pages.push(i);
+        if (cp < totalPages - 2) pages.push('...');
+        pages.push(totalPages);
+        return pages;
+    };
+
     // Reusable Survey Menu Items Component
     const SurveyMenuItems = ({ lesson }: { lesson: SavedLesson }) => (
         <>
@@ -659,6 +695,19 @@ function LibraryContent() {
                                 />
                             </div>
 
+                            <select
+                                value={pageSize}
+                                onChange={(e) => setPageSize(Number(e.target.value))}
+                                className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1A73A8] focus:border-transparent bg-white"
+                                aria-label="Lessons per page"
+                            >
+                                <option value={25}>25 / page</option>
+                                <option value={50}>50 / page</option>
+                                <option value={100}>100 / page</option>
+                                <option value={200}>200 / page</option>
+                                <option value={-1}>Show all</option>
+                            </select>
+
                             <div className="flex border border-gray-200 rounded-lg overflow-hidden">
                                 <button
                                     onClick={() => setViewMode('list')}
@@ -716,7 +765,7 @@ function LibraryContent() {
                             <div className="col-span-1"></div>
                         </div>
 
-                        {filteredLessons.map((lesson) => (
+                        {paginatedLessons.map((lesson) => (
                             <div
                                 key={lesson.id}
                                 className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-gray-50 hover:bg-gray-50 transition-colors items-center group"
@@ -835,7 +884,7 @@ function LibraryContent() {
                 ) : (
                     /* ==================== GRID VIEW ==================== */
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredLessons.map((lesson) => (
+                        {paginatedLessons.map((lesson) => (
                             <div
                                 key={lesson.id}
                                 className="bg-white rounded-2xl shadow-sm border border-[#E7E9EC] p-6 hover:shadow-md transition-shadow relative"
@@ -976,6 +1025,63 @@ function LibraryContent() {
                                 )}
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {/* ==================== PAGINATION FOOTER ==================== */}
+                {!loading && totalLessons > 0 && (
+                    <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white rounded-2xl shadow-sm border border-[#E7E9EC] px-4 py-3">
+                        <div className="text-sm text-gray-600">
+                            {pageSize === -1 ? (
+                                <>Showing all <span className="font-medium text-[#0E2235]">{totalLessons}</span> lessons</>
+                            ) : (
+                                <>
+                                    Showing <span className="font-medium text-[#0E2235]">{startIdx + 1}</span>–
+                                    <span className="font-medium text-[#0E2235]">{endIdx}</span> of{' '}
+                                    <span className="font-medium text-[#0E2235]">{totalLessons}</span> lessons
+                                </>
+                            )}
+                        </div>
+
+                        {pageSize !== -1 && totalPages > 1 && (
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={() => setCurrentPage(Math.max(1, safeCurrentPage - 1))}
+                                    disabled={safeCurrentPage === 1}
+                                    className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    aria-label="Previous page"
+                                >
+                                    <ChevronLeft className="w-4 h-4 text-gray-600" />
+                                </button>
+
+                                {getPageNumbers().map((p, idx) =>
+                                    p === '...' ? (
+                                        <span key={`ellipsis-${idx}`} className="px-2 text-gray-400 text-sm">…</span>
+                                    ) : (
+                                        <button
+                                            key={p}
+                                            onClick={() => setCurrentPage(p)}
+                                            className={`min-w-[36px] h-9 px-3 rounded-lg text-sm font-medium transition-colors ${
+                                                p === safeCurrentPage
+                                                    ? 'bg-[#1A73A8] text-white'
+                                                    : 'text-gray-700 hover:bg-gray-100 border border-gray-200'
+                                            }`}
+                                        >
+                                            {p}
+                                        </button>
+                                    )
+                                )}
+
+                                <button
+                                    onClick={() => setCurrentPage(Math.min(totalPages, safeCurrentPage + 1))}
+                                    disabled={safeCurrentPage === totalPages}
+                                    className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    aria-label="Next page"
+                                >
+                                    <ChevronRight className="w-4 h-4 text-gray-600" />
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
             </main>

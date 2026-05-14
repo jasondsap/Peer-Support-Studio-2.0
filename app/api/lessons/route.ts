@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
             FROM saved_lessons
             WHERE user_id = ${userId}::uuid
             ORDER BY created_at DESC
-            LIMIT 50
+            LIMIT 500
         `;
 
         return NextResponse.json({ lessons });
