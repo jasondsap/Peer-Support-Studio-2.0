@@ -9,7 +9,7 @@ import {
     ArrowRight, Loader2, Sparkles,
     BookOpen, ClipboardList, MessageSquare,
     Building2, ClipboardCheck, Search,
-    Plus,
+    Plus, Map, Mail,
 } from 'lucide-react';
 import AllyIntelligenceChat from './components/AllyIntelligenceChat';
 
@@ -253,6 +253,14 @@ export default function HomePage() {
             badge: 'AI',
             color: 'bg-green-500',
         },
+        {
+            title: 'Journey Tracker',
+            description: 'Track domain progress over time',
+            icon: Map,
+            href: '/journey-tracker',
+            badge: null,
+            color: 'bg-pink-500',
+        },
     ];
 
     // Connect & Support tools
@@ -280,6 +288,14 @@ export default function HomePage() {
             href: '/lesson-builder',
             badge: 'AI',
             color: 'bg-indigo-500',
+        },
+        {
+            title: 'Messages',
+            description: 'Team conversations and direct messages',
+            icon: Mail,
+            href: '/messages',
+            badge: null,
+            color: 'bg-sky-500',
         },
     ];
 
@@ -393,7 +409,7 @@ export default function HomePage() {
                         title="Assessment & Goals" 
                         subtitle="Measure progress and set objectives"
                     />
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         {assessmentTools.map((tool) => (
                             <ToolCard key={tool.title} tool={tool} />
                         ))}
@@ -406,7 +422,7 @@ export default function HomePage() {
                         title="Connect & Support" 
                         subtitle="Communication and resources"
                     />
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         {connectTools.map((tool) => (
                             <ToolCard key={tool.title} tool={tool} />
                         ))}

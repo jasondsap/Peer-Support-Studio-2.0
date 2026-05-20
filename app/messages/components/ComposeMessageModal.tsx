@@ -40,7 +40,7 @@ interface ComposeMessageModalProps {
 }
 
 type Step = 'recipient_type' | 'message_type' | 'select_recipient' | 'compose';
-type RecipientType = 'participant' | 'team' | 'supervisor';
+type RecipientType = 'participant' | 'team';
 type MessageType = 'general' | 'goal_update' | 'check_in' | 'appointment' | 'resource' | 'urgent';
 
 const MESSAGE_TYPES: Array<{ type: MessageType; label: string; description: string; icon: React.ElementType }> = [
@@ -117,8 +117,8 @@ export default function ComposeMessageModal({
                     const res = await fetch(`/api/participants?organization_id=${organizationId}&status=active`);
                     const data = await res.json();
                     setParticipants(data.participants || []);
-                } else if (recipientType === 'team' || recipientType === 'supervisor') {
-                    const res = await fetch(`/api/organizations/${organizationId}/members`);
+                } else if (recipientType === 'team') {
+                    const res = await fetch(`/api/messages/organizations/${organizationId}/members`);
                     const data = await res.json();
                     setTeamMembers(data.members || []);
                 }
@@ -325,22 +325,6 @@ export default function ComposeMessageModal({
                                         <div className="text-left">
                                             <p className="font-medium text-[#0E2235]">Message a Team Member</p>
                                             <p className="text-sm text-gray-500">Communicate with colleagues in your organization</p>
-                                        </div>
-                                    </div>
-                                    <ChevronRight className="w-5 h-5 text-gray-400" />
-                                </button>
-
-                                <button
-                                    onClick={() => selectRecipientType('supervisor')}
-                                    className="w-full flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-amber-500 text-white flex items-center justify-center">
-                                            <User className="w-5 h-5" />
-                                        </div>
-                                        <div className="text-left">
-                                            <p className="font-medium text-[#0E2235]">Message Your Supervisor</p>
-                                            <p className="text-sm text-gray-500">Questions, updates, or supervision requests</p>
                                         </div>
                                     </div>
                                     <ChevronRight className="w-5 h-5 text-gray-400" />
