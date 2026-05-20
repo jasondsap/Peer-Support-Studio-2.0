@@ -8,9 +8,11 @@ import {
     Sparkles, Target, TrendingUp, CheckCircle2, ChevronRight,
     Loader2, RotateCcw, Save, History, BookOpen, Trash2,
     Clock, ChevronDown, ChevronUp, Search, Share2, Send,
-    MessageSquare, Mail, QrCode, X, Copy, Check, ExternalLink, Download
+    Mail, X, Download
 } from 'lucide-react';
 import AssessmentDetailModal from '@/app/components/AssessmentDetailModal';
+import { SendAssessmentCard } from '@/components/SendAssessmentCard';
+import type { AssessmentType } from '@/lib/assessments/questionnaires';
 
 // BARC-10 Questions
 const BARC10_QUESTIONS = [
@@ -117,9 +119,7 @@ export default function RecoveryCapitalPage() {
     const [sendParticipantSearch, setSendParticipantSearch] = useState('');
     const [sendParticipants, setSendParticipants] = useState<Participant[]>([]);
     const [showSendDropdown, setShowSendDropdown] = useState(false);
-    const [generatedInvitation, setGeneratedInvitation] = useState<{token: string; url: string} | null>(null);
-    const [sendingInvitation, setSendingInvitation] = useState(false);
-    const [copiedLink, setCopiedLink] = useState(false);
+    const [sendAssessmentType, setSendAssessmentType] = useState<AssessmentType>('mirc28');
 
     // Pending invitations
     const [pendingInvitations, setPendingInvitations] = useState<Invitation[]>([]);
@@ -181,7 +181,6 @@ export default function RecoveryCapitalPage() {
         setSendParticipant(p);
         setSendParticipantSearch('');
         setShowSendDropdown(false);
-        setGeneratedInvitation(null);
     };
 
     const calculateScores = (answers: Answers): Scores => {
@@ -262,59 +261,6 @@ export default function RecoveryCapitalPage() {
         if (percentage >= 50) return { level: 'Building', desc: 'Actively developing recovery resources' };
         if (percentage >= 25) return { level: 'Developing', desc: 'Early stages of building capital' };
         return { level: 'Beginning', desc: 'Starting the recovery capital journey' };
-    };
-
-    // Generate invitation for participant
-    const generateInvitation = async () => {
-        if (!sendParticipant || !currentOrg?.id) return;
-        setSendingInvitation(true);
-        try {
-            const res = await fetch('/api/assessment-invitations', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    organization_id: currentOrg.id,
-                    participant_id: sendParticipant.id,
-                    assessment_type: 'mirc28',
-                }),
-            });
-            const data = await res.json();
-            if (data.success) {
-                setGeneratedInvitation({
-                    token: data.invitation.token,
-                    url: data.share_url,
-                });
-                fetchPendingInvitations();
-            }
-        } catch (e) {
-            console.error('Failed to generate invitation:', e);
-        } finally {
-            setSendingInvitation(false);
-        }
-    };
-
-    const copyLink = () => {
-        if (generatedInvitation?.url) {
-            navigator.clipboard.writeText(generatedInvitation.url);
-            setCopiedLink(true);
-            setTimeout(() => setCopiedLink(false), 2000);
-        }
-    };
-
-    const openSmsApp = () => {
-        if (!generatedInvitation?.url || !sendParticipant) return;
-        const message = `Hi ${sendParticipant.preferred_name || sendParticipant.first_name}, please complete your Recovery Capital Assessment: ${generatedInvitation.url}`;
-        window.open(`sms:${sendParticipant.phone || ''}?body=${encodeURIComponent(message)}`, '_blank');
-    };
-
-    const openEmailApp = () => {
-        if (!generatedInvitation?.url || !sendParticipant) return;
-        const subject = 'Your Recovery Capital Assessment';
-        const body = `Hi ${sendParticipant.preferred_name || sendParticipant.first_name},\n\nPlease complete your Recovery Capital Assessment by clicking the link below:\n\n${generatedInvitation.url}\n\nThis assessment takes about 10-15 minutes and will help us better support your recovery journey.\n\nThank you!`;
-        const mailtoUrl = sendParticipant.email
-            ? `mailto:${sendParticipant.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-            : `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-        window.open(mailtoUrl, '_blank');
     };
 
     // Analyze assessment with AI
@@ -778,145 +724,107 @@ export default function RecoveryCapitalPage() {
                     <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
                         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                             <h2 className="text-xl font-bold text-[#0E2235]">Send Assessment</h2>
-                            <button onClick={() => { setShowSendModal(false); setSendParticipant(null); setGeneratedInvitation(null); }} className="p-2 hover:bg-gray-100 rounded-lg">
+                            <button onClick={() => { setShowSendModal(false); setSendParticipant(null); }} className="p-2 hover:bg-gray-100 rounded-lg">
                                 <X className="w-5 h-5 text-gray-500" />
                             </button>
                         </div>
                         
-                        <div className="p-6">
-                            {!generatedInvitation ? (
-                                <>
-                                    {/* Step 1: Select Participant */}
-                                    <div className="mb-6">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Select Participant</label>
-                                        <div className="relative">
-                                            <div className="flex items-center gap-2 border border-gray-300 rounded-lg px-4 py-3">
-                                                <Search className="w-4 h-4 text-gray-400" />
-                                                <input
-                                                    type="text"
-                                                    value={sendParticipant ? `${sendParticipant.preferred_name || sendParticipant.first_name} ${sendParticipant.last_name}` : sendParticipantSearch}
-                                                    onChange={(e) => {
-                                                        setSendParticipantSearch(e.target.value);
-                                                        setShowSendDropdown(true);
-                                                        setSendParticipant(null);
-                                                    }}
-                                                    onFocus={() => setShowSendDropdown(true)}
-                                                    placeholder="Search participants..."
-                                                    className="flex-1 bg-transparent border-none outline-none"
-                                                />
-                                            </div>
-                                            {showSendDropdown && sendParticipantSearch.length >= 2 && sendParticipants.length > 0 && (
-                                                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 max-h-48 overflow-y-auto z-10">
-                                                    {sendParticipants.map((p) => (
-                                                        <button
-                                                            key={p.id}
-                                                            onClick={() => selectSendParticipant(p)}
-                                                            className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3"
-                                                        >
-                                                            <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-sm font-medium">
-                                                                {p.first_name[0]}{p.last_name[0]}
-                                                            </div>
-                                                            <div>
-                                                                <span className="font-medium block">{p.preferred_name || p.first_name} {p.last_name}</span>
-                                                                {p.phone && <span className="text-xs text-gray-500">{p.phone}</span>}
-                                                            </div>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
+                        <div className="p-6 space-y-4">
+                            {/* Step 1: Pick the assessment type */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Assessment</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {(['mirc28','barc10'] as AssessmentType[]).map(t => (
+                                        <button
+                                            key={t}
+                                            type="button"
+                                            onClick={() => setSendAssessmentType(t)}
+                                            className={`py-2 px-3 rounded-lg border text-sm font-medium ${
+                                                sendAssessmentType === t
+                                                    ? 'bg-purple-600 text-white border-purple-600'
+                                                    : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                                            }`}
+                                        >
+                                            {t === 'mirc28' ? 'MIRC-28' : 'BARC-10'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
 
-                                    {/* Selected Participant Card */}
-                                    {sendParticipant && (
-                                        <div className="bg-purple-50 rounded-xl p-4 mb-6">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-12 h-12 rounded-full bg-purple-200 flex items-center justify-center text-purple-700 font-semibold">
-                                                    {sendParticipant.first_name[0]}{sendParticipant.last_name[0]}
-                                                </div>
-                                                <div>
-                                                    <p className="font-semibold text-[#0E2235]">{sendParticipant.preferred_name || sendParticipant.first_name} {sendParticipant.last_name}</p>
-                                                    {sendParticipant.phone && <p className="text-sm text-gray-600">{sendParticipant.phone}</p>}
-                                                    {sendParticipant.email && <p className="text-sm text-gray-600">{sendParticipant.email}</p>}
-                                                </div>
-                                            </div>
+                            {/* Step 2: Select Participant */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Select Participant</label>
+                                <div className="relative">
+                                    <div className="flex items-center gap-2 border border-gray-300 rounded-lg px-4 py-3">
+                                        <Search className="w-4 h-4 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            value={sendParticipant ? `${sendParticipant.preferred_name || sendParticipant.first_name} ${sendParticipant.last_name}` : sendParticipantSearch}
+                                            onChange={(e) => {
+                                                setSendParticipantSearch(e.target.value);
+                                                setShowSendDropdown(true);
+                                                setSendParticipant(null);
+                                            }}
+                                            onFocus={() => setShowSendDropdown(true)}
+                                            placeholder="Search participants..."
+                                            className="flex-1 bg-transparent border-none outline-none"
+                                        />
+                                    </div>
+                                    {showSendDropdown && sendParticipantSearch.length >= 2 && sendParticipants.length > 0 && (
+                                        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 max-h-48 overflow-y-auto z-10">
+                                            {sendParticipants.map((p) => (
+                                                <button
+                                                    key={p.id}
+                                                    onClick={() => selectSendParticipant(p)}
+                                                    className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3"
+                                                >
+                                                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-sm font-medium">
+                                                        {p.first_name[0]}{p.last_name[0]}
+                                                    </div>
+                                                    <div>
+                                                        <span className="font-medium block">{p.preferred_name || p.first_name} {p.last_name}</span>
+                                                        {p.phone && <span className="text-xs text-gray-500">{p.phone}</span>}
+                                                    </div>
+                                                </button>
+                                            ))}
                                         </div>
                                     )}
+                                </div>
+                            </div>
 
-                                    <button
-                                        onClick={generateInvitation}
-                                        disabled={!sendParticipant || sendingInvitation}
-                                        className="w-full py-3 bg-purple-600 text-white rounded-xl font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-                                    >
-                                        {sendingInvitation ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                                        {sendingInvitation ? 'Generating...' : 'Generate Assessment Link'}
-                                    </button>
-                                </>
-                            ) : (
-                                <>
-                                    {/* Step 2: Share Link */}
-                                    <div className="text-center mb-6">
-                                        <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
-                                            <CheckCircle2 className="w-8 h-8 text-green-600" />
+                            {/* Selected Participant Card */}
+                            {sendParticipant && (
+                                <div className="bg-purple-50 rounded-xl p-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 rounded-full bg-purple-200 flex items-center justify-center text-purple-700 font-semibold">
+                                            {sendParticipant.first_name[0]}{sendParticipant.last_name[0]}
                                         </div>
-                                        <h3 className="text-lg font-semibold text-[#0E2235] mb-2">Link Generated!</h3>
-                                        <p className="text-sm text-gray-600">
-                                            Share this personalized link with {sendParticipant?.preferred_name || sendParticipant?.first_name}
-                                        </p>
-                                    </div>
-
-                                    {/* Link Display */}
-                                    <div className="bg-gray-50 rounded-xl p-4 mb-6">
-                                        <div className="flex items-center gap-2 mb-3">
-                                            <input
-                                                type="text"
-                                                readOnly
-                                                value={generatedInvitation.url}
-                                                className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600"
-                                            />
-                                            <button
-                                                onClick={copyLink}
-                                                className={`p-2 rounded-lg transition-colors ${copiedLink ? 'bg-green-100 text-green-600' : 'bg-white border border-gray-200 hover:bg-gray-50'}`}
-                                            >
-                                                {copiedLink ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-                                            </button>
+                                        <div>
+                                            <p className="font-semibold text-[#0E2235]">{sendParticipant.preferred_name || sendParticipant.first_name} {sendParticipant.last_name}</p>
+                                            {sendParticipant.phone && <p className="text-sm text-gray-600">{sendParticipant.phone}</p>}
+                                            {sendParticipant.email && <p className="text-sm text-gray-600">{sendParticipant.email}</p>}
                                         </div>
-                                        <p className="text-xs text-gray-500 text-center">Token: {generatedInvitation.token}</p>
                                     </div>
-
-                                    {/* Share Options */}
-                                    <div className="space-y-3">
-                                        <button
-                                            onClick={openSmsApp}
-                                            className="w-full py-3 bg-green-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-green-600"
-                                        >
-                                            <MessageSquare className="w-5 h-5" />
-                                            Send via Text Message
-                                        </button>
-                                        <button
-                                            onClick={openEmailApp}
-                                            className="w-full py-3 bg-blue-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-blue-600"
-                                        >
-                                            <Mail className="w-5 h-5" />
-                                            Send via Email
-                                        </button>
-                                        <button
-                                            onClick={() => window.open(generatedInvitation.url, '_blank')}
-                                            className="w-full py-3 border border-gray-300 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-50"
-                                        >
-                                            <ExternalLink className="w-5 h-5" />
-                                            Preview Link
-                                        </button>
-                                    </div>
-
-                                    <button
-                                        onClick={() => { setShowSendModal(false); setSendParticipant(null); setGeneratedInvitation(null); }}
-                                        className="w-full mt-4 py-3 text-gray-600 hover:text-gray-800"
-                                    >
-                                        Done
-                                    </button>
-                                </>
+                                </div>
                             )}
+
+                            {/* Step 3: Send card (Resend / Twilio) */}
+                            {sendParticipant && currentOrg?.id && (
+                                <SendAssessmentCard
+                                    organizationId={currentOrg.id}
+                                    participantId={sendParticipant.id}
+                                    assessmentType={sendAssessmentType}
+                                    participantEmail={sendParticipant.email ?? null}
+                                    participantPhone={sendParticipant.phone ?? null}
+                                />
+                            )}
+
+                            <button
+                                onClick={() => { setShowSendModal(false); setSendParticipant(null); fetchPendingInvitations(); }}
+                                className="w-full py-3 text-gray-600 hover:text-gray-800"
+                            >
+                                Close
+                            </button>
                         </div>
                     </div>
                 </div>

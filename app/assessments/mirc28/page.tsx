@@ -9,6 +9,7 @@ import {
     Loader2, RotateCcw, History, Search, X,
     Info, Volume2, Square, AlertCircle
 } from 'lucide-react';
+import { SendAssessmentCard } from '@/components/SendAssessmentCard';
 
 // =============================================
 // MIRC-28 QUESTIONS (28 items, 4-point Likert)
@@ -104,6 +105,8 @@ interface Participant {
     first_name: string;
     last_name: string;
     preferred_name?: string;
+    email?: string | null;
+    phone?: string | null;
 }
 
 type ViewState = 'dashboard' | 'assessment' | 'results' | 'history';
@@ -453,6 +456,16 @@ export default function Mirc28AssessmentPage() {
                                 Begin MIRC-28
                             </button>
                         </div>
+
+                        {selectedParticipant && currentOrg?.id && (
+                            <SendAssessmentCard
+                                organizationId={currentOrg.id}
+                                participantId={selectedParticipant.id}
+                                assessmentType="mirc28"
+                                participantEmail={selectedParticipant.email ?? null}
+                                participantPhone={selectedParticipant.phone ?? null}
+                            />
+                        )}
                     </div>
                 )}
 

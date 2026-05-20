@@ -9,6 +9,7 @@ import {
     Loader2, RotateCcw, History, Search, X,
     Info, Volume2, Square
 } from 'lucide-react';
+import { SendAssessmentCard } from '@/components/SendAssessmentCard';
 
 // =============================================
 // BARC-10 QUESTIONS (10 items, 6-point Likert)
@@ -64,6 +65,8 @@ interface Participant {
     first_name: string;
     last_name: string;
     preferred_name?: string;
+    email?: string | null;
+    phone?: string | null;
 }
 
 type ViewState = 'dashboard' | 'assessment' | 'results' | 'history';
@@ -381,6 +384,16 @@ export default function Barc10AssessmentPage() {
                                 Begin BARC-10
                             </button>
                         </div>
+
+                        {selectedParticipant && currentOrg?.id && (
+                            <SendAssessmentCard
+                                organizationId={currentOrg.id}
+                                participantId={selectedParticipant.id}
+                                assessmentType="barc10"
+                                participantEmail={selectedParticipant.email ?? null}
+                                participantPhone={selectedParticipant.phone ?? null}
+                            />
+                        )}
                     </div>
                 )}
 

@@ -39,6 +39,17 @@ const nextConfig = {
     // Google APIs
     GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
     GOOGLE_CUSTOM_SEARCH_ID: process.env.GOOGLE_CUSTOM_SEARCH_ID,
+
+    // Assessment invitation senders
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
+    TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
+    TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
+    TWILIO_MESSAGING_SERVICE_SID: process.env.TWILIO_MESSAGING_SERVICE_SID,
+    TWILIO_FROM_NUMBER: process.env.TWILIO_FROM_NUMBER,
+    TWILIO_STATUS_CALLBACK_URL: process.env.TWILIO_STATUS_CALLBACK_URL,
+    INVITE_BASE_URL: process.env.INVITE_BASE_URL,
+    INVITE_SENDER_DISPLAY_NAME: process.env.INVITE_SENDER_DISPLAY_NAME,
   },
 
   // Image optimization domains
