@@ -28,14 +28,21 @@ ALTER TABLE assessment_invitations
         REFERENCES recovery_assessments(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS opened_at                TIMESTAMPTZ;
 
--- ─── 1a. Widen the legacy token column ─────────────────────────────────────
+-- ─── 1a. Drop legacy dependent views ───────────────────────────────────────
+-- The legacy participant-app flow created `pending_invitations_view`, which
+-- references the token column and blocks us from widening it. Nothing in the
+-- new codebase reads from it, so drop unconditionally.
+
+DROP VIEW IF EXISTS pending_invitations_view;
+
+-- ─── 1b. Widen the legacy token column ─────────────────────────────────────
 -- The original schema used VARCHAR(12) for an auto-generated short code.
 -- The new sender writes a 43-char base64url(32) token, so widen to TEXT.
 
 ALTER TABLE assessment_invitations
     ALTER COLUMN token TYPE TEXT;
 
--- ─── 1b. Disarm any auto-token-generation trigger ──────────────────────────
+-- ─── 1c. Disarm any auto-token-generation trigger ──────────────────────────
 -- The legacy schema had a BEFORE INSERT trigger that generated a short
 -- token when NULL was inserted. Since we now write tokens explicitly, the
 -- trigger is at best a no-op and at worst could overwrite our values.
