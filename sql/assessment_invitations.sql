@@ -28,6 +28,34 @@ ALTER TABLE assessment_invitations
         REFERENCES recovery_assessments(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS opened_at                TIMESTAMPTZ;
 
+-- ─── 1a. Widen the legacy token column ─────────────────────────────────────
+-- The original schema used VARCHAR(12) for an auto-generated short code.
+-- The new sender writes a 43-char base64url(32) token, so widen to TEXT.
+
+ALTER TABLE assessment_invitations
+    ALTER COLUMN token TYPE TEXT;
+
+-- ─── 1b. Disarm any auto-token-generation trigger ──────────────────────────
+-- The legacy schema had a BEFORE INSERT trigger that generated a short
+-- token when NULL was inserted. Since we now write tokens explicitly, the
+-- trigger is at best a no-op and at worst could overwrite our values.
+-- Drop any trigger on this table whose name hints at token generation.
+
+DO $$
+DECLARE
+    tname text;
+BEGIN
+    FOR tname IN
+        SELECT tgname
+        FROM pg_trigger
+        WHERE tgrelid = 'assessment_invitations'::regclass
+          AND NOT tgisinternal
+          AND (tgname ILIKE '%token%' OR tgname ILIKE '%generate%')
+    LOOP
+        EXECUTE format('DROP TRIGGER IF EXISTS %I ON assessment_invitations', tname);
+    END LOOP;
+END $$;
+
 -- ─── 2. Backfill delivery_method from legacy sent_via ──────────────────────
 -- Old values: 'link' | 'sms' | 'email' (or NULL). 'link' meant a generic
 -- copy/paste share with no specific channel — leave as NULL.
