@@ -36,7 +36,9 @@ export async function POST(request: NextRequest) {
             setting_type,
             recovery_model,
             group_size,
-            group_composition
+            group_composition,
+            source_template_id,
+            category
         } = body;
 
         // Validate required fields
@@ -62,6 +64,8 @@ export async function POST(request: NextRequest) {
                 recovery_model,
                 group_size,
                 group_composition,
+                source_template_id,
+                category,
                 created_at,
                 updated_at
             ) VALUES (
@@ -77,6 +81,8 @@ export async function POST(request: NextRequest) {
                 ${recovery_model || 'General/Flexible'},
                 ${group_size || null},
                 ${group_composition || null},
+                ${source_template_id || null},
+                ${category || null},
                 NOW(),
                 NOW()
             )
