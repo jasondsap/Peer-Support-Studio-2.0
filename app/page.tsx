@@ -9,7 +9,7 @@ import {
     ArrowRight, Loader2, Sparkles,
     BookOpen, ClipboardList, MessageSquare,
     Building2, ClipboardCheck, Search,
-    Plus, Map, Mail,
+    Plus, Map, Mail, Library,
 } from 'lucide-react';
 import AllyIntelligenceChat from './components/AllyIntelligenceChat';
 
@@ -288,6 +288,14 @@ export default function HomePage() {
             href: '/lesson-builder',
             badge: 'AI',
             color: 'bg-indigo-500',
+        },
+        {
+            title: 'Lesson Library',
+            description: '145 premade lessons. Browse, customize, and use.',
+            icon: Library,
+            href: '/lesson-library',
+            badge: null,
+            color: 'bg-emerald-500',
         },
         {
             title: 'Messages',
