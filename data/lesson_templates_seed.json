@@ -1,0 +1,1376 @@
+{
+  "version": 1,
+  "generated_from": "PSS_Lesson_Topic_Library.xlsx",
+  "total_lessons": 145,
+  "session_type_values": [
+    "group",
+    "individual",
+    "both"
+  ],
+  "setting_type_values": [
+    "developmental-disability",
+    "general",
+    "jail",
+    "mental-health",
+    "outpatient",
+    "residential",
+    "youth"
+  ],
+  "categories": [
+    {
+      "name": "Recovery Foundations",
+      "order": 1
+    },
+    {
+      "name": "Coping Skills & Emotional Regulation",
+      "order": 2
+    },
+    {
+      "name": "Substance Use & Relapse Prevention",
+      "order": 3
+    },
+    {
+      "name": "Mental Health & Wellness",
+      "order": 4
+    },
+    {
+      "name": "Relationships & Communication",
+      "order": 5
+    },
+    {
+      "name": "Life Skills & Daily Living",
+      "order": 6
+    },
+    {
+      "name": "Employment & Education",
+      "order": 7
+    },
+    {
+      "name": "Legal & Reentry",
+      "order": 8
+    },
+    {
+      "name": "Community & Social Connection",
+      "order": 9
+    },
+    {
+      "name": "Identity & Purpose",
+      "order": 10
+    },
+    {
+      "name": "Health & Physical Wellness",
+      "order": 11
+    },
+    {
+      "name": "Specialized Populations",
+      "order": 12
+    }
+  ],
+  "lessons": [
+    {
+      "row_number": 1,
+      "title": "What recovery means: defining your own path",
+      "description": "An exploratory session helping participants articulate their personal definition of recovery, moving beyond abstinence to encompass health, relationships, purpose, and self-determination.",
+      "category": "Recovery Foundations",
+      "category_order": 1,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 2,
+      "title": "Stages of change: where are you right now?",
+      "description": "Introduces the Transtheoretical Model (precontemplation through maintenance) and helps participants honestly identify their current stage and what movement forward looks like.",
+      "category": "Recovery Foundations",
+      "category_order": 1,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 3,
+      "title": "Building a recovery identity: who am I becoming?",
+      "description": "A reflective session focused on separating self-concept from substance use history and actively constructing a new, values-based identity in recovery.",
+      "category": "Recovery Foundations",
+      "category_order": 1,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 4,
+      "title": "Hope as a skill: how to cultivate it when it's hard",
+      "description": "Examines hope not as a feeling but as a practice \u2014 drawing on SAMHSA's recovery principles to help participants build and sustain hope even during difficult periods.",
+      "category": "Recovery Foundations",
+      "category_order": 1,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 5,
+      "title": "What motivates your recovery? Finding your why",
+      "description": "Helps participants identify intrinsic motivators and connect recovery goals to deeper values, relationships, and aspirations using motivational interviewing principles.",
+      "category": "Recovery Foundations",
+      "category_order": 1,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 6,
+      "title": "Understanding the disease model vs. recovery capital models",
+      "description": "Compares biomedical and strengths-based frameworks for understanding addiction and recovery, helping participants find the model that resonates with their experience.",
+      "category": "Recovery Foundations",
+      "category_order": 1,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 7,
+      "title": "Early recovery survival guide: the first 90 days",
+      "description": "Practical skills and expectations for navigating the most vulnerable period of recovery, including triggers, support systems, and daily structure.",
+      "category": "Recovery Foundations",
+      "category_order": 1,
+      "session_type": "group",
+      "setting_type": "residential"
+    },
+    {
+      "row_number": 8,
+      "title": "The role of lived experience in peer support",
+      "description": "Explores how shared experience creates connection and credibility in the peer support relationship, and how participants can begin to see their story as a resource.",
+      "category": "Recovery Foundations",
+      "category_order": 1,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 9,
+      "title": "Recovery is not linear: understanding setbacks without shame",
+      "description": "Normalizes the non-linear nature of recovery and equips participants with frameworks for responding to setbacks without shame or hopelessness.",
+      "category": "Recovery Foundations",
+      "category_order": 1,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 10,
+      "title": "SAMHSA's four dimensions of recovery: a framework for your life",
+      "description": "Uses SAMHSA's Health, Home, Purpose, and Community framework to help participants assess and plan for a balanced recovery life.",
+      "category": "Recovery Foundations",
+      "category_order": 1,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 11,
+      "title": "From surviving to thriving: what long-term recovery looks like",
+      "description": "Inspires and informs participants about what sustained recovery can look like, featuring real-world examples and long-term recovery capital building.",
+      "category": "Recovery Foundations",
+      "category_order": 1,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 12,
+      "title": "The difference between abstinence and recovery",
+      "description": "Distinguishes sobriety from full recovery, expanding the conversation to include mental health, relationships, purpose, and wellbeing.",
+      "category": "Recovery Foundations",
+      "category_order": 1,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 13,
+      "title": "Identifying your emotional triggers before they catch you off guard",
+      "description": "Guided self-assessment to identify personal emotional triggers \u2014 situations, people, sensations \u2014 that increase vulnerability to use, with strategies for each.",
+      "category": "Coping Skills & Emotional Regulation",
+      "category_order": 2,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 14,
+      "title": "Grounding techniques for moments of overwhelm",
+      "description": "Teaches practical grounding techniques (5-4-3-2-1, box breathing, body scan) that participants can use in moments of acute stress, anxiety, or cravings.",
+      "category": "Coping Skills & Emotional Regulation",
+      "category_order": 2,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 15,
+      "title": "The HALT check-in: recognizing when your body is sending signals",
+      "description": "Introduces HALT (Hungry, Angry, Lonely, Tired) as a daily self-monitoring tool and builds habits for addressing each state before it becomes a crisis.",
+      "category": "Coping Skills & Emotional Regulation",
+      "category_order": 2,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 16,
+      "title": "Healthy vs. unhealthy coping: learning the difference",
+      "description": "Helps participants audit their current coping behaviors, distinguish adaptive from maladaptive strategies, and build a personal coping hierarchy.",
+      "category": "Coping Skills & Emotional Regulation",
+      "category_order": 2,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 17,
+      "title": "Managing boredom in recovery without using",
+      "description": "Addresses one of the most commonly underestimated relapse triggers, helping participants build meaningful activities and tolerate unstructured time.",
+      "category": "Coping Skills & Emotional Regulation",
+      "category_order": 2,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 18,
+      "title": "Distress tolerance: riding out the wave",
+      "description": "Based on DBT distress tolerance skills, teaches participants to survive emotional crises without making them worse, including urge surfing for cravings.",
+      "category": "Coping Skills & Emotional Regulation",
+      "category_order": 2,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 19,
+      "title": "Anger in recovery: what it's telling you and what to do with it",
+      "description": "Explores anger as information, teaches healthy expression and de-escalation strategies, and addresses how suppressed anger can increase relapse risk.",
+      "category": "Coping Skills & Emotional Regulation",
+      "category_order": 2,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 20,
+      "title": "Anxiety management skills for everyday recovery",
+      "description": "Practical anxiety management tools including cognitive restructuring, breathing techniques, and behavioral strategies appropriate for outpatient and mental health settings.",
+      "category": "Coping Skills & Emotional Regulation",
+      "category_order": 2,
+      "session_type": "both",
+      "setting_type": "mental-health"
+    },
+    {
+      "row_number": 21,
+      "title": "Building your personal coping toolkit",
+      "description": "An individualized session where participants inventory their existing coping skills, identify gaps, and build a personalized written toolkit for future use.",
+      "category": "Coping Skills & Emotional Regulation",
+      "category_order": 2,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 22,
+      "title": "Mindfulness basics: staying present without checking out",
+      "description": "Introduces mindfulness as a recovery skill \u2014 not a spiritual practice \u2014 teaching participants simple awareness techniques for managing cravings and emotions.",
+      "category": "Coping Skills & Emotional Regulation",
+      "category_order": 2,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 23,
+      "title": "The connection between emotions and cravings",
+      "description": "Explores the emotional antecedents of cravings, helping participants recognize how feelings drive urges and build emotion-specific coping responses.",
+      "category": "Coping Skills & Emotional Regulation",
+      "category_order": 2,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 24,
+      "title": "Emotional regulation when things feel out of control",
+      "description": "Focuses on TIPP skills and other emotional regulation strategies for moments when feelings feel unmanageable, especially useful in mental health and dual diagnosis contexts.",
+      "category": "Coping Skills & Emotional Regulation",
+      "category_order": 2,
+      "session_type": "individual",
+      "setting_type": "mental-health"
+    },
+    {
+      "row_number": 25,
+      "title": "Mapping your personal triggers: high-risk situations and warning signs",
+      "description": "A structured individual session to identify internal and external triggers, map high-risk situations, and begin building a personalized risk awareness plan.",
+      "category": "Substance Use & Relapse Prevention",
+      "category_order": 3,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 26,
+      "title": "Building a written relapse prevention plan",
+      "description": "Guides participants through creating a concrete, written relapse prevention plan including warning signs, supports, crisis contacts, and response steps.",
+      "category": "Substance Use & Relapse Prevention",
+      "category_order": 3,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 27,
+      "title": "Understanding cravings: why they happen and how long they last",
+      "description": "Psychoeducation on the neuroscience of cravings \u2014 how they work, how long they typically last, and evidence-based strategies for managing them.",
+      "category": "Substance Use & Relapse Prevention",
+      "category_order": 3,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 28,
+      "title": "Managing cravings at social events and family gatherings",
+      "description": "Scenario-based session on navigating high-exposure social situations: planning ahead, using supports, declining offers, and leaving gracefully if needed.",
+      "category": "Substance Use & Relapse Prevention",
+      "category_order": 3,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 29,
+      "title": "Recognizing the stages of relapse before the first use",
+      "description": "Teaches the emotional, mental, and physical warning stages of relapse so participants can intervene early in the process, long before a return to use.",
+      "category": "Substance Use & Relapse Prevention",
+      "category_order": 3,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 30,
+      "title": "What to do after a setback: getting back on track without shame",
+      "description": "A compassionate, action-oriented session addressing how to respond to a relapse or near-relapse \u2014 including reaching out for help, safety planning, and learning from the experience.",
+      "category": "Substance Use & Relapse Prevention",
+      "category_order": 3,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 31,
+      "title": "High-risk situations in early recovery: planning ahead",
+      "description": "Identifies common high-risk scenarios in early recovery (celebrations, stress, conflict, anniversaries) and builds specific plans for navigating each.",
+      "category": "Substance Use & Relapse Prevention",
+      "category_order": 3,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 32,
+      "title": "The role of people, places, and things in relapse prevention",
+      "description": "Examines environmental and social cues, helping participants make thoughtful decisions about relationships, locations, and objects associated with past use.",
+      "category": "Substance Use & Relapse Prevention",
+      "category_order": 3,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 33,
+      "title": "Overdose prevention and naloxone awareness",
+      "description": "Provides education on overdose risk, recognition, and response, including naloxone access and how to create a safety plan with people in the participant's network.",
+      "category": "Substance Use & Relapse Prevention",
+      "category_order": 3,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 34,
+      "title": "Alcohol: understanding its unique risks in recovery",
+      "description": "Addresses the often minimized risks of alcohol for people in recovery from other substances, including cross-addiction and the social normalization of drinking.",
+      "category": "Substance Use & Relapse Prevention",
+      "category_order": 3,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 35,
+      "title": "Creating a crisis response plan for cravings and urges",
+      "description": "An individual session to build a personalized written plan for responding to acute cravings, including distraction, support contacts, and safe environments.",
+      "category": "Substance Use & Relapse Prevention",
+      "category_order": 3,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 36,
+      "title": "Harm reduction: meeting yourself where you are",
+      "description": "Introduces harm reduction principles as a valid and evidence-based approach, helping participants reduce risk and stay connected to support regardless of where they are in their recovery.",
+      "category": "Substance Use & Relapse Prevention",
+      "category_order": 3,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 37,
+      "title": "Understanding depression in recovery: signs and strategies",
+      "description": "Psychoeducation on depression as a common co-occurring condition in recovery, with evidence-based coping strategies and guidance on when to seek additional support.",
+      "category": "Mental Health & Wellness",
+      "category_order": 4,
+      "session_type": "both",
+      "setting_type": "mental-health"
+    },
+    {
+      "row_number": 38,
+      "title": "Anxiety in recovery: more than just nerves",
+      "description": "Distinguishes normal anxiety from anxiety disorders, teaches practical management tools, and addresses how anxiety and substance use interact in recovery.",
+      "category": "Mental Health & Wellness",
+      "category_order": 4,
+      "session_type": "both",
+      "setting_type": "mental-health"
+    },
+    {
+      "row_number": 39,
+      "title": "Trauma awareness: what it is and how it shows up in recovery",
+      "description": "Non-clinical psychoeducation on trauma \u2014 what it is, how it affects the nervous system and behavior, and trauma-informed strategies for daily living. Does not process trauma.",
+      "category": "Mental Health & Wellness",
+      "category_order": 4,
+      "session_type": "group",
+      "setting_type": "mental-health"
+    },
+    {
+      "row_number": 40,
+      "title": "The basics of co-occurring disorders: when mental health and substance use overlap",
+      "description": "Introductory psychoeducation on co-occurring disorders, helping participants understand the relationship between mental health conditions and substance use and why integrated support matters.",
+      "category": "Mental Health & Wellness",
+      "category_order": 4,
+      "session_type": "group",
+      "setting_type": "developmental-disability"
+    },
+    {
+      "row_number": 41,
+      "title": "Sleep hygiene: why rest is a recovery skill",
+      "description": "Addresses the significant impact of sleep on recovery, teaching practical sleep hygiene strategies and explaining how sleep deprivation increases relapse risk.",
+      "category": "Mental Health & Wellness",
+      "category_order": 4,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 42,
+      "title": "Medication adherence: why it matters and how to stay on track",
+      "description": "Covers the importance of psychiatric and other medications in recovery, addresses stigma around medication, and builds practical systems for consistent adherence.",
+      "category": "Mental Health & Wellness",
+      "category_order": 4,
+      "session_type": "both",
+      "setting_type": "mental-health"
+    },
+    {
+      "row_number": 43,
+      "title": "Self-care practices that actually work in recovery",
+      "description": "Moves beyond generic self-care advice to build personalized, practical routines addressing physical, emotional, and social wellbeing in the context of recovery.",
+      "category": "Mental Health & Wellness",
+      "category_order": 4,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 44,
+      "title": "Grief and loss in recovery: it's not just about substances",
+      "description": "A compassionate individual session exploring grief \u2014 including grief over the substance itself, lost relationships, and lost time \u2014 with healthy mourning strategies.",
+      "category": "Mental Health & Wellness",
+      "category_order": 4,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 45,
+      "title": "Understanding PTSD and its connection to substance use",
+      "description": "Psychoeducation on PTSD symptoms and their relationship to substance use as self-medication, with emphasis on available supports and trauma-informed coping.",
+      "category": "Mental Health & Wellness",
+      "category_order": 4,
+      "session_type": "group",
+      "setting_type": "developmental-disability"
+    },
+    {
+      "row_number": 46,
+      "title": "Managing stress without using: practical techniques",
+      "description": "A practical toolkit session focused specifically on stress management strategies that don't involve substances, including time management, support-seeking, and relaxation techniques.",
+      "category": "Mental Health & Wellness",
+      "category_order": 4,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 47,
+      "title": "The mind-body connection: how your physical health affects your mental health",
+      "description": "Explores bidirectional relationships between physical wellness and mental health in recovery, motivating participants to invest in physical self-care as a recovery strategy.",
+      "category": "Mental Health & Wellness",
+      "category_order": 4,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 48,
+      "title": "Recognizing when you need more support: knowing your limits",
+      "description": "Helps participants develop self-awareness about when peer support is sufficient versus when to seek clinical, psychiatric, or crisis services \u2014 and how to take that step.",
+      "category": "Mental Health & Wellness",
+      "category_order": 4,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 49,
+      "title": "Setting healthy boundaries: what they are and how to hold them",
+      "description": "Teaches the concept of boundaries as self-care tools, helps participants identify where they need boundaries, and builds specific, respectful language for setting them.",
+      "category": "Relationships & Communication",
+      "category_order": 5,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 50,
+      "title": "Rebuilding trust after addiction: a realistic roadmap",
+      "description": "An honest individual session on the long-term work of rebuilding trust with family, partners, and friends \u2014 including managing expectations and handling disappointment.",
+      "category": "Relationships & Communication",
+      "category_order": 5,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 51,
+      "title": "Saying no without guilt: assertiveness in recovery",
+      "description": "Teaches assertive communication skills with specific focus on declining offers of substances, resisting peer pressure, and saying no to requests that threaten recovery.",
+      "category": "Relationships & Communication",
+      "category_order": 5,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 52,
+      "title": "Healthy vs. unhealthy relationships: how to tell the difference",
+      "description": "Uses a relationship quality framework to help participants evaluate their current relationships and make informed decisions about who to invest in during recovery.",
+      "category": "Relationships & Communication",
+      "category_order": 5,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 53,
+      "title": "Communication skills for difficult conversations",
+      "description": "Practical training in communication strategies for high-stakes conversations: using I-statements, active listening, staying regulated, and de-escalating conflict.",
+      "category": "Relationships & Communication",
+      "category_order": 5,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 54,
+      "title": "Navigating romantic relationships in early recovery",
+      "description": "Addresses the risks and realities of romantic relationships in early recovery, including timing, codependency patterns, and maintaining individual recovery work.",
+      "category": "Relationships & Communication",
+      "category_order": 5,
+      "session_type": "group",
+      "setting_type": "outpatient"
+    },
+    {
+      "row_number": 55,
+      "title": "Family dynamics in recovery: understanding roles and patterns",
+      "description": "Explores how family systems are shaped by addiction \u2014 including enabling, enmeshment, and communication breakdowns \u2014 and how recovery changes those dynamics.",
+      "category": "Relationships & Communication",
+      "category_order": 5,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 56,
+      "title": "Conflict resolution without escalation",
+      "description": "Teaches a structured approach to resolving interpersonal conflict that de-escalates emotion, promotes understanding, and finds workable solutions.",
+      "category": "Relationships & Communication",
+      "category_order": 5,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 57,
+      "title": "How to make and keep sober friendships",
+      "description": "Addresses the social isolation common in early recovery and teaches specific skills for initiating, developing, and maintaining sober friendships.",
+      "category": "Relationships & Communication",
+      "category_order": 5,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 58,
+      "title": "Co-dependency awareness: when helping becomes enabling",
+      "description": "Introduces co-dependency concepts to help participants recognize unhealthy relational patterns \u2014 both in themselves and others \u2014 and build healthier dynamics.",
+      "category": "Relationships & Communication",
+      "category_order": 5,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 59,
+      "title": "Communicating your recovery needs to people who don't understand",
+      "description": "Skills and scripts for explaining recovery needs to employers, family members, and others who may not understand addiction or peer support.",
+      "category": "Relationships & Communication",
+      "category_order": 5,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 60,
+      "title": "Forgiveness in recovery: what it means and what it doesn't",
+      "description": "A nuanced exploration of forgiveness \u2014 of others and of oneself \u2014 that separates forgiveness from reconciliation and frames it as a personal healing tool.",
+      "category": "Relationships & Communication",
+      "category_order": 5,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 61,
+      "title": "Building a daily routine that supports your recovery",
+      "description": "Helps participants design a structured daily routine \u2014 including sleep, meals, meetings, and meaningful activity \u2014 that reduces unstructured time and supports recovery.",
+      "category": "Life Skills & Daily Living",
+      "category_order": 6,
+      "session_type": "individual",
+      "setting_type": "residential"
+    },
+    {
+      "row_number": 62,
+      "title": "Time management basics: getting things done without burning out",
+      "description": "Practical time management techniques adapted for early recovery, including prioritization, scheduling, and managing fatigue and cognitive recovery effects.",
+      "category": "Life Skills & Daily Living",
+      "category_order": 6,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 63,
+      "title": "Financial literacy 101: budgeting on a limited income",
+      "description": "Introduces basic budgeting concepts \u2014 income tracking, expense categories, and savings habits \u2014 with specific attention to the financial realities of people in early recovery.",
+      "category": "Life Skills & Daily Living",
+      "category_order": 6,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 64,
+      "title": "Nutrition basics for people in recovery",
+      "description": "Addresses how substance use affects nutritional status and teaches basic healthy eating principles that support brain and body recovery.",
+      "category": "Life Skills & Daily Living",
+      "category_order": 6,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 65,
+      "title": "Grocery shopping and meal prep on a budget",
+      "description": "A practical skills session on food planning, smart shopping, and simple meal preparation that supports physical recovery on a limited budget.",
+      "category": "Life Skills & Daily Living",
+      "category_order": 6,
+      "session_type": "group",
+      "setting_type": "residential"
+    },
+    {
+      "row_number": 66,
+      "title": "Hygiene and self-care as acts of self-respect",
+      "description": "Reframes personal hygiene and grooming as forms of self-respect and identity, building motivation and practical skills for consistent self-care routines.",
+      "category": "Life Skills & Daily Living",
+      "category_order": 6,
+      "session_type": "group",
+      "setting_type": "residential"
+    },
+    {
+      "row_number": 67,
+      "title": "Household management: keeping your space stable",
+      "description": "Teaches basic household organization, cleaning routines, and home management skills, with emphasis on how a stable environment supports mental health and recovery.",
+      "category": "Life Skills & Daily Living",
+      "category_order": 6,
+      "session_type": "individual",
+      "setting_type": "residential"
+    },
+    {
+      "row_number": 68,
+      "title": "Transportation planning: getting where you need to go",
+      "description": "Practical session on navigating transportation options \u2014 public transit, ride sharing, community resources \u2014 for people in recovery who may lack reliable transportation.",
+      "category": "Life Skills & Daily Living",
+      "category_order": 6,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 69,
+      "title": "Navigating technology: apps, accounts, and digital life",
+      "description": "Covers basic digital literacy for recovery contexts: managing email and accounts, using recovery apps, and navigating government and healthcare portals online.",
+      "category": "Life Skills & Daily Living",
+      "category_order": 6,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 70,
+      "title": "Managing medical appointments and healthcare systems",
+      "description": "Teaches participants how to access healthcare, communicate with providers, manage medications, and navigate insurance or Medicaid \u2014 critical skills often disrupted by addiction.",
+      "category": "Life Skills & Daily Living",
+      "category_order": 6,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 71,
+      "title": "Crisis planning: what to do when life goes sideways",
+      "description": "Helps participants build a written personal crisis plan covering financial emergencies, housing loss, mental health crises, and relapse risk \u2014 with specific response steps.",
+      "category": "Life Skills & Daily Living",
+      "category_order": 6,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 72,
+      "title": "How to ask for help: practicing the skill of reaching out",
+      "description": "Addresses the stigma and vulnerability around asking for help, and teaches participants specific language and strategies for reaching out to supports before crisis hits.",
+      "category": "Life Skills & Daily Living",
+      "category_order": 6,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 73,
+      "title": "Job readiness: are you ready to work and how do you know?",
+      "description": "A candid self-assessment session on employment readiness \u2014 including stability, transportation, childcare, mental health, and the timing of returning to work in recovery.",
+      "category": "Employment & Education",
+      "category_order": 7,
+      "session_type": "group",
+      "setting_type": "residential"
+    },
+    {
+      "row_number": 74,
+      "title": "Writing a resume with gaps in employment history",
+      "description": "Practical resume-building session focused on how to address employment gaps honestly, highlight transferable skills, and frame recovery-era activities constructively.",
+      "category": "Employment & Education",
+      "category_order": 7,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 75,
+      "title": "Interview preparation: what to say (and not say) about your recovery",
+      "description": "Scenario-based session on interview skills, including how to handle questions about employment gaps or criminal history without disclosing more than legally required.",
+      "category": "Employment & Education",
+      "category_order": 7,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 76,
+      "title": "Managing your recovery at work: staying balanced on the job",
+      "description": "Strategies for maintaining recovery practices, managing stress, setting limits, and using EAPs or other supports in an employment setting.",
+      "category": "Employment & Education",
+      "category_order": 7,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 77,
+      "title": "Navigating workplace stress without using",
+      "description": "Identifies common workplace stressors and builds a specific response plan for managing work-related stress without turning to substances.",
+      "category": "Employment & Education",
+      "category_order": 7,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 78,
+      "title": "Setting an education goal and making a plan to get there",
+      "description": "Helps participants identify educational aspirations \u2014 GED, community college, vocational training \u2014 and build a concrete, realistic action plan with timelines.",
+      "category": "Employment & Education",
+      "category_order": 7,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 79,
+      "title": "Vocational training and trade programs as a path forward",
+      "description": "Explores vocational and trade training as accessible, high-value alternatives to traditional college, including local resources and recovery-friendly programs.",
+      "category": "Employment & Education",
+      "category_order": 7,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 80,
+      "title": "Disclosing your recovery history to employers: yes, no, or when?",
+      "description": "An honest exploration of disclosure decisions \u2014 legal rights, risks, and benefits \u2014 helping participants make informed, context-specific choices about sharing their story.",
+      "category": "Employment & Education",
+      "category_order": 7,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 81,
+      "title": "Handling rejection in the job search without it derailing your recovery",
+      "description": "Addresses the emotional impact of rejection during job searching and builds specific coping and resilience strategies to stay motivated and recovery-focused.",
+      "category": "Employment & Education",
+      "category_order": 7,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 82,
+      "title": "Financial aid, grants, and scholarships for people in recovery",
+      "description": "Provides an overview of funding opportunities for education and training, including recovery-specific scholarships, Pell grants, and state resources.",
+      "category": "Employment & Education",
+      "category_order": 7,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 83,
+      "title": "Workplace communication: professional relationships in early employment",
+      "description": "Teaches professional communication norms for people re-entering the workforce, including email, punctuality, workplace conflict, and navigating authority relationships.",
+      "category": "Employment & Education",
+      "category_order": 7,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 84,
+      "title": "Volunteering as a bridge to employment",
+      "description": "Explores volunteerism as a way to rebuild skills, address resume gaps, develop references, and re-engage with community while strengthening recovery.",
+      "category": "Employment & Education",
+      "category_order": 7,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 85,
+      "title": "Understanding your legal obligations: probation, parole, and court requirements",
+      "description": "A practical overview of the conditions of supervised release, how to stay compliant, and what to do when facing violations or confusion about requirements.",
+      "category": "Legal & Reentry",
+      "category_order": 8,
+      "session_type": "individual",
+      "setting_type": "jail"
+    },
+    {
+      "row_number": 86,
+      "title": "Navigating the reentry process: what to expect in the first 30 days",
+      "description": "Prepares participants for the immediate practical and emotional challenges of reentry \u2014 housing, ID, benefits, meetings, and support services in the critical first month.",
+      "category": "Legal & Reentry",
+      "category_order": 8,
+      "session_type": "group",
+      "setting_type": "jail"
+    },
+    {
+      "row_number": 87,
+      "title": "Getting your ID and vital documents after incarceration",
+      "description": "Step-by-step guidance on obtaining birth certificate, Social Security card, state ID, and other essential documents required to access housing, employment, and benefits.",
+      "category": "Legal & Reentry",
+      "category_order": 8,
+      "session_type": "individual",
+      "setting_type": "jail"
+    },
+    {
+      "row_number": 88,
+      "title": "Working with a probation or parole officer: building a productive relationship",
+      "description": "Strategies for communicating clearly with supervision officers, meeting expectations consistently, and addressing problems proactively rather than reactively.",
+      "category": "Legal & Reentry",
+      "category_order": 8,
+      "session_type": "individual",
+      "setting_type": "jail"
+    },
+    {
+      "row_number": 89,
+      "title": "Restoring your rights: voting, housing, and employment after a felony",
+      "description": "Educates participants on their rights post-conviction, including voting restoration, expungement opportunities, and anti-discrimination protections in employment and housing.",
+      "category": "Legal & Reentry",
+      "category_order": 8,
+      "session_type": "group",
+      "setting_type": "jail"
+    },
+    {
+      "row_number": 90,
+      "title": "Understanding drug court and diversion programs",
+      "description": "Explains drug court processes, expectations, and benefits \u2014 and how participants can make the most of diversion as a path toward recovery rather than punishment.",
+      "category": "Legal & Reentry",
+      "category_order": 8,
+      "session_type": "group",
+      "setting_type": "jail"
+    },
+    {
+      "row_number": 91,
+      "title": "Housing after incarceration: what counts against you and how to find options",
+      "description": "Practical guidance on navigating housing restrictions for people with criminal records \u2014 including what landlords can legally ask, fair chance housing, and transitional housing options.",
+      "category": "Legal & Reentry",
+      "category_order": 8,
+      "session_type": "individual",
+      "setting_type": "jail"
+    },
+    {
+      "row_number": 92,
+      "title": "Reentry planning before release: starting early",
+      "description": "A pre-release session focused on building a reentry plan 60+ days before release, covering housing, employment, support networks, and recovery services.",
+      "category": "Legal & Reentry",
+      "category_order": 8,
+      "session_type": "group",
+      "setting_type": "jail"
+    },
+    {
+      "row_number": 93,
+      "title": "Managing the stress of legal supervision without using",
+      "description": "Addresses the unique stressors of supervised release \u2014 check-ins, restrictions, fear of violations \u2014 and builds specific coping strategies for managing them in recovery.",
+      "category": "Legal & Reentry",
+      "category_order": 8,
+      "session_type": "individual",
+      "setting_type": "jail"
+    },
+    {
+      "row_number": 94,
+      "title": "Navigating the court system: understanding your case and your rights",
+      "description": "Demystifies the criminal court process and helps participants understand their rights, the role of their attorney, and how to participate meaningfully in their case.",
+      "category": "Legal & Reentry",
+      "category_order": 8,
+      "session_type": "individual",
+      "setting_type": "jail"
+    },
+    {
+      "row_number": 95,
+      "title": "From institutional thinking to community living: making the mindset shift",
+      "description": "Addresses the cognitive and behavioral adjustments required when transitioning from a correctional setting to the community, including decision-making, authority, and self-direction.",
+      "category": "Legal & Reentry",
+      "category_order": 8,
+      "session_type": "group",
+      "setting_type": "jail"
+    },
+    {
+      "row_number": 96,
+      "title": "Building your recovery support network from scratch",
+      "description": "A structured session on intentionally identifying and cultivating a recovery support network \u2014 including peers, sponsors, family, professionals, and community resources.",
+      "category": "Community & Social Connection",
+      "category_order": 9,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 97,
+      "title": "Finding and attending your first recovery meeting",
+      "description": "Practical preparation for attending 12-Step, SMART Recovery, or other peer support meetings for the first time, including what to expect, how to introduce yourself, and finding the right fit.",
+      "category": "Community & Social Connection",
+      "category_order": 9,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 98,
+      "title": "Volunteering as a recovery tool: giving back builds community",
+      "description": "Explores the research-backed recovery benefits of giving back, and helps participants identify volunteer opportunities that match their interests and schedule.",
+      "category": "Community & Social Connection",
+      "category_order": 9,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 99,
+      "title": "Navigating sober socializing: parties, holidays, and events",
+      "description": "Scenario-based session on attending social events without using \u2014 planning ahead, using exit strategies, managing social pressure, and building confidence.",
+      "category": "Community & Social Connection",
+      "category_order": 9,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 100,
+      "title": "Loneliness in recovery: why it's common and what to do about it",
+      "description": "Validates the isolation that often accompanies early recovery and teaches specific, actionable strategies for building connection and combating chronic loneliness.",
+      "category": "Community & Social Connection",
+      "category_order": 9,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 101,
+      "title": "What peer support relationships look like and why they work",
+      "description": "Educates participants on the unique nature of peer support \u2014 how it differs from clinical care, why lived experience matters, and how to make the most of peer relationships.",
+      "category": "Community & Social Connection",
+      "category_order": 9,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 102,
+      "title": "Getting involved in your recovery community",
+      "description": "Introduces participants to recovery community organizations, advocacy opportunities, and peer-led events that offer belonging, purpose, and meaningful connection.",
+      "category": "Community & Social Connection",
+      "category_order": 9,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 103,
+      "title": "Social media and recovery: when connection becomes comparison",
+      "description": "Addresses the double-edged nature of social media in recovery \u2014 its value for connection and community versus its risks for comparison, envy, and exposure to using content.",
+      "category": "Community & Social Connection",
+      "category_order": 9,
+      "session_type": "group",
+      "setting_type": "youth"
+    },
+    {
+      "row_number": 104,
+      "title": "Navigating neighborhoods with high exposure to substances",
+      "description": "Practical strategies for managing recovery in environments with high drug and alcohol availability \u2014 including route planning, time management, and building safer routines.",
+      "category": "Community & Social Connection",
+      "category_order": 9,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 105,
+      "title": "Faith communities and recovery: finding your fit",
+      "description": "Explores the role of faith and spirituality in recovery across diverse traditions, and helps participants navigate faith communities in a way that supports their recovery.",
+      "category": "Community & Social Connection",
+      "category_order": 9,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 106,
+      "title": "Creating new rituals and traditions that don't involve using",
+      "description": "Helps participants intentionally build new celebrations, routines, and rituals that provide meaning and connection without substances.",
+      "category": "Community & Social Connection",
+      "category_order": 9,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 107,
+      "title": "Giving back: becoming a peer supporter yourself",
+      "description": "Explores the pathway to peer support certification, the recovery benefits of helping others, and how participants can begin contributing their lived experience.",
+      "category": "Community & Social Connection",
+      "category_order": 9,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 108,
+      "title": "Exploring your values: what matters most to you in recovery?",
+      "description": "A structured values clarification exercise helping participants identify their core values and begin aligning daily decisions with what they believe in most.",
+      "category": "Identity & Purpose",
+      "category_order": 10,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 109,
+      "title": "Recovery identity: who you are beyond your history of use",
+      "description": "Focuses on separating personal identity from addiction history, building a narrative of self that encompasses growth, resilience, and possibility.",
+      "category": "Identity & Purpose",
+      "category_order": 10,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 110,
+      "title": "Setting meaningful goals that align with your values",
+      "description": "Connects values work to SMART goal-setting, helping participants create goals that feel personally meaningful rather than externally imposed.",
+      "category": "Identity & Purpose",
+      "category_order": 10,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 111,
+      "title": "Shame and stigma in recovery: understanding and releasing them",
+      "description": "Examines both internal shame and external stigma, offering frameworks for releasing shame that don't require public disclosure while building self-compassion.",
+      "category": "Identity & Purpose",
+      "category_order": 10,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 112,
+      "title": "Spirituality in recovery: a non-denominational exploration",
+      "description": "An inclusive exploration of spirituality as a recovery resource \u2014 meaning, connection, transcendence \u2014 that doesn't require religious affiliation or belief.",
+      "category": "Identity & Purpose",
+      "category_order": 10,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 113,
+      "title": "Celebrating recovery milestones: why it matters",
+      "description": "Makes the case for intentional milestone recognition in recovery and helps the group create meaningful ways to acknowledge and celebrate progress.",
+      "category": "Identity & Purpose",
+      "category_order": 10,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 114,
+      "title": "Self-esteem in recovery: rebuilding a positive self-image",
+      "description": "Addresses the erosion of self-esteem common in addiction and recovery, teaching cognitive and behavioral strategies for rebuilding a positive, realistic self-image.",
+      "category": "Identity & Purpose",
+      "category_order": 10,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 115,
+      "title": "Finding meaning and purpose beyond sobriety",
+      "description": "Helps participants explore vocation, contribution, creativity, and connection as sources of purpose that give recovery a reason beyond abstinence.",
+      "category": "Identity & Purpose",
+      "category_order": 10,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 116,
+      "title": "The power of storytelling: using your lived experience",
+      "description": "Explores how participants can begin to share their recovery story as a tool for connection, advocacy, and helping others \u2014 with guidance on healthy boundaries in sharing.",
+      "category": "Identity & Purpose",
+      "category_order": 10,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 117,
+      "title": "Accepting yourself in the present while working toward the future",
+      "description": "A session on radical acceptance and self-compassion \u2014 holding the tension between being a work in progress and being worthy of dignity and love right now.",
+      "category": "Identity & Purpose",
+      "category_order": 10,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 118,
+      "title": "Recovery as a second chance: reimagining your life narrative",
+      "description": "A strength-based session on reauthoring the personal narrative \u2014 seeing recovery not as what was lost but as a foundation for what is possible.",
+      "category": "Identity & Purpose",
+      "category_order": 10,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 119,
+      "title": "Exploring creativity and self-expression in recovery",
+      "description": "Introduces creative outlets (writing, art, music, movement) as recovery tools for processing emotion, building identity, and finding joy.",
+      "category": "Identity & Purpose",
+      "category_order": 10,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 120,
+      "title": "Exercise in recovery: getting started without overdoing it",
+      "description": "Introduces physical activity as a recovery-supporting practice, with accessible starting points, the neuroscience of exercise in recovery, and guidance on avoiding compulsive patterns.",
+      "category": "Health & Physical Wellness",
+      "category_order": 11,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 121,
+      "title": "Nutrition and the recovering brain: what your body needs",
+      "description": "Covers the nutritional needs specific to recovery \u2014 blood sugar regulation, neurotransmitter precursors, hydration \u2014 and practical dietary changes participants can make.",
+      "category": "Health & Physical Wellness",
+      "category_order": 11,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 122,
+      "title": "What substances do to the body: understanding the physical toll",
+      "description": "Non-judgmental psychoeducation on the physical effects of various substances on the brain, liver, cardiovascular system, and other organs, framed as motivation for healing.",
+      "category": "Health & Physical Wellness",
+      "category_order": 11,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 123,
+      "title": "Managing chronic pain without substances",
+      "description": "Addresses the challenge of living with chronic pain in recovery, exploring non-opioid pain management strategies including movement, mindfulness, physical therapy, and advocacy with providers.",
+      "category": "Health & Physical Wellness",
+      "category_order": 11,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 124,
+      "title": "Preventive healthcare in recovery: getting back to the doctor",
+      "description": "Overcomes barriers to healthcare access in recovery \u2014 including stigma, insurance navigation, and healthcare avoidance \u2014 and motivates participants to prioritize preventive care.",
+      "category": "Health & Physical Wellness",
+      "category_order": 11,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 125,
+      "title": "Sexual health in recovery: a healthy conversation",
+      "description": "Addresses sexual health topics relevant to recovery including consent, safe sex, intimacy in recovery, and the effects of substances on sexual health and decision-making.",
+      "category": "Health & Physical Wellness",
+      "category_order": 11,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 126,
+      "title": "Tobacco and recovery: the often overlooked addiction",
+      "description": "Examines tobacco use in the recovery population, its health consequences, and evidence-based cessation strategies in a non-shaming, motivating format.",
+      "category": "Health & Physical Wellness",
+      "category_order": 11,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 127,
+      "title": "Caffeine, sugar, and other substitute behaviors in early recovery",
+      "description": "Addresses cross-addiction and substitute behaviors common in early recovery \u2014 including caffeine, sugar, and screen time \u2014 with a harm-reduction and awareness lens.",
+      "category": "Health & Physical Wellness",
+      "category_order": 11,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 128,
+      "title": "Healing the gut: how substances affect digestion and what helps",
+      "description": "Covers the GI effects of substance use and early recovery, including nausea, appetite disruption, and practical strategies for digestive health during recovery.",
+      "category": "Health & Physical Wellness",
+      "category_order": 11,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 129,
+      "title": "Body image in recovery: making peace with your physical self",
+      "description": "Addresses body image concerns common in recovery \u2014 including weight changes, physical damage, and appearance-related shame \u2014 with self-compassion and body-neutral strategies.",
+      "category": "Health & Physical Wellness",
+      "category_order": 11,
+      "session_type": "both",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 130,
+      "title": "Understanding hepatitis C and liver health for people in recovery",
+      "description": "Targeted health education on hepatitis C risk, testing, treatment, and liver health for populations at higher risk due to injection drug use or alcohol use.",
+      "category": "Health & Physical Wellness",
+      "category_order": 11,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 131,
+      "title": "The connection between physical health and mental health in recovery",
+      "description": "Explores bidirectional relationships between physical wellness practices and mental health outcomes in recovery, motivating integrated self-care.",
+      "category": "Health & Physical Wellness",
+      "category_order": 11,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 132,
+      "title": "Preparing for release: reentry planning 60 days before you leave",
+      "description": "A structured pre-release planning session covering housing, employment, benefits, transportation, and recovery support services \u2014 designed to reduce chaos in the first days after release.",
+      "category": "Specialized Populations",
+      "category_order": 12,
+      "session_type": "group",
+      "setting_type": "jail"
+    },
+    {
+      "row_number": 133,
+      "title": "Transitioning from incarceration to community: mindset and expectations",
+      "description": "Addresses the psychological and behavioral adjustment required when moving from a controlled institutional environment to independent community living.",
+      "category": "Specialized Populations",
+      "category_order": 12,
+      "session_type": "group",
+      "setting_type": "jail"
+    },
+    {
+      "row_number": 134,
+      "title": "Peer pressure in adolescence: when your friends use and you don't",
+      "description": "Age-appropriate session helping young people identify and respond to peer pressure around substances, with practical refusal scripts and social alternatives.",
+      "category": "Specialized Populations",
+      "category_order": 12,
+      "session_type": "group",
+      "setting_type": "youth"
+    },
+    {
+      "row_number": 135,
+      "title": "Social media, comparison, and recovery for young people",
+      "description": "Tailored for adolescents and young adults, examining how social media affects self-image, peer norms around substances, and recovery motivation.",
+      "category": "Specialized Populations",
+      "category_order": 12,
+      "session_type": "group",
+      "setting_type": "youth"
+    },
+    {
+      "row_number": 136,
+      "title": "School reintegration after treatment: navigating academic life in recovery",
+      "description": "Practical guidance for young people returning to school after treatment, including managing relationships, academic catch-up, and disclosure decisions.",
+      "category": "Specialized Populations",
+      "category_order": 12,
+      "session_type": "individual",
+      "setting_type": "youth"
+    },
+    {
+      "row_number": 137,
+      "title": "Family communication for teens in recovery",
+      "description": "Skills and strategies for young people to communicate their needs, set limits, and navigate family conflict while maintaining their recovery.",
+      "category": "Specialized Populations",
+      "category_order": 12,
+      "session_type": "group",
+      "setting_type": "youth"
+    },
+    {
+      "row_number": 138,
+      "title": "Motherhood and recovery: navigating parenting while healing",
+      "description": "Supports women in recovery who are parenting, addressing guilt, practical parenting challenges, child welfare system navigation, and building parenting confidence.",
+      "category": "Specialized Populations",
+      "category_order": 12,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 139,
+      "title": "Domestic violence awareness: recognizing patterns and finding safety",
+      "description": "Provides education on domestic violence warning signs, safety planning, and resources \u2014 framed as empowerment and information rather than crisis intervention.",
+      "category": "Specialized Populations",
+      "category_order": 12,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 140,
+      "title": "Women's health in recovery: topics specific to women's experience",
+      "description": "Covers reproductive health, hormonal impacts of substances, sexual trauma awareness, and women-specific recovery considerations in a safe, women-centered format.",
+      "category": "Specialized Populations",
+      "category_order": 12,
+      "session_type": "group",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 141,
+      "title": "Understanding co-occurring disorders: when the diagnosis is more than one thing",
+      "description": "Psychoeducation for dual diagnosis populations on how mental health conditions and substance use disorders interact, reinforce each other, and require integrated support.",
+      "category": "Specialized Populations",
+      "category_order": 12,
+      "session_type": "group",
+      "setting_type": "developmental-disability"
+    },
+    {
+      "row_number": 142,
+      "title": "Medication management for co-occurring mental health and substance use",
+      "description": "Practical guidance for people managing psychiatric medications alongside substance use recovery, including adherence, side effects, and communication with prescribers.",
+      "category": "Specialized Populations",
+      "category_order": 12,
+      "session_type": "individual",
+      "setting_type": "developmental-disability"
+    },
+    {
+      "row_number": 143,
+      "title": "When mental health and substance use feed each other: breaking the cycle",
+      "description": "An advanced dual diagnosis session exploring the self-medication hypothesis and practical tools for interrupting the cycle between mental health symptoms and substance use.",
+      "category": "Specialized Populations",
+      "category_order": 12,
+      "session_type": "group",
+      "setting_type": "developmental-disability"
+    },
+    {
+      "row_number": 144,
+      "title": "Occupational identity and recovery for veterans and first responders",
+      "description": "Explores how professional identity, culture, and occupational trauma affect recovery for veterans and first responders, with strengths-based reintegration strategies.",
+      "category": "Specialized Populations",
+      "category_order": 12,
+      "session_type": "individual",
+      "setting_type": "general"
+    },
+    {
+      "row_number": 145,
+      "title": "Transitioning from military to civilian life: a recovery lens",
+      "description": "Addresses the unique challenges veterans face in transitioning to civilian life \u2014 including identity shifts, culture shock, and finding new purpose \u2014 within a recovery framework.",
+      "category": "Specialized Populations",
+      "category_order": 12,
+      "session_type": "group",
+      "setting_type": "general"
+    }
+  ]
+}

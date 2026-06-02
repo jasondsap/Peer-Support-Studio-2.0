@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Generated lesson-template data migration (contains live lesson content)
+migrations/008_lesson_templates_data.sql
