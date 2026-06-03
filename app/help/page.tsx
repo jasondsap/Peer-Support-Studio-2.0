@@ -8,7 +8,8 @@ import {
     ArrowRight, ChevronDown, ChevronUp, Mail, Heart, Users, Shield,
     Brain, Lightbulb, CheckCircle, TrendingUp,
     Award, Phone, MapPin, ClipboardList, MessageSquare,
-    ClipboardCheck, Calendar, Upload, PenLine, Zap
+    ClipboardCheck, Calendar, Upload, PenLine, Zap,
+    Library, Tablet, Package
 } from 'lucide-react';
 
 interface FAQItem {
@@ -371,6 +372,122 @@ export default function HelpCenter() {
                 { question: 'How do I assign a participant to a location?', answer: 'When creating or editing a participant, select a location from the dropdown. You can also set locations during intake.' },
                 { question: 'Can a participant be at multiple locations?', answer: 'Currently each participant has one primary location. This represents where they primarily receive services.' }
             ]
+        },
+        {
+            id: 'lesson-library',
+            name: 'Lesson Library',
+            route: '/lesson-library',
+            icon: <Library className="w-6 h-6" />,
+            color: '#10B981',
+            description: 'Browse 145 ready-made peer support lessons created by the PSS team. Filter by category, session type, and setting, preview the full facilitator guide and any presentation, then add a lesson to your own library with one click to customize and use.',
+            quickStart: [
+                'Go to Lesson Library from the Dashboard',
+                'Filter by category, session type, or setting — or search by title',
+                'Click a lesson to read the full facilitator guide and participant handout',
+                'Click "View Presentation" to preview the ready-made slide deck',
+                'Click "Use this lesson" to copy it into your own library',
+                'Customize your copy, download a PDF, or send a survey like any saved lesson'
+            ],
+            tips: [
+                'Use the three filters together to quickly narrow 145 lessons to the right fit',
+                'Most lessons include a ready-made presentation — look for the "Presentation" badge',
+                '"Use this lesson" makes your own editable copy; the shared template never changes',
+                'Your cloned lesson keeps the presentation, so you can present right away',
+                'The "Used X times" badge shows which lessons other facilitators rely on'
+            ],
+            faqs: [
+                { question: 'What\'s the difference between Lesson Library and Lesson Builder?', answer: 'Lesson Builder generates a brand-new lesson with AI. Lesson Library is a curated collection of 145 ready-made lessons you can browse and reuse instantly — no waiting for generation.' },
+                { question: 'Do I edit the template directly?', answer: 'No. "Use this lesson" creates your own private copy in My Lessons. Edits to your copy never affect the shared template, and other users aren\'t affected.' },
+                { question: 'Can I use the presentation?', answer: 'Yes — 144 of the 145 lessons include a ready-made presentation. View it from the lesson detail page, and your cloned copy keeps the link so you can present immediately.' }
+            ]
+        },
+        {
+            id: 'group-attendance',
+            name: 'Group Attendance',
+            route: '/groups',
+            icon: <Users className="w-6 h-6" />,
+            color: '#06B6D4',
+            description: 'Track group meetings and recovery events — like SMART Recovery, Recovery Dharma, or community outreach — and record who attended. Add attendees individually or capture a quick headcount, and every check-in shows up on each participant\'s record.',
+            quickStart: [
+                'Go to Group Attendance from the Dashboard',
+                'Click "New Activity" and enter the name, type, date, time, and location',
+                'Open the activity and click "Add attendee" to search and add participants',
+                'Or enter a Total headcount for a quick count without names',
+                'Mark each attendee Present, Excused, or No-show',
+                'Edit or cancel the activity anytime from its page'
+            ],
+            tips: [
+                'Use the bulk headcount for open drop-in groups where you just need a total',
+                'Add named attendees when you want the visit to show on each participant\'s record',
+                'Attendance appears automatically on the participant\'s "Activity" tab',
+                'Pair this with the Kiosk so participants can check themselves in',
+                'Cancelled a group? Use Delete — it leaves the list but attendance is preserved'
+            ],
+            faqs: [
+                { question: 'What\'s the difference between a headcount and named attendance?', answer: 'A headcount is a single number for a quick total. Named attendance records each person, which links the visit to their participant record. You can use either or both on the same activity.' },
+                { question: 'Who can edit or cancel an activity?', answer: 'Supervisors, admins, and owners can edit or cancel any activity. A peer specialist can edit or cancel an activity they created.' },
+                { question: 'Does deleting an activity remove attendance?', answer: 'No. Deleting cancels the activity and removes it from the list, but the attendance records are preserved.' },
+                { question: 'How do participants check themselves in?', answer: 'Set up the Kiosk (Dashboard → Kiosk). Participants check in on a tablet with their name and birthdate or a personal code, and it lands on the activity roster automatically.' }
+            ]
+        },
+        {
+            id: 'service-resource-log',
+            name: 'Service & Resource Log',
+            route: '/service-resource-log',
+            icon: <Package className="w-6 h-6" />,
+            color: '#F59E0B',
+            description: 'Log the operational services your organization provides — transportation (rides, mileage), volunteer hours, and supplies or goods distributed (clothing, food, harm-reduction kits). One unified log with CSV export built for grant reporting.',
+            quickStart: [
+                'Go to Service & Resource Log from the Dashboard',
+                'Pick a tab: Transportation, Volunteer, or Supplies',
+                'Click "New entry" and fill in the details (participant is optional)',
+                'For supplies, choose items from your catalog — totals are calculated for you',
+                'Click "Export CSV" anytime to pull a report for grants',
+                'Admins can click "Manage items" on the Supplies tab to curate the catalog'
+            ],
+            tips: [
+                'Leave the participant blank for anonymous distributions, like a walk-in grabbing supplies',
+                'Supplies totals are calculated from quantity × unit cost automatically',
+                'Admins and owners can add or remove catalog items under "Manage items"',
+                'Entries tied to a participant show on their "Activity" tab',
+                'Export CSV gives you date, type, participant, totals, and item details for reporting'
+            ],
+            faqs: [
+                { question: 'Why are these three logs combined?', answer: 'Transportation, volunteer hours, and supplies are all operational records used for grant reporting, so they live in one place with a shared export — rather than three separate tools.' },
+                { question: 'Is a participant required?', answer: 'No. Participant is optional, so you can log supplies handed to an anonymous walk-in or general volunteer hours not tied to one person.' },
+                { question: 'Where do the supply items come from?', answer: 'Each organization has a supplies catalog. It starts with a common set (hygiene kits, food, harm-reduction supplies, and more), and admins can add or remove items under "Manage items."' },
+                { question: 'How do I report for a grant?', answer: 'Use "Export CSV" on any tab. It produces a spreadsheet with dates, types, participants, cost and hour totals, and item breakdowns you can filter and total.' }
+            ]
+        },
+        {
+            id: 'kiosk',
+            name: 'Kiosk',
+            route: '/settings/kiosk',
+            icon: <Tablet className="w-6 h-6" />,
+            color: '#8B5CF6',
+            description: 'Set up a self-service check-in station on a tablet at your front desk. Participants check into today\'s groups themselves using their name and birthdate or a personal code — no staff data entry. Every organization gets its own secure kiosk link and QR code.',
+            quickStart: [
+                'Go to Kiosk from the Dashboard (admins and owners)',
+                'Copy the kiosk link or scan the QR code with your tablet',
+                'On the iPad, turn on Guided Access so it stays locked to the check-in screen',
+                'Participants tap today\'s group, then enter name + birthdate or their code',
+                'Find a participant\'s personal code on their record\'s "Activity" tab',
+                'Rotate the link anytime if a device is lost'
+            ],
+            tips: [
+                'Each participant\'s 8-character code is on their record — share it for faster check-in',
+                'The kiosk only shows groups scheduled for today, so create the activity first',
+                'Treat the kiosk link like a password; rotate it if a tablet goes missing',
+                'Kiosk check-ins land on the activity roster and the participant\'s record, like staff entries',
+                'Use iOS Guided Access to keep the tablet locked to the kiosk page'
+            ],
+            faqs: [
+                { question: 'Is the kiosk safe with participant data?', answer: 'Yes. The kiosk never shows a list of participants and only confirms a first name on a successful match. It uses exact matching, is rate-limited with lockout after repeated failed attempts, and logs every attempt.' },
+                { question: 'What happens if someone isn\'t found?', answer: 'The kiosk shows a generic "please see staff" message — it never reveals whether a person exists, which protects privacy. Staff can add them manually.' },
+                { question: 'Where do participants get their code?', answer: 'Every participant has an 8-character code on their record\'s "Activity" tab. Staff can share it or generate a new one with the "New code" button.' },
+                { question: 'Can new people sign themselves up at the kiosk?', answer: 'Not yet — the current kiosk is check-in only. Unknown visitors are directed to staff. Self-enrollment may be added in a later update.' },
+                { question: 'How do I move the kiosk to a different tablet?', answer: 'Just open the kiosk link on the new tablet. To invalidate the old device, rotate the link first.' }
+            ]
         }
     ];
 
@@ -385,7 +502,10 @@ export default function HelpCenter() {
         { question: 'How do PDFs work?', answer: 'Most tools offer PDF download. PDFs are generated instantly and include all relevant information. They\'re great for sharing with participants, supervisors, or keeping for your records.' },
         { question: 'What is the 10-domain recovery plan framework?', answer: 'Recovery Plans use 10 evidence-informed domains: Substance Use, Emotional Wellbeing, Physical Health, Civic Engagement, Functional Wellbeing, Meaning & Purpose, Housing, Risk Taking, Recovery Experience, and Social Support. Each domain includes template goals, activities, and outcome measures.' },
         { question: 'How do Intake, Recovery Plans, and Goals work together?', answer: 'Start with Intake to capture a participant\'s background and history. Use Recovery Plans to create a structured plan across life domains. Use the Goal Generator to create specific SMART goals within those domains. All three are accessible from the participant detail page.' },
-        { question: 'How do I set up locations for my organization?', answer: 'Go to Locations from the header navigation. Create locations with names and addresses. Once created, they appear in participant filters and can be assigned when creating or editing participants.' }
+        { question: 'How do I set up locations for my organization?', answer: 'Go to Locations from the header navigation. Create locations with names and addresses. Once created, they appear in participant filters and can be assigned when creating or editing participants.' },
+        { question: 'How do Group Attendance and the Kiosk work together?', answer: 'Create a group activity in Group Attendance for each meeting or event. Staff can add attendees by name, or participants can check themselves in at the Kiosk using their name and birthdate or a personal code. Either way, attendance lands on the activity roster and on each participant\'s record.' },
+        { question: 'What can I track in the Service & Resource Log?', answer: 'Three things, in one place: transportation (rides and mileage), volunteer hours, and supplies or goods distributed (clothing, food, harm-reduction kits, and more). Each has a CSV export designed for grant reporting, and a participant is optional so you can log anonymous distributions.' },
+        { question: 'Is the self-service Kiosk safe with participant data?', answer: 'Yes. The Kiosk never shows a list of participants — it only confirms a first name on a successful match. It uses exact matching, is rate-limited with lockout after repeated failed attempts, logs every attempt, and its link can be rotated if a device is lost.' }
     ];
 
     const filteredTools = tools.filter(tool =>
@@ -497,8 +617,9 @@ export default function HelpCenter() {
                             </h2>
                             <p className="text-gray-600 mb-6">
                                 Peer Support Studio is a comprehensive toolkit designed specifically for Peer Support Specialists. 
-                                Our AI-powered tools help you create lessons, build recovery plans, complete participant intakes, set recovery goals, document sessions, find resources, 
-                                assess recovery capital, and review your notes for billing compliance - all while maintaining the 
+                                Our AI-powered tools help you create lessons, build recovery plans, complete participant intakes, set recovery goals, document sessions, find resources,
+                                assess recovery capital, and review your notes for billing compliance. You can also browse a library of ready-made lessons,
+                                track group attendance, log transportation, volunteer, and supply services for grant reporting, and let participants check themselves in at a front-desk kiosk - all while maintaining the
                                 human-centered, trauma-informed approach that defines great peer support.
                             </p>
 
@@ -602,6 +723,22 @@ export default function HelpCenter() {
                                 <div className="flex items-start gap-3">
                                     <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
                                     <p className="text-gray-600">Assess <strong>Recovery Capital</strong> to identify participant strengths</p>
+                                </div>
+                                <div className="flex items-start gap-3">
+                                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                                    <p className="text-gray-600">Browse the <strong>Lesson Library</strong> for 145 ready-made lessons to reuse</p>
+                                </div>
+                                <div className="flex items-start gap-3">
+                                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                                    <p className="text-gray-600">Record <strong>Group Attendance</strong> for drop-in meetings and events</p>
+                                </div>
+                                <div className="flex items-start gap-3">
+                                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                                    <p className="text-gray-600">Log transportation, volunteer hours, and supplies in the <strong>Service &amp; Resource Log</strong></p>
+                                </div>
+                                <div className="flex items-start gap-3">
+                                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                                    <p className="text-gray-600">Set up the <strong>Kiosk</strong> for self-service tablet check-in</p>
                                 </div>
                             </div>
                         </div>
