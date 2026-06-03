@@ -75,14 +75,12 @@ export async function POST(
         } else if (method === 'name_dob') {
             const first = String(body.first_name || '').trim();
             const last = String(body.last_name || '').trim();
-            const dob = String(body.dob || '').trim();
-            if (first && last && dob) {
+            if (first && last) {
                 matches = (await sql`
                     SELECT id, first_name FROM participants
                     WHERE organization_id = ${orgId} AND status = 'active'
                       AND LOWER(first_name) = LOWER(${first})
                       AND LOWER(last_name) = LOWER(${last})
-                      AND date_of_birth = ${dob}::date
                     LIMIT 2
                 `) as any[];
             }

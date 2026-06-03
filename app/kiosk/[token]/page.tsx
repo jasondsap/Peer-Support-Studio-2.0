@@ -133,7 +133,7 @@ export default function KioskPage() {
     }
 
     const canSubmit =
-        method === 'code' ? code.trim().length > 0 : firstName.trim() && lastName.trim() && dob;
+        method === 'code' ? code.trim().length > 0 : !!(firstName.trim() && lastName.trim());
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-[#0E2235] to-[#1A73A8] flex items-center justify-center p-6">
@@ -201,7 +201,7 @@ export default function KioskPage() {
                                     method === 'name_dob' ? 'bg-[#1A73A8] text-white' : 'bg-gray-100 text-gray-600'
                                 }`}
                             >
-                                <UserCheck className="w-5 h-5" /> Name & birthdate
+                                <UserCheck className="w-5 h-5" /> Name
                             </button>
                             <button
                                 onClick={() => setMethod('code')}
@@ -227,15 +227,6 @@ export default function KioskPage() {
                                         placeholder="Last name"
                                         value={lastName}
                                         onChange={(e) => setLastName(e.target.value)}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm text-gray-500 mb-1">Date of birth</label>
-                                    <input
-                                        type="date"
-                                        className="w-full px-4 py-4 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-[#1A73A8]"
-                                        value={dob}
-                                        onChange={(e) => setDob(e.target.value)}
                                     />
                                 </div>
                             </div>
