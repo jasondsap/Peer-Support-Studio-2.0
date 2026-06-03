@@ -14,7 +14,11 @@ import {
     HandHeart,
     Package,
     Trash2,
+    Settings,
 } from 'lucide-react';
+
+const CATEGORIES = ['clothing', 'food', 'harm_reduction', 'hygiene', 'other'];
+const catLabel = (c: string) => (c === 'harm_reduction' ? 'Harm reduction' : c.charAt(0).toUpperCase() + c.slice(1));
 
 type LogType = 'transportation' | 'volunteer' | 'supplies';
 
@@ -48,6 +52,9 @@ export default function ServiceResourceLogPage() {
     const [logs, setLogs] = useState<LogRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
+    const [showCatalog, setShowCatalog] = useState(false);
+    const role = (session as any)?.currentOrganization?.role || '';
+    const canManage = role === 'admin' || role === 'owner';
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -121,22 +128,33 @@ export default function ServiceResourceLogPage() {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex gap-2 mb-6">
-                    {TABS.map((t) => {
-                        const Icon = t.icon;
-                        return (
-                            <button
-                                key={t.type}
-                                onClick={() => setTab(t.type)}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${
-                                    tab === t.type ? 'bg-[#1A73A8] text-white' : 'text-gray-600 hover:bg-gray-100 bg-white border border-gray-200'
-                                }`}
-                            >
-                                <Icon className="w-4 h-4" />
-                                {t.label}
-                            </button>
-                        );
-                    })}
+                <div className="flex items-center justify-between gap-2 mb-6">
+                    <div className="flex gap-2">
+                        {TABS.map((t) => {
+                            const Icon = t.icon;
+                            return (
+                                <button
+                                    key={t.type}
+                                    onClick={() => setTab(t.type)}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${
+                                        tab === t.type ? 'bg-[#1A73A8] text-white' : 'text-gray-600 hover:bg-gray-100 bg-white border border-gray-200'
+                                    }`}
+                                >
+                                    <Icon className="w-4 h-4" />
+                                    {t.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {tab === 'supplies' && canManage && (
+                        <button
+                            onClick={() => setShowCatalog(true)}
+                            className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 bg-white border border-gray-200 flex items-center gap-2"
+                        >
+                            <Settings className="w-4 h-4" />
+                            Manage items
+                        </button>
+                    )}
                 </div>
 
                 {loading ? (
@@ -181,6 +199,151 @@ export default function ServiceResourceLogPage() {
                     }}
                 />
             )}
+
+            {showCatalog && <CatalogManager onClose={() => setShowCatalog(false)} />}
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+function CatalogManager({ onClose }: { onClose: () => void }) {
+    const [items, setItems] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [name, setName] = useState('');
+    const [category, setCategory] = useState('other');
+    const [unit, setUnit] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/resource-items');
+            const data = await res.json();
+            setItems(data.items || []);
+        } catch {
+            setItems([]);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    const addItem = async () => {
+        if (!name.trim()) return;
+        setSaving(true);
+        try {
+            const res = await fetch('/api/resource-items', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name.trim(), category, unit: unit.trim() || null }),
+            });
+            if (!res.ok) throw new Error();
+            setName('');
+            setUnit('');
+            await load();
+        } catch {
+            alert('Could not add item.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const removeItem = async (id: string) => {
+        if (!confirm('Remove this item from the catalog? Past log entries are unaffected.')) return;
+        setItems((arr) => arr.filter((i) => i.id !== id));
+        await fetch(`/api/resource-items?id=${id}`, { method: 'DELETE' }).catch(() => {});
+    };
+
+    const grouped = CATEGORIES.map((c) => ({ category: c, items: items.filter((i) => i.category === c) })).filter(
+        (g) => g.items.length > 0
+    );
+
+    const inputCls =
+        'px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A73A8] text-sm';
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl max-w-lg w-full max-h-[88vh] flex flex-col">
+                <div className="flex items-center justify-between p-5 border-b border-gray-100">
+                    <h3 className="font-semibold text-[#0E2235]">Manage supply items</h3>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+                        <X className="w-5 h-5 text-gray-400" />
+                    </button>
+                </div>
+
+                {/* Add form */}
+                <div className="p-5 border-b border-gray-100">
+                    <div className="flex flex-wrap gap-2">
+                        <input
+                            className={`${inputCls} flex-1 min-w-[140px]`}
+                            placeholder="New item name"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && addItem()}
+                        />
+                        <select className={inputCls} value={category} onChange={(e) => setCategory(e.target.value)}>
+                            {CATEGORIES.map((c) => (
+                                <option key={c} value={c}>
+                                    {catLabel(c)}
+                                </option>
+                            ))}
+                        </select>
+                        <input
+                            className={`${inputCls} w-20`}
+                            placeholder="unit"
+                            value={unit}
+                            onChange={(e) => setUnit(e.target.value)}
+                        />
+                        <button
+                            onClick={addItem}
+                            disabled={saving || !name.trim()}
+                            className="px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-50"
+                            style={{ background: 'linear-gradient(135deg, #1A73A8 0%, #30B27A 100%)' }}
+                        >
+                            Add
+                        </button>
+                    </div>
+                </div>
+
+                {/* List */}
+                <div className="p-5 overflow-y-auto">
+                    {loading ? (
+                        <div className="py-6 text-center">
+                            <Loader2 className="w-6 h-6 animate-spin text-[#1A73A8] mx-auto" />
+                        </div>
+                    ) : items.length === 0 ? (
+                        <p className="text-sm text-gray-400 text-center py-4">No items yet. Add some above.</p>
+                    ) : (
+                        grouped.map((g) => (
+                            <div key={g.category} className="mb-4">
+                                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                                    {catLabel(g.category)}
+                                </p>
+                                {g.items.map((it) => (
+                                    <div
+                                        key={it.id}
+                                        className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50"
+                                    >
+                                        <span className="text-sm text-[#0E2235]">
+                                            {it.name}
+                                            {it.unit && <span className="text-gray-400"> · {it.unit}</span>}
+                                        </span>
+                                        <button
+                                            onClick={() => removeItem(it.id)}
+                                            className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

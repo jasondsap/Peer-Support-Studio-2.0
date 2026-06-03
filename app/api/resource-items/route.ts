@@ -73,3 +73,73 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to add item' }, { status: 500 });
     }
 }
+
+// PATCH - edit a catalog item (admin/owner)
+export async function PATCH(request: NextRequest) {
+    try {
+        const session = await getSession();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const ctx = await getUserContext(session);
+        if (!ctx) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        if (!MANAGE_ROLES.includes(ctx.role)) {
+            return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+        }
+
+        const body = await request.json();
+        const { id, name, category, unit, default_cost, active } = body;
+        if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+
+        const result = await sql`
+            UPDATE resource_items SET
+                name = COALESCE(${name ?? null}, name),
+                category = COALESCE(${category ?? null}, category),
+                unit = COALESCE(${unit ?? null}, unit),
+                default_cost = COALESCE(${default_cost ?? null}, default_cost),
+                active = COALESCE(${active ?? null}, active)
+            WHERE id = ${id}::uuid AND organization_id = ${ctx.organizationId}
+            RETURNING *
+        `;
+        if (result.length === 0) {
+            return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+        }
+        return NextResponse.json({ success: true, item: result[0] });
+    } catch (error: any) {
+        console.error('Resource items PATCH error:', error);
+        return NextResponse.json({ error: 'Failed to update item' }, { status: 500 });
+    }
+}
+
+// DELETE - remove a catalog item (admin/owner). Past log entries are unaffected
+// (item name/category are denormalized into each log's details at save time).
+export async function DELETE(request: NextRequest) {
+    try {
+        const session = await getSession();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const ctx = await getUserContext(session);
+        if (!ctx) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        if (!MANAGE_ROLES.includes(ctx.role)) {
+            return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+        }
+
+        const { searchParams } = new URL(request.url);
+        const id = searchParams.get('id');
+        if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+
+        const result = await sql`
+            DELETE FROM resource_items
+            WHERE id = ${id}::uuid AND organization_id = ${ctx.organizationId}
+            RETURNING id
+        `;
+        if (result.length === 0) {
+            return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+        }
+        return NextResponse.json({ success: true });
+    } catch (error: any) {
+        console.error('Resource items DELETE error:', error);
+        return NextResponse.json({ error: 'Failed to delete item' }, { status: 500 });
+    }
+}
