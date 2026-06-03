@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, getInternalUserId } from '@/lib/auth';
 import { sql } from '@/lib/db';
+import { generateUniqueKioskCode } from '@/lib/kiosk';
 
 // GET - Fetch participants for the current user's organization
 export async function GET(request: NextRequest) {
@@ -212,6 +213,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Assign a kiosk check-in code unique within the org.
+        const kioskCode = await generateUniqueKioskCode(organization_id);
+
         const result = await sql`
             INSERT INTO participants (
                 organization_id, first_name, last_name, preferred_name,
@@ -219,7 +223,7 @@ export async function POST(request: NextRequest) {
                 address_line1, address_line2, city, state, zip,
                 emergency_contact_name, emergency_contact_phone, emergency_contact_relationship,
                 intake_date, referral_source, internal_notes, status,
-                primary_pss_id, location_id
+                primary_pss_id, location_id, kiosk_code
             ) VALUES (
                 ${organization_id}::uuid,
                 ${first_name},
@@ -242,7 +246,8 @@ export async function POST(request: NextRequest) {
                 ${internal_notes || null},
                 'active',
                 ${primary_pss_id || userId}::uuid,
-                ${location_id || null}
+                ${location_id || null},
+                ${kioskCode}
             )
             RETURNING *
         `;

@@ -1219,6 +1219,32 @@ export default function ParticipantDetailPage() {
             {/* ACTIVITY TAB - group attendance + service & resource logs */}
             {/* ================================================================ */}
             {activeTab === 'activity' && (
+                <div className="space-y-6">
+                    <div className="bg-white rounded-2xl border border-[#E7E9EC] p-6 flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                            <h3 className="text-sm font-medium text-gray-500 mb-1">Kiosk check-in code</h3>
+                            <p className="text-2xl font-bold tracking-widest text-[#0E2235]">
+                                {(participant as any).kiosk_code || '—'}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                                {displayName} can enter this at the front-desk kiosk instead of their name and birthdate.
+                            </p>
+                        </div>
+                        <button
+                            onClick={async () => {
+                                if (!confirm('Generate a new code? The old one will stop working.')) return;
+                                try {
+                                    const res = await fetch(`/api/participants/${participant.id}/kiosk-code`, { method: 'POST' });
+                                    const data = await res.json();
+                                    if (res.ok) setParticipant({ ...participant, kiosk_code: data.kiosk_code } as any);
+                                } catch { /* no-op */ }
+                            }}
+                            className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                            New code
+                        </button>
+                    </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="bg-white rounded-2xl border border-[#E7E9EC] p-6">
                         <h3 className="text-lg font-semibold text-[#0E2235] mb-4 flex items-center gap-2">
@@ -1288,6 +1314,7 @@ export default function ParticipantDetailPage() {
                             </div>
                         )}
                     </div>
+                </div>
                 </div>
             )}
 
