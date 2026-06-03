@@ -15,6 +15,7 @@ import {
     Package,
     Trash2,
     Settings,
+    Pencil,
 } from 'lucide-react';
 
 const CATEGORIES = ['clothing', 'food', 'harm_reduction', 'hygiene', 'other'];
@@ -26,7 +27,9 @@ interface LogRow {
     id: string;
     log_type: LogType;
     service_date: string;
+    participant_id: string | null;
     participant_name: string | null;
+    logged_by_name: string | null;
     total_cost: string | null;
     total_hours: string | null;
     details: any;
@@ -52,6 +55,7 @@ export default function ServiceResourceLogPage() {
     const [logs, setLogs] = useState<LogRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
+    const [editing, setEditing] = useState<LogRow | null>(null);
     const [showCatalog, setShowCatalog] = useState(false);
     const role = (session as any)?.currentOrganization?.role || '';
     const canManage = role === 'admin' || role === 'owner';
@@ -76,6 +80,22 @@ export default function ServiceResourceLogPage() {
         }
         if (authStatus === 'authenticated') load();
     }, [authStatus, load]);
+
+    const remove = async (l: LogRow) => {
+        if (!confirm('Delete this entry? This cannot be undone.')) return;
+        setLogs((arr) => arr.filter((x) => x.id !== l.id));
+        try {
+            const res = await fetch('/api/service-resource-log', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: l.id, status: 'archived' }),
+            });
+            if (!res.ok) throw new Error();
+        } catch {
+            alert('Could not delete the entry.');
+            load();
+        }
+    };
 
     if (authStatus === 'loading') {
         return (
@@ -117,7 +137,10 @@ export default function ServiceResourceLogPage() {
                             Export CSV
                         </a>
                         <button
-                            onClick={() => setShowForm(true)}
+                            onClick={() => {
+                                setEditing(null);
+                                setShowForm(true);
+                            }}
                             className="px-5 py-2.5 text-white font-medium rounded-lg hover:opacity-90 flex items-center gap-2 text-sm"
                             style={{ background: 'linear-gradient(135deg, #1A73A8 0%, #30B27A 100%)' }}
                         >
@@ -168,11 +191,14 @@ export default function ServiceResourceLogPage() {
                 ) : (
                     <div className="bg-white rounded-2xl shadow-sm border border-[#E7E9EC] overflow-hidden">
                         {logs.map((l) => (
-                            <div key={l.id} className="flex items-center gap-4 px-6 py-4 border-b border-gray-50">
+                            <div key={l.id} className="flex items-center gap-4 px-6 py-4 border-b border-gray-50 group">
                                 <div className="w-24 text-sm text-gray-500">{fmtDate(l.service_date)}</div>
                                 <div className="flex-1 text-sm text-[#0E2235]">
                                     {l.participant_name || <span className="text-gray-400">No participant</span>}
                                     <div className="text-xs text-gray-500">{summarize(l)}</div>
+                                    {l.logged_by_name && (
+                                        <div className="text-xs text-gray-400 mt-0.5">Logged by {l.logged_by_name}</div>
+                                    )}
                                 </div>
                                 <div className="text-sm text-right text-gray-600">
                                     {l.total_cost != null && Number(l.total_cost) > 0 && (
@@ -181,6 +207,25 @@ export default function ServiceResourceLogPage() {
                                     {l.total_hours != null && Number(l.total_hours) > 0 && (
                                         <div className="text-xs">{Number(l.total_hours)} hrs</div>
                                     )}
+                                </div>
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                        onClick={() => {
+                                            setEditing(l);
+                                            setShowForm(true);
+                                        }}
+                                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-[#1A73A8]"
+                                        title="Edit entry"
+                                    >
+                                        <Pencil className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => remove(l)}
+                                        className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600"
+                                        title="Delete entry"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -192,9 +237,14 @@ export default function ServiceResourceLogPage() {
                 <EntryForm
                     type={tab}
                     orgId={currentOrg?.id}
-                    onClose={() => setShowForm(false)}
+                    editing={editing}
+                    onClose={() => {
+                        setShowForm(false);
+                        setEditing(null);
+                    }}
                     onSaved={() => {
                         setShowForm(false);
+                        setEditing(null);
                         load();
                     }}
                 />
@@ -369,40 +419,43 @@ function summarize(l: LogRow): string {
 function EntryForm({
     type,
     orgId,
+    editing,
     onClose,
     onSaved,
 }: {
     type: LogType;
     orgId?: string;
+    editing?: LogRow | null;
     onClose: () => void;
     onSaved: () => void;
 }) {
+    const d = editing?.details || {};
     const [saving, setSaving] = useState(false);
-    const [serviceDate, setServiceDate] = useState(today());
-    const [notes, setNotes] = useState('');
+    const [serviceDate, setServiceDate] = useState((editing?.service_date || today()).slice(0, 10));
+    const [notes, setNotes] = useState(editing?.notes || '');
 
     // Participant (optional)
-    const [participantId, setParticipantId] = useState('');
-    const [participantLabel, setParticipantLabel] = useState('');
+    const [participantId, setParticipantId] = useState(editing?.participant_id || '');
+    const [participantLabel, setParticipantLabel] = useState(editing?.participant_name || '');
     const [pSearch, setPSearch] = useState('');
     const [pResults, setPResults] = useState<any[]>([]);
 
     // Transportation
-    const [mode, setMode] = useState('');
-    const [mileage, setMileage] = useState('');
-    const [startPoint, setStartPoint] = useState('');
-    const [endPoint, setEndPoint] = useState('');
-    const [cost, setCost] = useState('');
-    const [purpose, setPurpose] = useState('');
+    const [mode, setMode] = useState(d.mode || '');
+    const [mileage, setMileage] = useState(d.mileage != null ? String(d.mileage) : '');
+    const [startPoint, setStartPoint] = useState(d.start_point || '');
+    const [endPoint, setEndPoint] = useState(d.end_point || '');
+    const [cost, setCost] = useState(editing?.total_cost != null ? String(editing.total_cost) : '');
+    const [purpose, setPurpose] = useState(d.purpose || '');
 
     // Volunteer
-    const [activity, setActivity] = useState('');
-    const [role, setRole] = useState('');
-    const [hours, setHours] = useState('');
+    const [activity, setActivity] = useState(d.activity || '');
+    const [role, setRole] = useState(d.role || '');
+    const [hours, setHours] = useState(editing?.total_hours != null ? String(editing.total_hours) : '');
 
     // Supplies
     const [catalog, setCatalog] = useState<any[]>([]);
-    const [items, setItems] = useState<any[]>([]);
+    const [items, setItems] = useState<any[]>(Array.isArray(d.items) ? d.items : []);
 
     useEffect(() => {
         if (type === 'supplies') {
@@ -461,17 +514,31 @@ function EntryForm({
 
         try {
             const res = await fetch('/api/service-resource-log', {
-                method: 'POST',
+                method: editing ? 'PATCH' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    log_type: type,
-                    service_date: serviceDate,
-                    participant_id: participantId || null,
-                    details,
-                    total_cost,
-                    total_hours,
-                    notes: notes || null,
-                }),
+                body: JSON.stringify(
+                    editing
+                        ? {
+                              id: editing.id,
+                              service_date: serviceDate,
+                              participant_id: participantId || null,
+                              details,
+                              total_cost,
+                              total_hours,
+                              // Send '' (not null) so cleared notes actually clear — the
+                              // API COALESCEs nulls back to the existing value.
+                              notes: notes ?? '',
+                          }
+                        : {
+                              log_type: type,
+                              service_date: serviceDate,
+                              participant_id: participantId || null,
+                              details,
+                              total_cost,
+                              total_hours,
+                              notes: notes || null,
+                          }
+                ),
             });
             if (!res.ok) throw new Error('save failed');
             onSaved();
@@ -488,7 +555,7 @@ function EntryForm({
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl max-w-lg w-full max-h-[88vh] overflow-y-auto">
                 <div className="flex items-center justify-between p-5 border-b border-gray-100 sticky top-0 bg-white">
-                    <h3 className="font-semibold text-[#0E2235] capitalize">New {type} entry</h3>
+                    <h3 className="font-semibold text-[#0E2235] capitalize">{editing ? 'Edit' : 'New'} {type} entry</h3>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
                         <X className="w-5 h-5 text-gray-400" />
                     </button>
@@ -670,7 +737,7 @@ function EntryForm({
                         className="px-6 py-2.5 text-white font-medium rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
                         style={{ background: 'linear-gradient(135deg, #1A73A8 0%, #30B27A 100%)' }}
                     >
-                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Save entry'}
+                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : editing ? 'Save changes' : 'Save entry'}
                     </button>
                     <button onClick={onClose} className="px-6 py-2.5 border border-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-50">
                         Cancel

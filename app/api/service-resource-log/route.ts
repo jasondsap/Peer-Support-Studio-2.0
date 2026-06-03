@@ -52,9 +52,11 @@ export async function GET(request: NextRequest) {
             SELECT
                 srl.*,
                 TRIM(COALESCE(p.first_name, '') || ' ' || COALESCE(p.last_name, '')) AS participant_name,
+                NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), '') AS logged_by_name,
                 l.name AS location_name
             FROM service_resource_logs srl
             LEFT JOIN participants p ON p.id = srl.participant_id
+            LEFT JOIN users u ON u.id = srl.logged_by
             LEFT JOIN locations l ON l.id = srl.location_id
             WHERE srl.organization_id = ${ctx.organizationId}
               AND srl.status = 'active'
@@ -67,7 +69,7 @@ export async function GET(request: NextRequest) {
         `;
 
         if (isExport) {
-            const header = ['Date', 'Type', 'Participant', 'Location', 'Total Cost', 'Total Hours', 'Details', 'Notes'];
+            const header = ['Date', 'Type', 'Participant', 'Location', 'Total Cost', 'Total Hours', 'Details', 'Notes', 'Logged By'];
             const lines = [header.join(',')];
             for (const r of logs as any[]) {
                 lines.push([
@@ -79,6 +81,7 @@ export async function GET(request: NextRequest) {
                     csvCell(r.total_hours),
                     csvCell(JSON.stringify(r.details)),
                     csvCell(r.notes),
+                    csvCell(r.logged_by_name),
                 ].join(','));
             }
             return new NextResponse(lines.join('\n'), {
