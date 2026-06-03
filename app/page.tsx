@@ -9,7 +9,7 @@ import {
     ArrowRight, Loader2, Sparkles,
     BookOpen, ClipboardList, MessageSquare,
     Building2, ClipboardCheck, Search,
-    Plus, Map, Mail, Library,
+    Plus, Map, Mail, Library, Tablet,
 } from 'lucide-react';
 import AllyIntelligenceChat from './components/AllyIntelligenceChat';
 
@@ -312,6 +312,14 @@ export default function HomePage() {
             href: '/service-resource-log',
             badge: null,
             color: 'bg-amber-500',
+        },
+        {
+            title: 'Kiosk',
+            description: 'Front-desk tablet check-in for groups',
+            icon: Tablet,
+            href: '/settings/kiosk',
+            badge: null,
+            color: 'bg-violet-500',
         },
         {
             title: 'Messages',
