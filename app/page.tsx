@@ -298,6 +298,22 @@ export default function HomePage() {
             color: 'bg-emerald-500',
         },
         {
+            title: 'Group Attendance',
+            description: 'Log group meetings and track who attended',
+            icon: Users,
+            href: '/groups',
+            badge: null,
+            color: 'bg-cyan-500',
+        },
+        {
+            title: 'Service & Resource Log',
+            description: 'Transportation, volunteer hours, and supplies',
+            icon: ClipboardList,
+            href: '/service-resource-log',
+            badge: null,
+            color: 'bg-amber-500',
+        },
+        {
             title: 'Messages',
             description: 'Team conversations and direct messages',
             icon: Mail,

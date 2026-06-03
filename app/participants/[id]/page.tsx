@@ -102,7 +102,7 @@ interface JournalEntry {
     updated_at: string;
 }
 
-type TabType = 'overview' | 'intake' | 'goals' | 'plans' | 'notes' | 'assessments' | 'readiness';
+type TabType = 'overview' | 'intake' | 'goals' | 'plans' | 'notes' | 'assessments' | 'activity' | 'readiness';
 
 // ============================================================================
 // Helper Functions
@@ -313,6 +313,8 @@ export default function ParticipantDetailPage() {
     const [showSnapshotModal, setShowSnapshotModal] = useState(false);
     const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
     const [showJournalModal, setShowJournalModal] = useState(false);
+    const [groupAttendance, setGroupAttendance] = useState<any[]>([]);
+    const [resourceLogs, setResourceLogs] = useState<any[]>([]);
 
     // ========================================================================
     // Data Fetching
@@ -358,6 +360,15 @@ export default function ParticipantDetailPage() {
                 const jRes = await fetch(`/api/journal?participant_id=${params.id}&organization_id=${currentOrg.id}`);
                 const jData = await jRes.json();
                 setJournalEntries(jData.entries || []);
+
+                // Fetch group attendance + service/resource logs for the Activity tab
+                const gaRes = await fetch(`/api/group-attendance?participant_id=${params.id}`);
+                const gaData = await gaRes.json();
+                setGroupAttendance(gaData.attendance || []);
+
+                const srRes = await fetch(`/api/service-resource-log?participant_id=${params.id}`);
+                const srData = await srRes.json();
+                setResourceLogs(srData.logs || []);
 
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Failed to load participant');
@@ -471,6 +482,7 @@ export default function ParticipantDetailPage() {
         { id: 'plans', label: 'Recovery Plans', icon: Heart },
         { id: 'notes', label: 'Session Notes', icon: FileText },
         { id: 'assessments', label: 'Assessments', icon: Activity },
+        { id: 'activity', label: 'Activity', icon: Users },
         ...(participant.is_reentry_participant ? [{ id: 'readiness', label: 'Readiness', icon: Shield }] : [])
     ];
 
@@ -1201,6 +1213,82 @@ export default function ParticipantDetailPage() {
                     participantName={displayName}
                     isReentryParticipant={participant.is_reentry_participant}
                 />
+            )}
+
+            {/* ================================================================ */}
+            {/* ACTIVITY TAB - group attendance + service & resource logs */}
+            {/* ================================================================ */}
+            {activeTab === 'activity' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="bg-white rounded-2xl border border-[#E7E9EC] p-6">
+                        <h3 className="text-lg font-semibold text-[#0E2235] mb-4 flex items-center gap-2">
+                            <Users className="w-5 h-5 text-[#30B27A]" />
+                            Group Attendance
+                        </h3>
+                        {groupAttendance.length === 0 ? (
+                            <p className="text-sm text-gray-400">No group attendance recorded.</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {groupAttendance.map((a) => (
+                                    <button
+                                        key={a.id}
+                                        onClick={() => router.push(`/groups/${a.activity_id}`)}
+                                        className="w-full flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 text-left"
+                                    >
+                                        <div>
+                                            <p className="text-sm font-medium text-[#0E2235]">{a.activity_name}</p>
+                                            <p className="text-xs text-gray-500">
+                                                {new Date(a.activity_date + 'T00:00:00').toLocaleDateString('en-US', {
+                                                    month: 'short', day: 'numeric', year: 'numeric',
+                                                })}
+                                            </p>
+                                        </div>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                            a.attendance_status === 'no_show'
+                                                ? 'bg-red-100 text-red-700'
+                                                : 'bg-green-100 text-green-700'
+                                        }`}>
+                                            {a.attendance_status === 'no_show' ? 'No-show' : 'Present'}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-[#E7E9EC] p-6">
+                        <h3 className="text-lg font-semibold text-[#0E2235] mb-4 flex items-center gap-2">
+                            <ClipboardList className="w-5 h-5 text-[#1A73A8]" />
+                            Service &amp; Resources
+                        </h3>
+                        {resourceLogs.length === 0 ? (
+                            <p className="text-sm text-gray-400">No service or resource entries.</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {resourceLogs.map((l) => (
+                                    <div key={l.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100">
+                                        <div>
+                                            <p className="text-sm font-medium text-[#0E2235] capitalize">{l.log_type}</p>
+                                            <p className="text-xs text-gray-500">
+                                                {new Date(l.service_date + 'T00:00:00').toLocaleDateString('en-US', {
+                                                    month: 'short', day: 'numeric', year: 'numeric',
+                                                })}
+                                            </p>
+                                        </div>
+                                        <div className="text-right text-xs text-gray-600">
+                                            {l.total_cost != null && Number(l.total_cost) > 0 && (
+                                                <div className="font-medium">${Number(l.total_cost).toFixed(2)}</div>
+                                            )}
+                                            {l.total_hours != null && Number(l.total_hours) > 0 && (
+                                                <div>{Number(l.total_hours)} hrs</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
             )}
 
             {/* Assessment Detail Modal */}
