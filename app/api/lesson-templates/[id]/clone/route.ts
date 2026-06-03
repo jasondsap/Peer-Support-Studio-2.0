@@ -4,8 +4,7 @@ import { sql } from '@/lib/db';
 
 // POST - Clone a system template into the current user's personal saved_lessons.
 // Records source_template_id for usage analytics and increments the template use_count.
-// gamma_presentation_url is intentionally NOT copied — clones start without a
-// presentation; users generate their own.
+// The template's gamma_presentation_url is copied so the clone keeps the premade deck.
 export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -39,7 +38,7 @@ export async function POST(
                 user_id, title, topic, facilitator_guide, participant_handout,
                 lesson_json, session_type, session_length, setting_type,
                 recovery_model, group_size, group_composition,
-                source_template_id, category,
+                gamma_presentation_url, source_template_id, category,
                 created_at, updated_at
             ) VALUES (
                 ${userId}::uuid,
@@ -54,6 +53,7 @@ export async function POST(
                 ${template.recovery_model || 'General/Flexible'},
                 ${template.group_size},
                 ${template.group_composition},
+                ${template.gamma_presentation_url},
                 ${template.id}::uuid,
                 ${template.category},
                 NOW(),

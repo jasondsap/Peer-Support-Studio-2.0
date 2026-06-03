@@ -12,6 +12,8 @@ import {
     Users,
     Clock,
     Sparkles,
+    Presentation,
+    ExternalLink,
 } from 'lucide-react';
 
 interface SourceCitation {
@@ -37,6 +39,7 @@ interface LessonTemplate {
     facilitator_guide: string | null;
     participant_handout: string | null;
     lesson_json: string | null;
+    gamma_presentation_url: string | null;
     use_count: number;
     created_at: string;
 }
@@ -222,6 +225,18 @@ export default function LessonTemplateDetail() {
                                 'Use this lesson'
                             )}
                         </button>
+                        {template.gamma_presentation_url && (
+                            <a
+                                href={template.gamma_presentation_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-6 py-2.5 border border-[#1A73A8] text-[#1A73A8] font-medium rounded-lg hover:bg-[#1A73A8]/5 transition-colors flex items-center gap-2"
+                            >
+                                <Presentation className="w-5 h-5" />
+                                View Presentation
+                                <ExternalLink className="w-4 h-4" />
+                            </a>
+                        )}
                         <button
                             onClick={() => router.push('/lesson-library')}
                             className="px-6 py-2.5 border border-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"

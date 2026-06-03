@@ -16,6 +16,7 @@ import {
     ArrowRight,
     BookOpen,
     Sparkles,
+    Presentation,
     Library as LibraryIcon,
 } from 'lucide-react';
 
@@ -372,11 +373,24 @@ export default function LessonLibrary() {
                                         >
                                             {t.title}
                                         </button>
-                                        {t.use_count > 0 && (
-                                            <span className="text-xs text-gray-400">
-                                                Used {t.use_count} time{t.use_count !== 1 ? 's' : ''}
-                                            </span>
-                                        )}
+                                        <div className="flex items-center gap-3">
+                                            {t.gamma_presentation_url && (
+                                                <a
+                                                    href={t.gamma_presentation_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-xs text-[#1A73A8] hover:underline inline-flex items-center gap-1"
+                                                >
+                                                    <Presentation className="w-3 h-3" />
+                                                    Presentation
+                                                </a>
+                                            )}
+                                            {t.use_count > 0 && (
+                                                <span className="text-xs text-gray-400">
+                                                    Used {t.use_count} time{t.use_count !== 1 ? 's' : ''}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="col-span-2 text-sm text-gray-600 truncate">
@@ -416,10 +430,21 @@ export default function LessonLibrary() {
                                 className="bg-white rounded-2xl shadow-sm border border-[#E7E9EC] p-6 hover:shadow-md transition-shadow flex flex-col"
                             >
                                 {/* Category badge */}
-                                <div className="flex items-center gap-2 mb-3">
+                                <div className="flex flex-wrap items-center gap-2 mb-3">
                                     <span className="inline-flex items-center text-xs font-medium text-[#1A73A8] bg-[#1A73A8]/10 px-2 py-1 rounded-full">
                                         {t.category}
                                     </span>
+                                    {t.gamma_presentation_url && (
+                                        <a
+                                            href={t.gamma_presentation_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-xs font-medium text-[#1A73A8] bg-[#1A73A8]/10 px-2 py-1 rounded-full hover:bg-[#1A73A8]/20 transition-colors"
+                                        >
+                                            <Presentation className="w-3 h-3" />
+                                            Presentation
+                                        </a>
+                                    )}
                                     {t.use_count > 0 && (
                                         <span className="inline-flex items-center gap-1 text-xs font-medium text-[#30B27A] bg-[#30B27A]/10 px-2 py-1 rounded-full">
                                             <Sparkles className="w-3 h-3" />
