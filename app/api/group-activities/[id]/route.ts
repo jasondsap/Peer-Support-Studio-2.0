@@ -128,11 +128,20 @@ export async function DELETE(
         }
         const ctx = await getUserContext(session);
         if (!ctx) return NextResponse.json({ error: 'User not found' }, { status: 404 });
-        if (!EDIT_ROLES.includes(ctx.role)) {
-            return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
-        }
 
         const { id } = await params;
+
+        // Supervisor+ can delete any activity; a PSS can delete (cancel) one they created.
+        if (!EDIT_ROLES.includes(ctx.role)) {
+            const owned = await sql`
+                SELECT 1 FROM group_activities
+                WHERE id = ${id}::uuid AND organization_id = ${ctx.organizationId} AND created_by = ${ctx.userId}::uuid
+            `;
+            if (owned.length === 0) {
+                return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+            }
+        }
+
         const result = await sql`
             UPDATE group_activities SET status = 'archived', updated_at = NOW()
             WHERE id = ${id}::uuid AND organization_id = ${ctx.organizationId}

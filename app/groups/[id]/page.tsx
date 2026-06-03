@@ -15,7 +15,17 @@ import {
     Search,
     X,
     Trash2,
+    Pencil,
 } from 'lucide-react';
+
+const TYPE_OPTIONS = [
+    { value: 'recovery_group', label: 'Recovery Group' },
+    { value: 'outreach', label: 'Outreach' },
+    { value: 'community_event', label: 'Community Event' },
+    { value: 'class', label: 'Class' },
+    { value: 'other', label: 'Other' },
+];
+const AUDIENCE_OPTIONS = ['recoverees', 'family', 'community', 'youth', 'general'];
 
 interface RosterRow {
     id: string;
@@ -74,6 +84,9 @@ export default function ActivityDetailPage() {
     const [results, setResults] = useState<any[]>([]);
     const [searching, setSearching] = useState(false);
     const [adding, setAdding] = useState(false);
+
+    const [showEdit, setShowEdit] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     const load = useCallback(async () => {
         try {
@@ -171,6 +184,19 @@ export default function ActivityDetailPage() {
         }).catch(() => {});
     };
 
+    const handleDelete = async () => {
+        if (!confirm('Delete this activity? It will be removed from the list. Attendance records are kept.')) return;
+        setDeleting(true);
+        try {
+            const res = await fetch(`/api/group-activities/${activityId}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error();
+            router.push('/groups');
+        } catch {
+            alert('Could not delete the activity. You may not have permission.');
+            setDeleting(false);
+        }
+    };
+
     if (authStatus === 'loading' || loading) {
         return (
             <div className="min-h-screen bg-[#F8FAFB] flex items-center justify-center">
@@ -206,9 +232,28 @@ export default function ActivityDetailPage() {
             <main className="max-w-4xl mx-auto px-6 py-8">
                 {/* Activity header */}
                 <div className="bg-white rounded-2xl shadow-sm border border-[#E7E9EC] p-8 mb-6">
-                    <span className="inline-flex items-center text-xs font-medium text-[#1A73A8] bg-[#1A73A8]/10 px-2 py-1 rounded-full mb-3">
-                        {TYPE_LABELS[activity.activity_type] || activity.activity_type}
-                    </span>
+                    <div className="flex items-start justify-between gap-4">
+                        <span className="inline-flex items-center text-xs font-medium text-[#1A73A8] bg-[#1A73A8]/10 px-2 py-1 rounded-full mb-3">
+                            {TYPE_LABELS[activity.activity_type] || activity.activity_type}
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setShowEdit(true)}
+                                className="px-3 py-1.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-1.5"
+                            >
+                                <Pencil className="w-4 h-4" />
+                                Edit
+                            </button>
+                            <button
+                                onClick={handleDelete}
+                                disabled={deleting}
+                                className="px-3 py-1.5 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 flex items-center gap-1.5"
+                            >
+                                {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                Delete
+                            </button>
+                        </div>
+                    </div>
                     <h1 className="text-3xl font-bold text-[#0E2235] mb-4">{activity.name}</h1>
                     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-600">
                         <span className="flex items-center gap-2">
@@ -310,6 +355,19 @@ export default function ActivityDetailPage() {
                 </div>
             </main>
 
+            {/* Edit activity modal */}
+            {showEdit && (
+                <EditActivityModal
+                    activity={activity}
+                    orgId={currentOrg?.id}
+                    onClose={() => setShowEdit(false)}
+                    onSaved={() => {
+                        setShowEdit(false);
+                        load();
+                    }}
+                />
+            )}
+
             {/* Add attendee modal */}
             {showAdd && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -375,6 +433,178 @@ export default function ActivityDetailPage() {
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+function EditActivityModal({
+    activity,
+    orgId,
+    onClose,
+    onSaved,
+}: {
+    activity: any;
+    orgId?: string;
+    onClose: () => void;
+    onSaved: () => void;
+}) {
+    const [locations, setLocations] = useState<any[]>([]);
+    const [members, setMembers] = useState<any[]>([]);
+    const [saving, setSaving] = useState(false);
+    const [form, setForm] = useState({
+        name: activity.name || '',
+        activity_type: activity.activity_type || 'recovery_group',
+        primary_audience: activity.primary_audience || 'recoverees',
+        activity_date: activity.activity_date || '',
+        start_time: activity.start_time ? String(activity.start_time).slice(0, 5) : '',
+        duration_minutes: activity.duration_minutes != null ? String(activity.duration_minutes) : '',
+        location_id: activity.location_id || '',
+        facilitator_id: activity.facilitator_id || '',
+        notes: activity.notes || '',
+    });
+
+    useEffect(() => {
+        if (!orgId) return;
+        fetch(`/api/locations?organization_id=${orgId}`)
+            .then((r) => r.json())
+            .then((d) => setLocations(d.locations || []))
+            .catch(() => {});
+        fetch(`/api/organizations/members?organization_id=${orgId}`)
+            .then((r) => r.json())
+            .then((d) => setMembers(d.members || d.users || []))
+            .catch(() => {});
+    }, [orgId]);
+
+    const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+    const memberName = (m: any) =>
+        m.display_name || m.name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email || 'Member';
+    const memberId = (m: any) => m.user_id || m.id;
+
+    const save = async () => {
+        if (!form.name || !form.activity_date) {
+            alert('Name and date are required.');
+            return;
+        }
+        setSaving(true);
+        try {
+            const res = await fetch(`/api/group-activities/${activity.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...form,
+                    duration_minutes: form.duration_minutes ? Number(form.duration_minutes) : null,
+                    start_time: form.start_time || null,
+                    location_id: form.location_id || null,
+                    facilitator_id: form.facilitator_id || null,
+                }),
+            });
+            if (!res.ok) throw new Error();
+            onSaved();
+        } catch {
+            alert('Could not save changes. You may not have permission.');
+            setSaving(false);
+        }
+    };
+
+    const inputCls =
+        'w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A73A8] text-sm';
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl max-w-lg w-full max-h-[88vh] overflow-y-auto">
+                <div className="flex items-center justify-between p-5 border-b border-gray-100 sticky top-0 bg-white">
+                    <h3 className="font-semibold text-[#0E2235]">Edit activity</h3>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+                        <X className="w-5 h-5 text-gray-400" />
+                    </button>
+                </div>
+
+                <div className="p-5 space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Activity name *</label>
+                        <input className={inputCls} value={form.name} onChange={(e) => set('name', e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                            <select className={inputCls} value={form.activity_type} onChange={(e) => set('activity_type', e.target.value)}>
+                                {TYPE_OPTIONS.map((o) => (
+                                    <option key={o.value} value={o.value}>
+                                        {o.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Audience</label>
+                            <select className={inputCls} value={form.primary_audience} onChange={(e) => set('primary_audience', e.target.value)}>
+                                {AUDIENCE_OPTIONS.map((o) => (
+                                    <option key={o} value={o}>
+                                        {o.charAt(0).toUpperCase() + o.slice(1)}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+                            <input type="date" className={inputCls} value={form.activity_date} onChange={(e) => set('activity_date', e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Start</label>
+                            <input type="time" className={inputCls} value={form.start_time} onChange={(e) => set('start_time', e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Min</label>
+                            <input type="number" min="0" className={inputCls} value={form.duration_minutes} onChange={(e) => set('duration_minutes', e.target.value)} />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                            <select className={inputCls} value={form.location_id} onChange={(e) => set('location_id', e.target.value)}>
+                                <option value="">— None —</option>
+                                {locations.map((l) => (
+                                    <option key={l.id} value={l.id}>
+                                        {l.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Facilitator</label>
+                            <select className={inputCls} value={form.facilitator_id} onChange={(e) => set('facilitator_id', e.target.value)}>
+                                <option value="">— None —</option>
+                                {members.map((m) => (
+                                    <option key={memberId(m)} value={memberId(m)}>
+                                        {memberName(m)}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                        <textarea className={inputCls} rows={3} value={form.notes} onChange={(e) => set('notes', e.target.value)} />
+                    </div>
+                </div>
+
+                <div className="flex gap-3 p-5 border-t border-gray-100">
+                    <button
+                        onClick={save}
+                        disabled={saving}
+                        className="px-6 py-2.5 text-white font-medium rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+                        style={{ background: 'linear-gradient(135deg, #1A73A8 0%, #30B27A 100%)' }}
+                    >
+                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Save changes'}
+                    </button>
+                    <button onClick={onClose} className="px-6 py-2.5 border border-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-50">
+                        Cancel
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }
