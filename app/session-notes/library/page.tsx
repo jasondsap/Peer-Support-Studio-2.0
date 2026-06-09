@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatDateOnly } from '@/lib/dateUtils';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
@@ -216,7 +217,7 @@ export default function SessionNotesLibraryPage() {
                                         <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 mb-3">
                                             <div className="flex items-center gap-1">
                                                 <Calendar className="w-4 h-4" />
-                                                {new Date(note.metadata?.date || note.created_at).toLocaleDateString()}
+                                                {formatDateOnly(note.metadata?.date || note.created_at)}
                                             </div>
                                             <div className="flex items-center gap-1">
                                                 <Clock className="w-4 h-4" />

@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { useState, useEffect } from 'react';
+import { formatDateOnly } from '@/lib/dateUtils';
 import {
     Fingerprint, CreditCard, Heart, Home, Scale,
     Check, X, Clock, AlertTriangle, Minus,
@@ -585,7 +586,7 @@ function ReadinessItemRow({
                             {item.obtained_date && (
                                 <span className="flex items-center gap-1">
                                     <Calendar className="w-3 h-3" />
-                                    {new Date(item.obtained_date).toLocaleDateString()}
+                                    {formatDateOnly(item.obtained_date)}
                                 </span>
                             )}
                             {item.notes && (

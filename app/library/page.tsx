@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
+import { todayLocal } from '@/lib/dateUtils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { generateLessonPDF } from '../utils/generatePDF';
@@ -101,7 +102,7 @@ function LibraryContent() {
     const [sendSurveyLesson, setSendSurveyLesson] = useState<SavedLesson | null>(null);
     const [viewResponsesLesson, setViewResponsesLesson] = useState<SavedLesson | null>(null);
     const [creatingSurvey, setCreatingSurvey] = useState(false);
-    const [surveySessionDate, setSurveySessionDate] = useState(new Date().toISOString().split('T')[0]);
+    const [surveySessionDate, setSurveySessionDate] = useState(todayLocal());
     const [newSurvey, setNewSurvey] = useState<Survey | null>(null);
     const [copiedLink, setCopiedLink] = useState(false);
     const [lessonSurveys, setLessonSurveys] = useState<Survey[]>([]);
@@ -361,7 +362,7 @@ function LibraryContent() {
     const handleOpenSendSurvey = (lesson: SavedLesson) => {
         setSendSurveyLesson(lesson);
         setNewSurvey(null);
-        setSurveySessionDate(new Date().toISOString().split('T')[0]);
+        setSurveySessionDate(todayLocal());
         setMenuOpen(null);
     };
 

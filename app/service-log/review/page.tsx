@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatDateOnly } from '@/lib/dateUtils';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
@@ -306,7 +307,7 @@ export default function SupervisorReviewPage() {
                                                     {service.service_type} Session
                                                 </div>
                                                 <div className="text-sm text-gray-500">
-                                                    {new Date(service.planned_date).toLocaleDateString()} • {service.planned_duration} min
+                                                    {formatDateOnly(service.planned_date)} • {service.planned_duration} min
                                                     {pssName && <span className="ml-2">• by {pssName}</span>}
                                                 </div>
                                             </div>
@@ -461,7 +462,7 @@ export default function SupervisorReviewPage() {
                         <div className="mb-4 p-3 bg-gray-50 rounded-lg">
                             <div className="text-sm text-gray-600">
                                 <span className="capitalize">{actionService.service_type}</span> session on{' '}
-                                {new Date(actionService.planned_date).toLocaleDateString()}
+                                {formatDateOnly(actionService.planned_date)}
                             </div>
                             {actionService.lesson && (
                                 <div className="text-sm text-[#1A73A8] mt-1">

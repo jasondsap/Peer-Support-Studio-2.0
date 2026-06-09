@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { formatDateOnly } from '@/lib/dateUtils';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
@@ -218,7 +219,7 @@ function ServiceDetailModal({
                                     <Calendar className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
                                     <div>
                                         <p className="text-sm font-medium text-[#0E2235]">
-                                            {new Date(service.planned_date).toLocaleDateString('en-US', {
+                                            {formatDateOnly(service.planned_date, {
                                                 weekday: 'long',
                                                 month: 'long',
                                                 day: 'numeric',
@@ -486,7 +487,7 @@ function ServiceCard({
             <div className="flex items-center gap-4 text-sm text-gray-500 mb-2">
                 <span className="flex items-center gap-1">
                     <Calendar className="w-4 h-4" />
-                    {new Date(service.planned_date).toLocaleDateString('en-US', {
+                    {formatDateOnly(service.planned_date, {
                         weekday: 'short',
                         month: 'short',
                         day: 'numeric'

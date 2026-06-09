@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { formatDateOnly } from '@/lib/dateUtils';
 import { neon } from '@neondatabase/serverless';
 import OpenAI from 'openai';
 
@@ -397,7 +398,7 @@ Recent Participants: ${result.data.recent.map((r: any) =>
                 } else {
                     sections.push(`**Upcoming Sessions:**\n${result.data.map((s: any) => {
                         const name = s.preferred_name || s.first_name || 'Unassigned';
-                        return `- ${new Date(s.planned_date).toLocaleDateString()} (${s.planned_duration} min ${s.service_type}) with ${name}${s.notes ? `: ${s.notes}` : ''}`;
+                        return `- ${formatDateOnly(s.planned_date)} (${s.planned_duration} min ${s.service_type}) with ${name}${s.notes ? `: ${s.notes}` : ''}`;
                     }).join('\n')}`);
                 }
                 break;

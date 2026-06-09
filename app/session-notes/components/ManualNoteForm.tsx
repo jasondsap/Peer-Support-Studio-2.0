@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { todayLocal } from '@/lib/dateUtils';
 import {
     User, Calendar, Clock, MapPin,
     Save, Loader2, Target, Heart,
@@ -59,7 +60,7 @@ export default function ManualNoteForm({
     const [formData, setFormData] = useState({
         // === SECTION 1: Session Details (Who, Where, When) ===
         staffName: initialStaffName,
-        dateOfService: new Date().toISOString().split('T')[0],
+        dateOfService: todayLocal(),
         startTime: '09:00',
         endTime: '10:00',
         sessionType: 'individual' as 'individual' | 'group',

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useMemo } from 'react';
+import { formatDateOnly, todayLocal } from '@/lib/dateUtils';
 import {
     Heart, Home, Briefcase, Scale, Flag, Brain,
     Activity, ZoomIn, ZoomOut,
@@ -104,16 +105,19 @@ const parseDate = (d: any): Date => {
 
 const formatDateStr = (d: Date): string => {
     try {
-        return d.toISOString().split('T')[0];
+        return todayLocal(d);
     } catch {
-        return new Date().toISOString().split('T')[0];
+        return todayLocal();
     }
 };
 
 const formatDateFull = (d: any) => {
     try {
-        const date = d instanceof Date ? d : new Date(d);
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+        // Date objects are already local; date-only strings need the no-UTC-shift path.
+        return d instanceof Date
+            ? d.toLocaleDateString('en-US', opts)
+            : formatDateOnly(d, opts);
     } catch {
         return String(d);
     }
@@ -728,7 +732,7 @@ export default function JourneySwimlane({
 
                             {/* Today marker */}
                             {(() => {
-                                const today = new Date().toISOString().split('T')[0];
+                                const today = todayLocal();
                                 const x = dateToX(today);
                                 if (x < 0 || x > chartWidth) return null;
                                 return (

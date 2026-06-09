@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatDateOnly, todayLocal } from '@/lib/dateUtils';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -107,7 +108,7 @@ export default function JourneyTrackerPage() {
     const [newEntry, setNewEntry] = useState({
         status_key: '',
         status_label: '',
-        entry_date: new Date().toISOString().split('T')[0],
+        entry_date: todayLocal(),
         notes: '',
         is_milestone: false
     });
@@ -211,7 +212,7 @@ export default function JourneyTrackerPage() {
         setNewEntry({
             status_key: '',
             status_label: '',
-            entry_date: new Date().toISOString().split('T')[0],
+            entry_date: todayLocal(),
             notes: '',
             is_milestone: false
         });
@@ -261,7 +262,7 @@ export default function JourneyTrackerPage() {
     };
 
     const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString('en-US', {
+        return formatDateOnly(dateStr, {
             month: 'short',
             day: 'numeric',
             year: 'numeric'

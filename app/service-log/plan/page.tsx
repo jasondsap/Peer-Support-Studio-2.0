@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { todayLocal } from '@/lib/dateUtils';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
@@ -68,7 +69,7 @@ export default function PlanServicePage() {
     // Form state
     const [serviceType, setServiceType] = useState<'individual' | 'group'>('individual');
     const [title, setTitle] = useState('');
-    const [plannedDate, setPlannedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [plannedDate, setPlannedDate] = useState(todayLocal());
     const [plannedTime, setPlannedTime] = useState('');
     const [plannedDuration, setPlannedDuration] = useState(60);
     const [setting, setSetting] = useState('outpatient');

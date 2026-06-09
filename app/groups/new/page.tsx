@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { ArrowLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { todayLocal } from '@/lib/dateUtils';
 
 const TYPE_OPTIONS = [
     { value: 'recovery_group', label: 'Recovery Group' },
@@ -15,7 +16,7 @@ const TYPE_OPTIONS = [
 
 const AUDIENCE_OPTIONS = ['recoverees', 'family', 'community', 'youth', 'general'];
 
-const today = () => new Date().toISOString().split('T')[0];
+const today = () => todayLocal();
 
 export default function NewActivityPage() {
     const router = useRouter();

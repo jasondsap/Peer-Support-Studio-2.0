@@ -8,6 +8,7 @@
 // ============================================================================
 
 import { useState, useEffect, useRef, Suspense } from 'react';
+import { todayLocal } from '@/lib/dateUtils';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -402,7 +403,7 @@ function IntakeContent() {
     const [participantSearch, setParticipantSearch] = useState('');
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [showDropdown, setShowDropdown] = useState(false);
-    const [intakeDate, setIntakeDate] = useState(new Date().toISOString().split('T')[0]);
+    const [intakeDate, setIntakeDate] = useState(todayLocal());
 
     // Diagnosis manual entry toggle
     const [manualDxEntry, setManualDxEntry] = useState(false);

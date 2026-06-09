@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { formatDateOnly, todayLocal } from '@/lib/dateUtils';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
@@ -42,9 +43,9 @@ const TABS: { type: LogType; label: string; icon: any }[] = [
     { type: 'supplies', label: 'Supplies', icon: Package },
 ];
 
-const today = () => new Date().toISOString().split('T')[0];
+const today = () => todayLocal();
 const fmtDate = (d: string) =>
-    new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    formatDateOnly(d, { month: 'short', day: 'numeric', year: 'numeric' });
 
 export default function ServiceResourceLogPage() {
     const router = useRouter();

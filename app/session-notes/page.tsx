@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
+import { todayLocal } from '@/lib/dateUtils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
@@ -50,7 +51,7 @@ function SessionNotesContent() {
 
     // Session metadata as an object (matching SessionDebrief expectations)
     const [metadata, setMetadata] = useState<SessionMetadata>({
-        date: new Date().toISOString().split('T')[0],
+        date: todayLocal(),
         startTime: '',
         endTime: '',
         duration: '30',

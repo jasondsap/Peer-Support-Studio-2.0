@@ -21,6 +21,7 @@ import AssessmentDetailModal from '@/app/components/AssessmentDetailModal';
 import ReadinessChecklist from '@/app/components/ReadinessChecklist';
 import ParticipantSnapshotModal from '@/app/components/ParticipantSnapshotModal';
 import BillingReadinessCard, { BillingStatusBadge } from '@/app/components/BillingReadinessCard';
+import { formatDateOnly } from '@/lib/dateUtils';
 
 // ============================================================================
 // Types
@@ -111,16 +112,14 @@ type TabType = 'overview' | 'intake' | 'goals' | 'plans' | 'notes' | 'assessment
 function formatSessionDate(note: SessionNote): string {
     const dateValue = note.session_date || note.date_of_service || note.created_at;
     if (!dateValue) return 'Date not recorded';
-    
+
     try {
-        const date = new Date(dateValue);
-        if (isNaN(date.getTime())) return 'Date not recorded';
-        return date.toLocaleDateString('en-US', {
+        return formatDateOnly(dateValue, {
             weekday: 'long',
             year: 'numeric',
             month: 'long',
             day: 'numeric'
-        });
+        }) || 'Date not recorded';
     } catch {
         return 'Date not recorded';
     }
@@ -673,7 +672,7 @@ export default function ParticipantDetailPage() {
                                 <div className="flex items-center gap-3">
                                     <Calendar className="w-4 h-4 text-gray-400" />
                                     <span className="text-gray-700">
-                                        DOB: {new Date(participant.date_of_birth).toLocaleDateString()}
+                                        DOB: {formatDateOnly(participant.date_of_birth)}
                                     </span>
                                 </div>
                             )}
@@ -699,7 +698,7 @@ export default function ParticipantDetailPage() {
                             <div className="flex items-center gap-3">
                                 <Calendar className="w-4 h-4 text-gray-400" />
                                 <span className="text-gray-700">
-                                    Intake: {intakeDate.toLocaleDateString()}
+                                    Intake: {formatDateOnly(participant.intake_date)}
                                 </span>
                             </div>
                             {participant.referral_source && (
@@ -830,7 +829,7 @@ export default function ParticipantDetailPage() {
                             {/* Action bar */}
                             <div className="flex items-center justify-between">
                                 <div className="text-sm text-gray-500">
-                                    Completed {intake.intake_date ? new Date(intake.intake_date).toLocaleDateString() : ''}
+                                    Completed {formatDateOnly(intake.intake_date)}
                                     {intake.completed_by_name && <> by {intake.completed_by_name}</>}
                                     {intake.updated_at && intake.updated_at !== intake.created_at && (
                                         <> · Updated {new Date(intake.updated_at).toLocaleDateString()}</>
@@ -1184,7 +1183,7 @@ export default function ParticipantDetailPage() {
                                                     {assessment.assessment_type}
                                                 </span>
                                                 <p className="text-sm text-gray-500">
-                                                    {new Date(assessment.assessment_date || assessment.created_at).toLocaleDateString()}
+                                                    {formatDateOnly(assessment.assessment_date || assessment.created_at)}
                                                 </p>
                                             </div>
                                             <div className="flex items-center gap-4">

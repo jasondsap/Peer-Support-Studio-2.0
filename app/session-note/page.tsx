@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState } from 'react';
+import { todayLocal } from '@/lib/dateUtils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ChevronRight, Download, FileText, Users, Clock, Calendar, Loader2 } from 'lucide-react';
 
@@ -48,7 +49,7 @@ function SessionNoteContent() {
     const searchParams = useSearchParams();
 
     const [formData, setFormData] = useState<SessionNoteData>({
-        dateOfService: new Date().toISOString().split('T')[0],
+        dateOfService: todayLocal(),
         serviceCode: '52091',
         startTime: '09:00',
         endTime: '10:00',

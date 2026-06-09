@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatDateOnly } from '@/lib/dateUtils';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
@@ -447,7 +448,7 @@ export default function ServiceDetailPage() {
                                     <p className="text-xs text-gray-400 capitalize">{service.service_type} Session{participantName ? ` · ${participantName}` : ''}</p>
                                 )}
                                 <p className="text-sm text-gray-500">
-                                    {new Date(service.planned_date).toLocaleDateString('en-US', {
+                                    {formatDateOnly(service.planned_date, {
                                         weekday: 'long',
                                         year: 'numeric',
                                         month: 'long',
@@ -475,7 +476,7 @@ export default function ServiceDetailPage() {
                         <div>
                             <h3 className="font-medium text-red-800">Service Overdue</h3>
                             <p className="text-sm text-red-700">
-                                This service was planned for {new Date(service.planned_date).toLocaleDateString()}
+                                This service was planned for {formatDateOnly(service.planned_date)}
                                 but hasn't been marked as completed.
                             </p>
                         </div>
@@ -504,7 +505,7 @@ export default function ServiceDetailPage() {
                             <div>
                                 <div className="text-xs text-gray-500">Planned Date</div>
                                 <div className="font-medium text-[#0E2235]">
-                                    {new Date(service.planned_date).toLocaleDateString()}
+                                    {formatDateOnly(service.planned_date)}
                                     {service.planned_time && ` at ${formatTime(service.planned_time)}`}
                                 </div>
                             </div>

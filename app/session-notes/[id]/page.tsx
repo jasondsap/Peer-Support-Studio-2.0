@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatDateOnly } from '@/lib/dateUtils';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
@@ -244,7 +245,7 @@ ${note.pss_note.followUpNeeded.map(f => `• ${f}`).join('\n')}`;
                     <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                         <div className="flex items-center gap-2">
                             <Calendar className="w-4 h-4" />
-                            {new Date(note.metadata.date).toLocaleDateString('en-US', {
+                            {formatDateOnly(note.metadata.date, {
                                 weekday: 'long',
                                 year: 'numeric',
                                 month: 'long',

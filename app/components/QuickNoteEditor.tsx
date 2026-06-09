@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { todayLocal } from '@/lib/dateUtils';
 import { useSession } from 'next-auth/react';
 import {
     Save, X, ArrowLeft, Calendar, User, Tag,
@@ -129,7 +130,7 @@ export default function QuickNoteEditor({ onBack, onSaved }: QuickNoteEditorProp
     // Form state
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState(todayLocal());
     const [sessionType, setSessionType] = useState('general');
     const [selectedParticipant, setSelectedParticipant] = useState<string>('');
     const [tags, setTags] = useState<string[]>([]);

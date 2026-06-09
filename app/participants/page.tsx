@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatDateOnly } from '@/lib/dateUtils';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -363,7 +364,7 @@ export default function ParticipantsPage() {
                                                         {participant.preferred_name || participant.first_name} {participant.last_name}
                                                     </p>
                                                     <p className="text-sm text-gray-500">
-                                                        Since {new Date(participant.intake_date).toLocaleDateString()}
+                                                        Since {formatDateOnly(participant.intake_date)}
                                                     </p>
                                                 </div>
                                             </div>
