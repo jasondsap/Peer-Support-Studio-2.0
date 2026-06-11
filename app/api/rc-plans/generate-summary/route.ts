@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, requireOrgAccess } from '@/lib/auth';
 import { sql } from '@/lib/db';
+
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 // ============================================================================
 // POST /api/rc-plans/generate-summary
@@ -25,6 +28,13 @@ export async function POST(req: NextRequest) {
                 { error: 'plan_id and organization_id required' },
                 { status: 400 }
             );
+        }
+        try {
+            await requireOrgAccess(organization_id);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unauthorized';
+            const status = message.includes('access denied') ? 403 : 401;
+            return NextResponse.json({ error: message }, { status });
         }
 
         // ── Fetch plan + participant name ──────────────────────────────────────

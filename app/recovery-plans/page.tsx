@@ -8,7 +8,7 @@ import {
     CheckCircle2, Clock, ChevronDown, ChevronUp, Edit3, Trash2,
     Users, Shield, Heart, Brain, Home, Compass, Activity, Star,
     Briefcase, AlertTriangle, Coffee, BookOpen, ChevronRight, Sparkles,
-    BarChart3, FileSignature, ExternalLink
+    BarChart3, FileSignature
 } from 'lucide-react';
 
 // ============================================================================
@@ -374,10 +374,11 @@ export default function RecoveryPlansPage() {
 function RecoveryPlansContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { data: session } = useSession();
+    const { data: session, status: authStatus } = useSession();
 
-    const [currentOrg, setCurrentOrg] = useState<{ id: string; name: string } | null>(null);
-    const [authLoading, setAuthLoading] = useState(true);
+    // Use the org selected in the header switcher (same convention as the rest of the app)
+    const currentOrg = (session as any)?.currentOrganization as { id: string; name: string } | null;
+    const authLoading = authStatus === 'loading';
 
     const [plans, setPlans] = useState<Plan[]>([]);
     const [participants, setParticipants] = useState<Participant[]>([]);
@@ -386,6 +387,10 @@ function RecoveryPlansContent() {
     const [view, setView] = useState<ViewState>('list');
     const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
+
+    // List filters
+    const [planSearch, setPlanSearch] = useState('');
+    const [planStatusFilter, setPlanStatusFilter] = useState('all');
 
     // Create flow state
     const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
@@ -404,20 +409,16 @@ function RecoveryPlansContent() {
     const [generatingSummary, setGeneratingSummary] = useState(false);
     const [summaryError, setSummaryError] = useState('');
 
+    // Plan rename state
+    const [editingPlanName, setEditingPlanName] = useState(false);
+    const [planNameValue, setPlanNameValue] = useState('');
+
     // ========================================================================
     // Init & Data
     // ========================================================================
     useEffect(() => {
-        async function init() {
-            try {
-                const orgRes = await fetch('/api/user/organizations');
-                const orgData = await orgRes.json();
-                if (orgData.organizations?.length > 0) setCurrentOrg(orgData.organizations[0]);
-            } catch (e) { console.error(e); }
-            finally { setAuthLoading(false); }
-        }
-        init();
-    }, []);
+        if (authStatus === 'unauthenticated') router.push('/auth/signin');
+    }, [authStatus, router]);
 
     useEffect(() => {
         if (!currentOrg?.id) return;
@@ -538,6 +539,31 @@ function RecoveryPlansContent() {
         });
     };
 
+    const [customGoalDrafts, setCustomGoalDrafts] = useState<Map<string, string>>(new Map());
+
+    const addCustomGoal = (domainKey: string) => {
+        const draft = (customGoalDrafts.get(domainKey) || '').trim();
+        if (!draft) return;
+        setDomainConfigs(prev => {
+            const next = new Map(prev);
+            const cfg = { ...next.get(domainKey)! };
+            cfg.customGoals = [...cfg.customGoals, draft];
+            next.set(domainKey, cfg);
+            return next;
+        });
+        setCustomGoalDrafts(prev => { const n = new Map(prev); n.set(domainKey, ''); return n; });
+    };
+
+    const removeCustomGoal = (domainKey: string, idx: number) => {
+        setDomainConfigs(prev => {
+            const next = new Map(prev);
+            const cfg = { ...next.get(domainKey)! };
+            cfg.customGoals = cfg.customGoals.filter((_, i) => i !== idx);
+            next.set(domainKey, cfg);
+            return next;
+        });
+    };
+
     const setActivityDuration = (domainKey: string, actIdx: number, value: string) => {
         setDomainConfigs(prev => {
             const next = new Map(prev);
@@ -556,11 +582,11 @@ function RecoveryPlansContent() {
     const handleSavePlan = async () => {
         if (!selectedParticipant || selectedDomainKeys.size === 0) return;
 
-        // Validate at least one goal is selected across all domains
+        // Validate at least one goal (template or custom) is selected across all domains
         let hasAnyGoal = false;
         for (const key of selectedDomainKeys) {
             const cfg = domainConfigs.get(key);
-            if (cfg && cfg.goals.size > 0) { hasAnyGoal = true; break; }
+            if (cfg && (cfg.goals.size > 0 || cfg.customGoals.length > 0)) { hasAnyGoal = true; break; }
         }
         if (!hasAnyGoal) {
             setError('Please select at least one goal before creating the plan.');
@@ -576,29 +602,42 @@ function RecoveryPlansContent() {
                 .map((g, i) => ({ text: g, idx: i }))
                 .filter((_, i) => cfg?.goals.has(i) ?? false);
 
+            // Activities are selected at the domain level (stored under goal index 0);
+            // attach them to the domain's first chosen goal so none are lost.
+            const selectedActs = tpl.activities
+                .map((a, i) => ({ text: a, idx: i }))
+                .filter((_, i) => cfg?.activities.get(0)?.has(i) ?? false);
+            const activitiesPayload = selectedActs.map((a, ai) => ({
+                activity_text: a.text,
+                is_custom: false,
+                sort_order: ai,
+                frequency: cfg?.activityFrequency.get(a.idx) || '',
+                duration: cfg?.activityDuration.get(a.idx) ? `${cfg.activityDuration.get(a.idx)} min` : '',
+            }));
+
+            const goals = selectedGoals.map((g, gi) => ({
+                goal_text: g.text,
+                is_custom: false,
+                sort_order: gi,
+                activities: gi === 0 ? activitiesPayload : [],
+            }));
+
+            (cfg?.customGoals || []).forEach((text, ci) => {
+                if (!text.trim()) return;
+                goals.push({
+                    goal_text: text.trim(),
+                    is_custom: true,
+                    sort_order: goals.length,
+                    activities: goals.length === 0 ? activitiesPayload : [],
+                });
+            });
+
             return {
                 domain_key: key,
                 importance_rating: cfg?.importance || null,
                 confidence_rating: cfg?.confidence || null,
                 sort_order: di,
-                goals: selectedGoals.map((g, gi) => {
-                    const selectedActs = tpl.activities
-                        .map((a, i) => ({ text: a, idx: i }))
-                        .filter((_, i) => cfg?.activities.get(g.idx)?.has(i) ?? false);
-
-                    return {
-                        goal_text: g.text,
-                        is_custom: false,
-                        sort_order: gi,
-                        activities: selectedActs.map((a, ai) => ({
-                            activity_text: a.text,
-                            is_custom: false,
-                            sort_order: ai,
-                            frequency: cfg?.activityFrequency.get(a.idx) || '',
-                            duration: cfg?.activityDuration.get(a.idx) ? `${cfg.activityDuration.get(a.idx)} min` : '',
-                        })),
-                    };
-                }),
+                goals,
             };
         });
 
@@ -627,7 +666,7 @@ function RecoveryPlansContent() {
 
     const resetCreate = () => {
         setSelectedParticipant(null); setParticipantSearch(''); setSelectedDomainKeys(new Set());
-        setDomainConfigs(new Map()); setError('');
+        setDomainConfigs(new Map()); setCustomGoalDrafts(new Map()); setError('');
     };
 
     // ========================================================================
@@ -713,9 +752,11 @@ function RecoveryPlansContent() {
                     type: 'domain',
                     plan_id: selectedPlan.id,
                     domain_key: domainKey,
+                    // Template activities go under the first goal only — duplicating
+                    // the full activity list under every goal bloats the plan.
                     goals: tpl.goals.map((g, gi) => ({
                         goal_text: g,
-                        activities: tpl.activities.map((a, ai) => ({ activity_text: a })),
+                        activities: gi === 0 ? tpl.activities.map(a => ({ activity_text: a })) : [],
                     })),
                 }),
             });
@@ -877,6 +918,15 @@ function RecoveryPlansContent() {
         active: 'Active', on_hold: 'On Hold', archived: 'Archived',
     };
 
+    const filteredPlans = plans.filter(plan => {
+        if (planStatusFilter !== 'all' && plan.status !== planStatusFilter) return false;
+        if (planSearch) {
+            const haystack = `${plan.participant_first_name || ''} ${plan.participant_last_name || ''} ${plan.participant_preferred_name || ''} ${plan.plan_name || ''}`.toLowerCase();
+            if (!haystack.includes(planSearch.toLowerCase())) return false;
+        }
+        return true;
+    });
+
     // ========================================================================
     // Loading
     // ========================================================================
@@ -932,6 +982,31 @@ function RecoveryPlansContent() {
                 {/* ============================================================ */}
                 {view === 'list' && (
                     <div className="space-y-4">
+                        {!loading && plans.length > 0 && (
+                            <div className="bg-white rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row gap-3">
+                                <div className="flex-1 relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={planSearch}
+                                        onChange={e => setPlanSearch(e.target.value)}
+                                        placeholder="Search by resident or plan name..."
+                                        className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <select
+                                    value={planStatusFilter}
+                                    onChange={e => setPlanStatusFilter(e.target.value)}
+                                    className="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                    <option value="all">All Statuses</option>
+                                    <option value="active">Active</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="on_hold">On Hold</option>
+                                    <option value="archived">Archived</option>
+                                </select>
+                            </div>
+                        )}
                         {loading ? (
                             <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>
                         ) : plans.length === 0 ? (
@@ -945,8 +1020,13 @@ function RecoveryPlansContent() {
                                     <Plus className="w-4 h-4 inline mr-2" /> Create First Plan
                                 </button>
                             </div>
+                        ) : filteredPlans.length === 0 ? (
+                            <div className="bg-white rounded-2xl p-12 text-center shadow-sm">
+                                <Search className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                                <p className="text-gray-500">No plans match your search or filter.</p>
+                            </div>
                         ) : (
-                            plans.map(plan => {
+                            filteredPlans.map(plan => {
                                 const pName = plan.participant_preferred_name || plan.participant_first_name || '';
                                 const goalPct = plan.total_goals ? Math.round(((plan.completed_goals || 0) / plan.total_goals) * 100) : 0;
                                 return (
@@ -1170,6 +1250,31 @@ function RecoveryPlansContent() {
                                                     </label>
                                                 );
                                             })}
+                                            {(cfg?.customGoals || []).map((cg, ci) => (
+                                                <div key={`custom-${ci}`} className="flex items-center gap-3 p-3 rounded-xl bg-green-50">
+                                                    <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                                                    <span className="text-sm text-gray-800 flex-1">{cg}</span>
+                                                    <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded">custom</span>
+                                                    <button onClick={() => removeCustomGoal(key, ci)} className="p-0.5 text-red-400 hover:text-red-600">
+                                                        <X className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            <div className="flex items-center gap-2 pt-1">
+                                                <input
+                                                    type="text"
+                                                    value={customGoalDrafts.get(key) || ''}
+                                                    onChange={e => setCustomGoalDrafts(prev => { const n = new Map(prev); n.set(key, e.target.value); return n; })}
+                                                    onKeyDown={e => { if (e.key === 'Enter') addCustomGoal(key); }}
+                                                    placeholder="Add a custom goal for this domain..."
+                                                    className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                />
+                                                <button onClick={() => addCustomGoal(key)}
+                                                    disabled={!(customGoalDrafts.get(key) || '').trim()}
+                                                    className="px-3 py-2 bg-green-600 text-white text-xs rounded-lg disabled:opacity-40 hover:bg-green-700 flex items-center gap-1">
+                                                    <Plus className="w-3.5 h-3.5" /> Add
+                                                </button>
+                                            </div>
                                         </div>
 
                                         <h4 className="text-sm font-semibold text-gray-700 mb-3">Activities</h4>
@@ -1284,7 +1389,36 @@ function RecoveryPlansContent() {
                                             <h2 className="text-lg font-bold text-[#0E2235]">
                                                 {selectedPlan.participant_preferred_name || selectedPlan.participant_first_name} {selectedPlan.participant_last_name}
                                             </h2>
-                                            <p className="text-sm text-gray-500">Created {new Date(selectedPlan.created_at).toLocaleDateString()}</p>
+                                            {editingPlanName ? (
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <input type="text" value={planNameValue}
+                                                        onChange={e => setPlanNameValue(e.target.value)}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter' && planNameValue.trim()) {
+                                                                updateItem('plan', selectedPlan.id, { plan_name: planNameValue.trim() });
+                                                                setEditingPlanName(false);
+                                                            }
+                                                            if (e.key === 'Escape') setEditingPlanName(false);
+                                                        }}
+                                                        className="text-sm border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-[#1A73A8] focus:border-[#1A73A8]"
+                                                        autoFocus
+                                                    />
+                                                    <button onClick={() => {
+                                                        if (planNameValue.trim()) updateItem('plan', selectedPlan.id, { plan_name: planNameValue.trim() });
+                                                        setEditingPlanName(false);
+                                                    }} className="text-green-600 hover:text-green-700"><CheckCircle2 className="w-4 h-4" /></button>
+                                                    <button onClick={() => setEditingPlanName(false)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-gray-500 flex items-center gap-1.5">
+                                                    {selectedPlan.plan_name}
+                                                    <button onClick={() => { setPlanNameValue(selectedPlan.plan_name || ''); setEditingPlanName(true); }}
+                                                        className="text-gray-300 hover:text-[#1A73A8]" title="Rename plan">
+                                                        <Edit3 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <span>· Created {new Date(selectedPlan.created_at).toLocaleDateString()}</span>
+                                                </p>
+                                            )}
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <select value={selectedPlan.status}
@@ -1510,6 +1644,12 @@ function RecoveryPlansContent() {
                                                                     {goal.is_custom && <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded">custom</span>}
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
+                                                                    <input type="date"
+                                                                        value={goal.target_date ? String(goal.target_date).slice(0, 10) : ''}
+                                                                        onChange={e => updateItem('goal', goal.id!, { target_date: e.target.value || null })}
+                                                                        className="text-xs border border-gray-300 rounded-lg px-2 py-1 text-gray-500"
+                                                                        title="Target date"
+                                                                    />
                                                                     <select value={goal.status}
                                                                         onChange={e => updateItem('goal', goal.id!, { status: e.target.value })}
                                                                         className="text-xs border border-gray-300 rounded-lg px-2 py-1"
@@ -1745,18 +1885,8 @@ function RecoveryPlansContent() {
                                                                                         </div>
                                                                                     ) : measure.type === 'assessment_link' ? (
                                                                                         <div className="space-y-2">
-                                                                                            <button
-                                                                                                onClick={() => {
-                                                                                                    const assessmentUrl = `/assessments?participant_id=${selectedPlan!.participant_id}&type=${measure.assessment_type || measure.key}`;
-                                                                                                    window.open(assessmentUrl, '_blank');
-                                                                                                }}
-                                                                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-colors"
-                                                                                            >
-                                                                                                <ExternalLink className="w-3 h-3" />
-                                                                                                Take {measure.label} Assessment
-                                                                                            </button>
                                                                                             <div className="flex items-center gap-2">
-                                                                                                <span className="text-[10px] text-gray-400">or enter score manually:</span>
+                                                                                                <span className="text-[10px] text-gray-400">Enter {measure.label} score:</span>
                                                                                                 <input type="number"
                                                                                                     value={outcomeValues[inputKey] || ''}
                                                                                                     onChange={e => setOutcomeValues(prev => ({ ...prev, [inputKey]: e.target.value }))}

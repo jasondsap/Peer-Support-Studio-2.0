@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession, getInternalUserId } from '@/lib/auth';
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
 import { sql } from '@/lib/db';
+
+// Resolve the owning plan for the parent entity an item is being added to,
+// so the insert can be org-scoped before it runs.
+async function resolveParentPlan(body: any): Promise<{ planId: string; organizationId: string } | null> {
+    let rows: any[] = [];
+    if (body.type === 'goal' && body.domain_entry_id) {
+        rows = await sql`
+            SELECT p.id AS plan_id, p.organization_id FROM rc_plan_domains d
+            JOIN rc_plans p ON p.id = d.plan_id WHERE d.id = ${body.domain_entry_id}::uuid`;
+    } else if (body.type === 'activity' && body.goal_entry_id) {
+        rows = await sql`
+            SELECT p.id AS plan_id, p.organization_id FROM rc_plan_goals g
+            JOIN rc_plan_domains d ON d.id = g.domain_entry_id
+            JOIN rc_plans p ON p.id = d.plan_id WHERE g.id = ${body.goal_entry_id}::uuid`;
+    } else if (body.type === 'domain' && body.plan_id) {
+        rows = await sql`SELECT id AS plan_id, organization_id FROM rc_plans WHERE id = ${body.plan_id}::uuid`;
+    } else if (body.type === 'outcome' && body.domain_entry_id) {
+        rows = await sql`
+            SELECT p.id AS plan_id, p.organization_id FROM rc_plan_domains d
+            JOIN rc_plans p ON p.id = d.plan_id WHERE d.id = ${body.domain_entry_id}::uuid`;
+    }
+    if (rows.length === 0) return null;
+    return { planId: rows[0].plan_id, organizationId: rows[0].organization_id };
+}
 
 // ============================================================================
 // RC-PLANS ITEMS API — Add items to existing plans
@@ -22,6 +46,20 @@ export async function POST(req: NextRequest) {
         if (!type) {
             return NextResponse.json({ error: 'type is required' }, { status: 400 });
         }
+
+        const owner = await resolveParentPlan(body);
+        if (!owner) {
+            return NextResponse.json({ error: 'Parent plan not found' }, { status: 404 });
+        }
+        try {
+            await requireOrgAccess(owner.organizationId);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unauthorized';
+            const status = message.includes('access denied') ? 403 : 401;
+            return NextResponse.json({ error: message }, { status });
+        }
+        // Any add bumps the plan's updated_at so list ordering stays accurate.
+        await sql`UPDATE rc_plans SET updated_at = NOW() WHERE id = ${owner.planId}::uuid`;
 
         // ── Add goal to domain ──
         if (type === 'goal') {

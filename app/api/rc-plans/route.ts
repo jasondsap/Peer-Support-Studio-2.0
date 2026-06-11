@@ -1,14 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
+import { query, logAuditEvent } from '@/lib/db';
+
+// Resolve the owning plan (id + organization_id) for any rc-plan item type so
+// every mutation can be org-scoped before it runs.
+async function resolvePlanForItem(type: string, id: string): Promise<{ planId: string; organizationId: string } | null> {
+    let rows: any[] = [];
+    switch (type) {
+        case 'plan':
+        case 'add_signature':
+            rows = await query('SELECT id AS plan_id, organization_id FROM rc_plans WHERE id = $1', [id]) as any[];
+            break;
+        case 'domain':
+            rows = await query(
+                `SELECT p.id AS plan_id, p.organization_id FROM rc_plan_domains d
+                 JOIN rc_plans p ON p.id = d.plan_id WHERE d.id = $1`, [id]) as any[];
+            break;
+        case 'goal':
+            rows = await query(
+                `SELECT p.id AS plan_id, p.organization_id FROM rc_plan_goals g
+                 JOIN rc_plan_domains d ON d.id = g.domain_entry_id
+                 JOIN rc_plans p ON p.id = d.plan_id WHERE g.id = $1`, [id]) as any[];
+            break;
+        case 'activity':
+            rows = await query(
+                `SELECT p.id AS plan_id, p.organization_id FROM rc_plan_activities a
+                 JOIN rc_plan_goals g ON g.id = a.goal_entry_id
+                 JOIN rc_plan_domains d ON d.id = g.domain_entry_id
+                 JOIN rc_plans p ON p.id = d.plan_id WHERE a.id = $1`, [id]) as any[];
+            break;
+        case 'outcome':
+            rows = await query(
+                `SELECT p.id AS plan_id, p.organization_id FROM rc_plan_outcomes o
+                 JOIN rc_plan_domains d ON d.id = o.domain_entry_id
+                 JOIN rc_plans p ON p.id = d.plan_id WHERE o.id = $1`, [id]) as any[];
+            break;
+        case 'signature':
+            rows = await query(
+                `SELECT plan_id, organization_id FROM rc_plan_signatures WHERE id = $1`, [id]) as any[];
+            break;
+    }
+    if (rows.length === 0) return null;
+    return { planId: rows[0].plan_id, organizationId: rows[0].organization_id };
+}
+
+function accessDenied(err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unauthorized';
+    const status = message.includes('access denied') ? 403 : 401;
+    return NextResponse.json({ error: message }, { status });
+}
 
 // ============================================================================
 // GET /api/rc-plans
 // ============================================================================
 export async function GET(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
+        const session = await getSession();
         if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const { searchParams } = new URL(req.url);
@@ -19,6 +66,7 @@ export async function GET(req: NextRequest) {
         if (!organizationId) {
             return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
         }
+        try { await requireOrgAccess(organizationId); } catch (err) { return accessDenied(err); }
 
         // ── Single plan with full nested data ──
         if (planId) {
@@ -128,25 +176,29 @@ export async function GET(req: NextRequest) {
 // ============================================================================
 export async function POST(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
+        const session = await getSession();
         if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-        // Get user ID
-        const userResult = await query(
-            'SELECT id FROM users WHERE cognito_sub = $1',
-            [(session.user as any).sub || session.user.id]
-        ) as { id: string }[];
-
-        if (userResult.length === 0) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
-        }
-        const userId = userResult[0].id;
 
         const body = await req.json();
         const { organization_id, participant_id, plan_name, notes, domains } = body;
 
         if (!organization_id || !participant_id) {
             return NextResponse.json({ error: 'organization_id and participant_id required' }, { status: 400 });
+        }
+        try { await requireOrgAccess(organization_id); } catch (err) { return accessDenied(err); }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        // The participant must belong to the same org
+        const participantCheck = await query(
+            'SELECT id FROM participants WHERE id = $1 AND organization_id = $2',
+            [participant_id, organization_id]
+        ) as any[];
+        if (participantCheck.length === 0) {
+            return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
         }
 
         // Create plan
@@ -194,6 +246,8 @@ export async function POST(req: NextRequest) {
             }
         }
 
+        await logAuditEvent(userId, organization_id, 'create', 'recovery_plan', planId);
+
         return NextResponse.json({ success: true, planId });
     } catch (error) {
         console.error('Error creating rc-plan:', error);
@@ -206,13 +260,17 @@ export async function POST(req: NextRequest) {
 // ============================================================================
 export async function PUT(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
+        const session = await getSession();
         if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const body = await req.json();
         const { type, id, _plan_id, ...data } = body;
 
         if (!type || !id) return NextResponse.json({ error: 'type and id required' }, { status: 400 });
+
+        const owner = await resolvePlanForItem(type, id);
+        if (!owner) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        try { await requireOrgAccess(owner.organizationId); } catch (err) { return accessDenied(err); }
 
         switch (type) {
             case 'plan': {
@@ -245,7 +303,7 @@ export async function PUT(req: NextRequest) {
                 let pi = 1;
                 if (data.status !== undefined) { fields.push(`status = $${pi++}`); values.push(data.status); }
                 if (data.goal_text !== undefined) { fields.push(`goal_text = $${pi++}`); values.push(data.goal_text); }
-                if (data.target_date !== undefined) { fields.push(`target_date = $${pi++}`); values.push(data.target_date); }
+                if (data.target_date !== undefined) { fields.push(`target_date = $${pi++}`); values.push(data.target_date || null); }
                 values.push(id);
                 await query(`UPDATE rc_plan_goals SET ${fields.join(', ')} WHERE id = $${pi}`, values);
                 break;
@@ -275,13 +333,13 @@ export async function PUT(req: NextRequest) {
                 break;
             }
             case 'add_signature': {
-                if (!data.signer_role || !data.signer_name || !data.organization_id) {
-                    return NextResponse.json({ error: 'signer_role, signer_name, and organization_id required' }, { status: 400 });
+                if (!data.signer_role || !data.signer_name) {
+                    return NextResponse.json({ error: 'signer_role and signer_name required' }, { status: 400 });
                 }
                 await query(
                     `INSERT INTO rc_plan_signatures (plan_id, signer_role, signer_name, organization_id)
                      VALUES ($1, $2, $3, $4)`,
-                    [id, data.signer_role, data.signer_name, data.organization_id]
+                    [id, data.signer_role, data.signer_name, owner.organizationId]
                 );
                 break;
             }
@@ -289,8 +347,13 @@ export async function PUT(req: NextRequest) {
                 return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
         }
 
-        if (type !== 'plan' && _plan_id) {
-            await query('UPDATE rc_plans SET updated_at = NOW() WHERE id = $1', [_plan_id]);
+        if (type !== 'plan') {
+            await query('UPDATE rc_plans SET updated_at = NOW() WHERE id = $1', [owner.planId]);
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (userId) {
+            await logAuditEvent(userId, owner.organizationId, 'update', `recovery_plan_${type}`, id);
         }
 
         return NextResponse.json({ success: true });
@@ -305,13 +368,17 @@ export async function PUT(req: NextRequest) {
 // ============================================================================
 export async function DELETE(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
+        const session = await getSession();
         if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const { searchParams } = new URL(req.url);
         const type = searchParams.get('type') || 'plan';
         const id = searchParams.get('id');
         if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+        const owner = await resolvePlanForItem(type, id);
+        if (!owner) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        try { await requireOrgAccess(owner.organizationId); } catch (err) { return accessDenied(err); }
 
         switch (type) {
             case 'plan': await query('DELETE FROM rc_plans WHERE id = $1', [id]); break;
@@ -320,6 +387,17 @@ export async function DELETE(req: NextRequest) {
             case 'activity': await query('DELETE FROM rc_plan_activities WHERE id = $1', [id]); break;
             case 'outcome': await query('DELETE FROM rc_plan_outcomes WHERE id = $1', [id]); break;
             case 'signature': await query('DELETE FROM rc_plan_signatures WHERE id = $1', [id]); break;
+            default:
+                return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
+        }
+
+        if (type !== 'plan') {
+            await query('UPDATE rc_plans SET updated_at = NOW() WHERE id = $1', [owner.planId]);
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (userId) {
+            await logAuditEvent(userId, owner.organizationId, 'delete', `recovery_plan_${type}`, id);
         }
 
         return NextResponse.json({ success: true });
