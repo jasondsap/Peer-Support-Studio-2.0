@@ -8,7 +8,8 @@ import Link from 'next/link';
 import {
     Users, Plus, Search, Filter, Loader2,
     User, Phone, Mail, Calendar, Target,
-    FileText, ChevronRight, AlertCircle, UserCheck, MapPin
+    FileText, ChevronRight, AlertCircle, UserCheck, MapPin,
+    ArrowUpDown
 } from 'lucide-react';
 
 interface Participant {
@@ -47,6 +48,7 @@ export default function ParticipantsPage() {
     const [statusFilter, setStatusFilter] = useState('active');
     const [pssFilter, setPssFilter] = useState('all');
     const [locationFilter, setLocationFilter] = useState('all');
+    const [sortBy, setSortBy] = useState('last_az');
     const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
     const [locations, setLocations] = useState<{ id: string; name: string; short_name?: string }[]>([]);
     
@@ -149,6 +151,25 @@ export default function ParticipantsPage() {
     };
 
     const hasFilters = searchTerm || statusFilter !== 'active' || pssFilter !== 'all' || locationFilter !== 'all';
+
+    const displayFirst = (p: Participant) => (p.preferred_name || p.first_name || '').toLowerCase();
+    const sortedParticipants = [...participants].sort((a, b) => {
+        switch (sortBy) {
+            case 'last_za':
+                return b.last_name.localeCompare(a.last_name) || displayFirst(b).localeCompare(displayFirst(a));
+            case 'first_az':
+                return displayFirst(a).localeCompare(displayFirst(b)) || a.last_name.localeCompare(b.last_name);
+            case 'first_za':
+                return displayFirst(b).localeCompare(displayFirst(a)) || b.last_name.localeCompare(a.last_name);
+            case 'newest':
+                return String(b.intake_date || '').localeCompare(String(a.intake_date || ''));
+            case 'oldest':
+                return String(a.intake_date || '').localeCompare(String(b.intake_date || ''));
+            case 'last_az':
+            default:
+                return a.last_name.localeCompare(b.last_name) || displayFirst(a).localeCompare(displayFirst(b));
+        }
+    });
     
     return (
         <div className="max-w-7xl mx-auto px-6 py-8">
@@ -233,10 +254,25 @@ export default function ParticipantsPage() {
                                 </select>
                             </div>
                         )}
+                        <div className="flex items-center gap-2">
+                            <ArrowUpDown className="w-5 h-5 text-gray-400" />
+                            <select
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value)}
+                                className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A73A8]/20 focus:border-[#1A73A8]"
+                            >
+                                <option value="last_az">Last name (A–Z)</option>
+                                <option value="last_za">Last name (Z–A)</option>
+                                <option value="first_az">First name (A–Z)</option>
+                                <option value="first_za">First name (Z–A)</option>
+                                <option value="newest">Newest first</option>
+                                <option value="oldest">Oldest first</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
-            
+
             {/* Stats Summary */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-white rounded-xl p-4 border border-gray-200">
@@ -348,7 +384,7 @@ export default function ParticipantsPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {participants.map((participant) => (
+                                {sortedParticipants.map((participant) => (
                                     <tr 
                                         key={participant.id}
                                         className="hover:bg-gray-50 transition-colors cursor-pointer"
