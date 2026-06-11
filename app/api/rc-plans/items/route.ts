@@ -58,6 +58,22 @@ export async function POST(req: NextRequest) {
             const status = message.includes('access denied') ? 403 : 401;
             return NextResponse.json({ error: message }, { status });
         }
+        // Adding goals/activities/domains is blocked while the plan is signed by
+        // both parties; recording outcomes stays allowed.
+        if (type !== 'outcome') {
+            const lockRows = await sql`
+                SELECT COUNT(DISTINCT signer_role)::int AS roles
+                FROM rc_plan_signatures
+                WHERE plan_id = ${owner.planId}::uuid AND signer_role IN ('staff', 'resident')
+            `;
+            if ((lockRows[0]?.roles ?? 0) >= 2) {
+                return NextResponse.json(
+                    { error: 'Plan is signed and locked. Use Revise Plan to remove signatures before editing.' },
+                    { status: 409 }
+                );
+            }
+        }
+
         // Any add bumps the plan's updated_at so list ordering stays accurate.
         await sql`UPDATE rc_plans SET updated_at = NOW() WHERE id = ${owner.planId}::uuid`;
 

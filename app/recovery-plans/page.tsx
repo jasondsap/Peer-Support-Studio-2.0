@@ -3,13 +3,32 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { formatDateOnly, todayLocal } from '@/lib/dateUtils';
 import {
     ArrowLeft, Plus, Loader2, Save, Search, X, Target, Calendar,
     CheckCircle2, Clock, ChevronDown, ChevronUp, Edit3, Trash2,
     Users, Shield, Heart, Brain, Home, Compass, Activity, Star,
     Briefcase, AlertTriangle, Coffee, BookOpen, ChevronRight, Sparkles,
-    BarChart3, FileSignature
+    BarChart3, FileSignature, ExternalLink, Printer, Archive, Lock, Unlock
 } from 'lucide-react';
+
+// Assessment types that have a real instrument page in this app.
+const ASSESSMENT_PAGES: Record<string, string> = {
+    phq4: '/assessments/phq4',
+    cdc_hrqol: '/assessments/cdc-hrqol',
+    floc1: '/assessments/floc1',
+    barc10: '/assessments/barc10',
+    mirc28: '/assessments/mirc28',
+};
+
+// Instrument chip labels → instrument pages (where one exists).
+const INSTRUMENT_LINKS: Record<string, string> = {
+    'PHQ-4': '/assessments/phq4',
+    'CDC HRQOL': '/assessments/cdc-hrqol',
+    'FLOC-1': '/assessments/floc1',
+    'BARC-10': '/assessments/barc10',
+    'MIRC-28': '/assessments/mirc28',
+};
 
 // ============================================================================
 // 10-DOMAIN RECOVERY PLAN TEMPLATE (Fletcher Group Model)
@@ -352,6 +371,7 @@ interface PlanSignature {
 interface Plan {
     id: string; participant_id: string; organization_id: string; user_id: string;
     plan_name: string; status: string; notes: string; created_at: string; updated_at: string;
+    next_review_date?: string | null;
     participant_first_name?: string; participant_last_name?: string; participant_preferred_name?: string;
     domains?: PlanDomain[]; domain_count?: number; completed_goals?: number; total_goals?: number;
     plan_summary?: string; signatures?: PlanSignature[];
@@ -675,11 +695,15 @@ function RecoveryPlansContent() {
     const updateItem = async (type: string, id: string, data: any) => {
         setUpdatingId(id);
         try {
-            await fetch('/api/rc-plans', {
+            const res = await fetch('/api/rc-plans', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ type, id, _plan_id: selectedPlan?.id, ...data }),
             });
+            if (!res.ok) {
+                const d = await res.json().catch(() => ({}));
+                alert(d.error || 'Could not save the change.');
+            }
             if (selectedPlan) await fetchPlanDetail(selectedPlan.id);
         } catch (e) { console.error(e); }
         finally { setUpdatingId(null); }
@@ -830,6 +854,30 @@ function RecoveryPlansContent() {
         finally { setOutcomeLoading(false); }
     };
 
+    const [pullError, setPullError] = useState('');
+
+    // Pull the participant's most recent saved score for a linked instrument
+    // and record it as this outcome's value.
+    const pullLatestScore = async (domainEntryId: string, measure: any) => {
+        if (!selectedPlan || !currentOrg?.id) return;
+        setPullError('');
+        setOutcomeLoading(true);
+        try {
+            const res = await fetch(`/api/recovery-assessments?organization_id=${currentOrg.id}&participant_id=${selectedPlan.participant_id}&type=${measure.assessment_type}`);
+            const data = await res.json();
+            const latest = (data.assessments || [])[0];
+            if (!latest) {
+                setPullError('No saved assessment for this resident yet — take the assessment first, then pull the score.');
+                return;
+            }
+            await recordOutcome(domainEntryId, measure.key, measure.type, measure.label, String(latest.total_score));
+        } catch (e) {
+            setPullError('Could not fetch the latest score.');
+        } finally {
+            setOutcomeLoading(false);
+        }
+    };
+
     const deleteOutcome = async (outcomeId: string) => {
         if (!confirm('Delete this outcome record?')) return;
         setUpdatingId(outcomeId);
@@ -840,15 +888,48 @@ function RecoveryPlansContent() {
         finally { setUpdatingId(null); }
     };
 
+    // Soft delete by default; permanent delete is supervisor+ and only for archived plans.
+    const canHardDelete = ['supervisor', 'admin', 'owner'].includes((currentOrg as any)?.role || '');
+
+    const archivePlan = async () => {
+        if (!selectedPlan) return;
+        if (!confirm('Archive this recovery plan? It will be hidden from the active list but kept on record.')) return;
+        await updateItem('plan', selectedPlan.id, { status: 'archived' });
+    };
+
     const deletePlan = async () => {
         if (!selectedPlan) return;
-        if (!confirm('Delete this entire recovery plan? This will remove all domains, goals, activities, and outcomes. This cannot be undone.')) return;
+        if (!confirm('Permanently delete this recovery plan? This removes all domains, goals, activities, outcomes, and signatures and cannot be undone.')) return;
         try {
-            await fetch(`/api/rc-plans?type=plan&id=${selectedPlan.id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/rc-plans?type=plan&id=${selectedPlan.id}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const d = await res.json().catch(() => ({}));
+                alert(d.error || 'Could not delete the plan. You may not have permission.');
+                return;
+            }
             setSelectedPlan(null);
             setView('list');
             await fetchPlans();
         } catch (e) { console.error(e); }
+    };
+
+    // A plan is locked once both parties have signed; content edits require a revision.
+    const isLocked = !!(
+        selectedPlan?.signatures?.some(s => s.signer_role === 'staff') &&
+        selectedPlan?.signatures?.some(s => s.signer_role === 'resident')
+    );
+
+    const revisePlan = async () => {
+        if (!selectedPlan?.signatures?.length) return;
+        if (!confirm('Revise this plan? Both signatures will be removed, and the plan must be re-acknowledged after changes are made.')) return;
+        setUpdatingId(selectedPlan.id);
+        try {
+            for (const sig of selectedPlan.signatures) {
+                await fetch(`/api/rc-plans?type=signature&id=${sig.id}`, { method: 'DELETE' });
+            }
+            await fetchPlanDetail(selectedPlan.id);
+        } catch (e) { console.error(e); }
+        finally { setUpdatingId(null); }
     };
 
     // ========================================================================
@@ -918,7 +999,13 @@ function RecoveryPlansContent() {
         active: 'Active', on_hold: 'On Hold', archived: 'Archived',
     };
 
+    const isReviewOverdue = (plan: Plan) =>
+        plan.status === 'active' && !!plan.next_review_date &&
+        String(plan.next_review_date).slice(0, 10) < todayLocal();
+
     const filteredPlans = plans.filter(plan => {
+        // "All" hides archived plans; select Archived explicitly to see them.
+        if (planStatusFilter === 'all' && plan.status === 'archived') return false;
         if (planStatusFilter !== 'all' && plan.status !== planStatusFilter) return false;
         if (planSearch) {
             const haystack = `${plan.participant_first_name || ''} ${plan.participant_last_name || ''} ${plan.participant_preferred_name || ''} ${plan.plan_name || ''}`.toLowerCase();
@@ -1040,9 +1127,15 @@ function RecoveryPlansContent() {
                                                 </h3>
                                                 <p className="text-sm text-gray-500">
                                                     {plan.domain_count || 0} domains · {plan.total_goals || 0} goals · Created {new Date(plan.created_at).toLocaleDateString()}
+                                                    {plan.next_review_date && ` · Review ${formatDateOnly(plan.next_review_date, { month: 'short', day: 'numeric', year: 'numeric' })}`}
                                                 </p>
                                             </div>
                                             <div className="flex items-center gap-2">
+                                                {isReviewOverdue(plan) && (
+                                                    <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-red-100 text-red-700">
+                                                        Review overdue
+                                                    </span>
+                                                )}
                                                 <span className="text-xs font-medium px-2.5 py-1 rounded-full" style={{ backgroundColor: `${statusColors[plan.status]}15`, color: statusColors[plan.status] }}>
                                                     {statusLabels[plan.status]}
                                                 </span>
@@ -1412,15 +1505,31 @@ function RecoveryPlansContent() {
                                             ) : (
                                                 <p className="text-sm text-gray-500 flex items-center gap-1.5">
                                                     {selectedPlan.plan_name}
-                                                    <button onClick={() => { setPlanNameValue(selectedPlan.plan_name || ''); setEditingPlanName(true); }}
-                                                        className="text-gray-300 hover:text-[#1A73A8]" title="Rename plan">
-                                                        <Edit3 className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    {!isLocked && (
+                                                        <button onClick={() => { setPlanNameValue(selectedPlan.plan_name || ''); setEditingPlanName(true); }}
+                                                            className="text-gray-300 hover:text-[#1A73A8]" title="Rename plan">
+                                                            <Edit3 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
                                                     <span>· Created {new Date(selectedPlan.created_at).toLocaleDateString()}</span>
                                                 </p>
                                             )}
                                         </div>
                                         <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-1.5" title="Next review date">
+                                                <Calendar className="w-4 h-4 text-gray-400" />
+                                                <input type="date"
+                                                    value={selectedPlan.next_review_date ? String(selectedPlan.next_review_date).slice(0, 10) : ''}
+                                                    onChange={e => updateItem('plan', selectedPlan.id, { next_review_date: e.target.value || null })}
+                                                    className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 text-gray-600"
+                                                />
+                                            </div>
+                                            <button onClick={() => window.open(`/recovery-plans/print/${selectedPlan.id}`, '_blank')}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
+                                                title="Print or save as PDF"
+                                            >
+                                                <Printer className="w-4 h-4" /> Print / PDF
+                                            </button>
                                             <select value={selectedPlan.status}
                                                 onChange={e => updateItem('plan', selectedPlan.id, { status: e.target.value })}
                                                 className="text-sm border border-gray-300 rounded-lg px-3 py-1.5"
@@ -1430,12 +1539,21 @@ function RecoveryPlansContent() {
                                                 <option value="on_hold">On Hold</option>
                                                 <option value="archived">Archived</option>
                                             </select>
-                                            <button onClick={deletePlan}
-                                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                title="Delete Plan"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            {selectedPlan.status !== 'archived' ? (
+                                                <button onClick={archivePlan}
+                                                    className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                                    title="Archive Plan"
+                                                >
+                                                    <Archive className="w-4 h-4" />
+                                                </button>
+                                            ) : canHardDelete && (
+                                                <button onClick={deletePlan}
+                                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                    title="Delete Permanently"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1506,6 +1624,23 @@ function RecoveryPlansContent() {
                                         )}
                                     </div>
                                 </div>
+
+                                {/* ── Signed-and-locked banner ── */}
+                                {isLocked && (
+                                    <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <Lock className="w-5 h-5 text-[#1A73A8] flex-shrink-0" />
+                                            <p className="text-sm text-[#0E2235]">
+                                                <span className="font-semibold">This plan is signed and locked.</span>{' '}
+                                                Goals, activities, and domains can&apos;t be changed. Outcome measures can still be recorded.
+                                            </p>
+                                        </div>
+                                        <button onClick={revisePlan}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-[#1A73A8] text-[#1A73A8] rounded-lg hover:bg-blue-100 flex-shrink-0">
+                                            <Unlock className="w-3.5 h-3.5" /> Revise Plan
+                                        </button>
+                                    </div>
+                                )}
 
                                 {/* ── Signatures & Acknowledgment ── */}
                                 <div className="bg-white rounded-2xl p-6 shadow-sm">
@@ -1647,12 +1782,14 @@ function RecoveryPlansContent() {
                                                                     <input type="date"
                                                                         value={goal.target_date ? String(goal.target_date).slice(0, 10) : ''}
                                                                         onChange={e => updateItem('goal', goal.id!, { target_date: e.target.value || null })}
-                                                                        className="text-xs border border-gray-300 rounded-lg px-2 py-1 text-gray-500"
+                                                                        disabled={isLocked}
+                                                                        className="text-xs border border-gray-300 rounded-lg px-2 py-1 text-gray-500 disabled:opacity-60"
                                                                         title="Target date"
                                                                     />
                                                                     <select value={goal.status}
                                                                         onChange={e => updateItem('goal', goal.id!, { status: e.target.value })}
-                                                                        className="text-xs border border-gray-300 rounded-lg px-2 py-1"
+                                                                        disabled={isLocked}
+                                                                        className="text-xs border border-gray-300 rounded-lg px-2 py-1 disabled:opacity-60"
                                                                         style={{ color: statusColors[goal.status] }}
                                                                     >
                                                                         <option value="not_started">Not Started</option>
@@ -1660,7 +1797,7 @@ function RecoveryPlansContent() {
                                                                         <option value="completed">Completed</option>
                                                                         <option value="ongoing">Ongoing</option>
                                                                     </select>
-                                                                    {goal.is_custom && (
+                                                                    {goal.is_custom && !isLocked && (
                                                                         <button onClick={() => deleteItem('goal', goal.id!)} className="p-1 text-red-400 hover:text-red-600">
                                                                             <Trash2 className="w-3.5 h-3.5" />
                                                                         </button>
@@ -1673,10 +1810,11 @@ function RecoveryPlansContent() {
                                                                     <div key={act.id} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50/50 group">
                                                                         <div className="flex items-center gap-3 flex-1 min-w-0">
                                                                             <button onClick={() => {
+                                                                                if (isLocked) return;
                                                                                 const nextStatus = act.status === 'completed' ? 'not_started' :
                                                                                     act.status === 'not_started' ? 'in_progress' : 'completed';
                                                                                 updateItem('activity', act.id!, { status: nextStatus });
-                                                                            }} className="flex-shrink-0">
+                                                                            }} className="flex-shrink-0" disabled={isLocked}>
                                                                                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
                                                                                     act.status === 'completed' ? 'border-green-500 bg-green-500' :
                                                                                     act.status === 'in_progress' ? 'border-blue-500 bg-blue-100' :
@@ -1711,7 +1849,7 @@ function RecoveryPlansContent() {
                                                                                         className="text-green-600"><CheckCircle2 className="w-3.5 h-3.5" /></button>
                                                                                     <button onClick={() => setEditingFrequency(null)} className="text-gray-400"><X className="w-3.5 h-3.5" /></button>
                                                                                 </div>
-                                                                            ) : (
+                                                                            ) : !isLocked && (
                                                                                 <button onClick={() => { setEditingFrequency(act.id!); setFreqValue(act.frequency || ''); }}
                                                                                     className="text-xs text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
                                                                                 >
@@ -1724,7 +1862,7 @@ function RecoveryPlansContent() {
                                                                             {act.duration && (
                                                                                 <span className="text-xs px-1.5 py-0.5 bg-green-50 text-green-600 rounded">{act.duration}</span>
                                                                             )}
-                                                                            {act.is_custom && (
+                                                                            {act.is_custom && !isLocked && (
                                                                                 <button onClick={() => deleteItem('activity', act.id!)}
                                                                                     className="p-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                                     <Trash2 className="w-3 h-3" />
@@ -1735,7 +1873,7 @@ function RecoveryPlansContent() {
                                                                 ))}
 
                                                                 {/* Add activity */}
-                                                                {addingActivityToGoal === goal.id ? (
+                                                                {isLocked ? null : addingActivityToGoal === goal.id ? (
                                                                     <div className="px-4 py-3 flex items-center gap-2">
                                                                         <input type="text" value={newActivityText}
                                                                             onChange={e => setNewActivityText(e.target.value)}
@@ -1762,7 +1900,7 @@ function RecoveryPlansContent() {
                                                     ))}
 
                                                     {/* Add goal to domain */}
-                                                    {addingGoalToDomain === domain.id ? (
+                                                    {isLocked ? null : addingGoalToDomain === domain.id ? (
                                                         <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
                                                             <input type="text" value={newGoalText}
                                                                 onChange={e => setNewGoalText(e.target.value)}
@@ -1791,7 +1929,14 @@ function RecoveryPlansContent() {
                                                             <p className="text-xs font-medium text-gray-500 mb-1.5">Linked Instruments</p>
                                                             <div className="flex flex-wrap gap-1.5">
                                                                 {tpl.instruments.map(inst => (
-                                                                    <span key={inst} className="text-xs px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-600">{inst}</span>
+                                                                    INSTRUMENT_LINKS[inst] ? (
+                                                                        <a key={inst} href={INSTRUMENT_LINKS[inst]} target="_blank" rel="noopener noreferrer"
+                                                                            className="text-xs px-2 py-1 rounded-full bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1">
+                                                                            {inst} <ExternalLink className="w-2.5 h-2.5" />
+                                                                        </a>
+                                                                    ) : (
+                                                                        <span key={inst} className="text-xs px-2 py-1 rounded-full bg-white border border-gray-200 text-gray-600">{inst}</span>
+                                                                    )
                                                                 ))}
                                                             </div>
                                                         </div>
@@ -1885,8 +2030,30 @@ function RecoveryPlansContent() {
                                                                                         </div>
                                                                                     ) : measure.type === 'assessment_link' ? (
                                                                                         <div className="space-y-2">
+                                                                                            {ASSESSMENT_PAGES[measure.assessment_type] && (
+                                                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                                                    <button
+                                                                                                        onClick={() => window.open(ASSESSMENT_PAGES[measure.assessment_type], '_blank')}
+                                                                                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-colors"
+                                                                                                    >
+                                                                                                        <ExternalLink className="w-3 h-3" />
+                                                                                                        Take {measure.label} Assessment
+                                                                                                    </button>
+                                                                                                    <button
+                                                                                                        onClick={() => pullLatestScore(domain.id!, measure)}
+                                                                                                        disabled={outcomeLoading}
+                                                                                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-lg border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                                                                                                    >
+                                                                                                        {outcomeLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <BarChart3 className="w-3 h-3" />}
+                                                                                                        Use latest saved score
+                                                                                                    </button>
+                                                                                                </div>
+                                                                                            )}
+                                                                                            {pullError && (
+                                                                                                <p className="text-[11px] text-amber-600">{pullError}</p>
+                                                                                            )}
                                                                                             <div className="flex items-center gap-2">
-                                                                                                <span className="text-[10px] text-gray-400">Enter {measure.label} score:</span>
+                                                                                                <span className="text-[10px] text-gray-400">{ASSESSMENT_PAGES[measure.assessment_type] ? 'or enter score manually:' : `Enter ${measure.label} score:`}</span>
                                                                                                 <input type="number"
                                                                                                     value={outcomeValues[inputKey] || ''}
                                                                                                     onChange={e => setOutcomeValues(prev => ({ ...prev, [inputKey]: e.target.value }))}
@@ -1918,11 +2085,11 @@ function RecoveryPlansContent() {
                                                                                             </button>
                                                                                         </>
                                                                                     )}
-                                                                                    <button onClick={() => setRecordingOutcome(null)}
+                                                                                    <button onClick={() => { setRecordingOutcome(null); setPullError(''); }}
                                                                                         className="p-1 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
                                                                                 </div>
                                                                             ) : (
-                                                                                <button onClick={() => setRecordingOutcome(`${domain.id}_${measure.key}`)}
+                                                                                <button onClick={() => { setRecordingOutcome(`${domain.id}_${measure.key}`); setPullError(''); }}
                                                                                     className="text-xs text-amber-600 hover:text-amber-700 mt-1 flex items-center gap-1">
                                                                                     <Plus className="w-3 h-3" /> Record {latestValue ? 'new value' : 'value'}
                                                                                 </button>
@@ -1972,7 +2139,7 @@ function RecoveryPlansContent() {
                                 })}
 
                                 {/* Add domain to plan */}
-                                {showAddDomain ? (
+                                {isLocked ? null : showAddDomain ? (
                                     <div className="bg-white rounded-2xl p-6 shadow-sm">
                                         <div className="flex items-center justify-between mb-4">
                                             <h3 className="font-semibold text-[#0E2235]">Add Recovery Domain</h3>

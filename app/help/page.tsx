@@ -299,14 +299,20 @@ export default function HelpCenter() {
                 'Use the importance and confidence ratings as conversation starters with participants',
                 'Customize template goals by adding your own - every participant\'s journey is unique',
                 'Record outcome measures regularly to document progress over time',
+                'Use "Use latest saved score" on linked instruments (PHQ-4, CDC HRQOL, FLOC-1, BARC-10, MIRC-28) to pull assessment results into the plan automatically',
+                'Set a next review date on every plan - overdue reviews show on the Dashboard and the plans list',
+                'Use Print / PDF to produce a signable paper copy of the plan',
                 'Review plans during sessions and update statuses together with participants',
                 'The progress bar on each plan card shows goal completion at a glance',
                 'Plans are accessible from both the Recovery Plans page and each participant\'s detail page'
             ],
             faqs: [
                 { question: 'What are the 10 recovery domains?', answer: 'Substance Use, Emotional Wellbeing, Physical Health, Civic Engagement, Functional Wellbeing, Meaning & Purpose, Housing, Risk Taking, Recovery Experience, and Social Support. Each domain includes pre-built goals, activities, and outcome measures based on clinical best practices.' },
-                { question: 'Can I add custom goals and activities?', answer: 'Yes! Each domain comes with template goals and activities, but you can add custom ones at any time. Custom items are marked so you can distinguish them from templates.' },
-                { question: 'What are outcome measures?', answer: 'Outcome measures let you record specific data points within each domain, such as assessment scores (BARC-10, PHQ-4, etc.), numeric values, ratings, or yes/no indicators. They create a history of measurable progress.' },
+                { question: 'Can I add custom goals and activities?', answer: 'Yes! Each domain comes with template goals and activities, but you can add custom ones during plan creation and at any time afterward. Custom items are marked so you can distinguish them from templates.' },
+                { question: 'What are outcome measures?', answer: 'Outcome measures let you record specific data points within each domain, such as assessment scores (BARC-10, PHQ-4, etc.), numeric values, ratings, or yes/no indicators. For linked instruments you can take the assessment directly or pull the participant\'s latest saved score with one click.' },
+                { question: 'How do signatures and locking work?', answer: 'Once both the Peer Support Specialist and the resident sign, the plan locks: goals, activities, and domains can no longer be changed (outcome measures can still be recorded). To make changes, click "Revise Plan" - this removes both signatures, and the plan must be re-acknowledged after editing.' },
+                { question: 'How do I print a plan or save it as a PDF?', answer: 'Open the plan and click "Print / PDF". A print-ready document opens with the full plan, outcome measures, and signature lines, and you can print it or save it as a PDF from the print dialog.' },
+                { question: 'What happens when I archive or delete a plan?', answer: 'Archiving hides the plan from the active list but keeps it on record (filter by Archived to see it). Permanent deletion is only available to supervisors, admins, and owners, and only for archived plans.' },
                 { question: 'Can a participant have multiple plans?', answer: 'Yes. You might create a new plan for a new phase of recovery or when priorities shift. Previous plans remain accessible for reference.' },
                 { question: 'How do importance and confidence ratings work?', answer: 'These are 0-10 scales completed with the participant. Importance measures how much a domain matters to them. Confidence measures how ready they feel to work on it. High importance + low confidence areas may need extra support.' }
             ]

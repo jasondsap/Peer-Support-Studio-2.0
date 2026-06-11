@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
+import { getSession, getInternalUserId, requireOrgAccess, requireOrgRole } from '@/lib/auth';
 import { query, logAuditEvent } from '@/lib/db';
+
+// A plan is locked once both the staff and resident signatures exist.
+async function planIsLocked(planId: string): Promise<boolean> {
+    const rows = await query(
+        `SELECT COUNT(DISTINCT signer_role)::int AS roles
+         FROM rc_plan_signatures
+         WHERE plan_id = $1 AND signer_role IN ('staff', 'resident')`,
+        [planId]
+    ) as any[];
+    return (rows[0]?.roles ?? 0) >= 2;
+}
+
+const LOCKED_PLAN_ERROR = 'Plan is signed and locked. Use Revise Plan to remove signatures before editing.';
 
 // Resolve the owning plan (id + organization_id) for any rc-plan item type so
 // every mutation can be org-scoped before it runs.
@@ -46,7 +59,7 @@ async function resolvePlanForItem(type: string, id: string): Promise<{ planId: s
 
 function accessDenied(err: unknown) {
     const message = err instanceof Error ? err.message : 'Unauthorized';
-    const status = message.includes('access denied') ? 403 : 401;
+    const status = (message.includes('access denied') || message.includes('Insufficient')) ? 403 : 401;
     return NextResponse.json({ error: message }, { status });
 }
 
@@ -272,6 +285,15 @@ export async function PUT(req: NextRequest) {
         if (!owner) return NextResponse.json({ error: 'Not found' }, { status: 404 });
         try { await requireOrgAccess(owner.organizationId); } catch (err) { return accessDenied(err); }
 
+        // Content edits are blocked while the plan is signed by both parties.
+        // Status changes, review-date changes, outcomes, and signature ops stay allowed.
+        const isContentEdit =
+            ['domain', 'goal', 'activity'].includes(type) ||
+            (type === 'plan' && (data.plan_name !== undefined || data.notes !== undefined));
+        if (isContentEdit && await planIsLocked(owner.planId)) {
+            return NextResponse.json({ error: LOCKED_PLAN_ERROR }, { status: 409 });
+        }
+
         switch (type) {
             case 'plan': {
                 const fields: string[] = [];
@@ -280,6 +302,7 @@ export async function PUT(req: NextRequest) {
                 if (data.status !== undefined) { fields.push(`status = $${pi++}`); values.push(data.status); }
                 if (data.plan_name !== undefined) { fields.push(`plan_name = $${pi++}`); values.push(data.plan_name); }
                 if (data.notes !== undefined) { fields.push(`notes = $${pi++}`); values.push(data.notes); }
+                if (data.next_review_date !== undefined) { fields.push(`next_review_date = $${pi++}`); values.push(data.next_review_date || null); }
                 fields.push('updated_at = NOW()');
                 values.push(id);
                 await query(`UPDATE rc_plans SET ${fields.join(', ')} WHERE id = $${pi}`, values);
@@ -378,7 +401,20 @@ export async function DELETE(req: NextRequest) {
 
         const owner = await resolvePlanForItem(type, id);
         if (!owner) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-        try { await requireOrgAccess(owner.organizationId); } catch (err) { return accessDenied(err); }
+
+        // Permanent plan deletion is supervisor+; everything else just needs membership.
+        try {
+            if (type === 'plan') {
+                await requireOrgRole(owner.organizationId, ['supervisor', 'admin', 'owner']);
+            } else {
+                await requireOrgAccess(owner.organizationId);
+            }
+        } catch (err) { return accessDenied(err); }
+
+        // Content deletions are blocked while the plan is signed by both parties.
+        if (['domain', 'goal', 'activity'].includes(type) && await planIsLocked(owner.planId)) {
+            return NextResponse.json({ error: LOCKED_PLAN_ERROR }, { status: 409 });
+        }
 
         switch (type) {
             case 'plan': await query('DELETE FROM rc_plans WHERE id = $1', [id]); break;

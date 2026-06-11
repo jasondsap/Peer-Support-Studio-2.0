@@ -12,6 +12,7 @@ import {
     Plus, Map, Mail, Library, Tablet,
 } from 'lucide-react';
 import AllyIntelligenceChat from './components/AllyIntelligenceChat';
+import { todayLocal } from '@/lib/dateUtils';
 
 interface Organization {
     id: string;
@@ -151,6 +152,22 @@ export default function HomePage() {
         fetchOrganization();
     }, [status]);
 
+    // Recovery plan reviews that are past their next_review_date
+    const [overdueReviews, setOverdueReviews] = useState(0);
+    useEffect(() => {
+        if (status !== 'authenticated' || !organization?.id) return;
+        fetch(`/api/rc-plans?organization_id=${organization.id}`)
+            .then(res => res.json())
+            .then(data => {
+                const today = todayLocal();
+                const count = (data.plans || []).filter((p: any) =>
+                    p.status === 'active' && p.next_review_date && String(p.next_review_date).slice(0, 10) < today
+                ).length;
+                setOverdueReviews(count);
+            })
+            .catch(() => {});
+    }, [status, organization?.id]);
+
     // Show loading while checking auth and org
     if (status === 'loading' || orgLoading) {
         return (
@@ -190,7 +207,9 @@ export default function HomePage() {
             icon: ClipboardList,
             href: '/recovery-plans',
             gradient: 'from-[#30B27A] to-[#4AC490]',
-            stat: null,
+            stat: overdueReviews > 0
+                ? `⚠ ${overdueReviews} plan ${overdueReviews === 1 ? 'review' : 'reviews'} overdue`
+                : null,
             action: {
                 label: 'Create New',
                 href: '/recovery-plans?create=true',
