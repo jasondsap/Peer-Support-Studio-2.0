@@ -1263,7 +1263,7 @@ export default function ParticipantDetailPage() {
                                         <div>
                                             <p className="text-sm font-medium text-[#0E2235]">{a.activity_name}</p>
                                             <p className="text-xs text-gray-500">
-                                                {new Date(a.activity_date + 'T00:00:00').toLocaleDateString('en-US', {
+                                                {formatDateOnly(a.activity_date, {
                                                     month: 'short', day: 'numeric', year: 'numeric',
                                                 })}
                                             </p>
@@ -1295,7 +1295,7 @@ export default function ParticipantDetailPage() {
                                         <div>
                                             <p className="text-sm font-medium text-[#0E2235] capitalize">{l.log_type}</p>
                                             <p className="text-xs text-gray-500">
-                                                {new Date(l.service_date + 'T00:00:00').toLocaleDateString('en-US', {
+                                                {formatDateOnly(l.service_date, {
                                                     month: 'short', day: 'numeric', year: 'numeric',
                                                 })}
                                             </p>

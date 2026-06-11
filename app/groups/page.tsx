@@ -14,6 +14,7 @@ import {
     CalendarDays,
     Plus,
 } from 'lucide-react';
+import { formatDateOnly } from '@/lib/dateUtils';
 
 interface Activity {
     id: string;
@@ -38,7 +39,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const formatDate = (d: string) =>
-    new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    formatDateOnly(d, { month: 'short', day: 'numeric', year: 'numeric' });
 
 export default function GroupActivitiesPage() {
     const router = useRouter();

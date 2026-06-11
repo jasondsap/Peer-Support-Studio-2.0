@@ -17,6 +17,7 @@ import {
     Trash2,
     Pencil,
 } from 'lucide-react';
+import { formatDateOnly } from '@/lib/dateUtils';
 
 const TYPE_OPTIONS = [
     { value: 'recovery_group', label: 'Recovery Group' },
@@ -65,7 +66,7 @@ const statusLabel = (s: string) => (s === 'no_show' ? 'No-show' : s.charAt(0).to
 const pName = (r: { first_name: string; last_name: string; preferred_name: string | null }) =>
     `${r.preferred_name || r.first_name} ${r.last_name}`;
 const formatDate = (d: string) =>
-    new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    formatDateOnly(d, { month: 'long', day: 'numeric', year: 'numeric' });
 
 export default function ActivityDetailPage() {
     const router = useRouter();
@@ -456,7 +457,7 @@ function EditActivityModal({
         name: activity.name || '',
         activity_type: activity.activity_type || 'recovery_group',
         primary_audience: activity.primary_audience || 'recoverees',
-        activity_date: activity.activity_date || '',
+        activity_date: activity.activity_date ? String(activity.activity_date).slice(0, 10) : '',
         start_time: activity.start_time ? String(activity.start_time).slice(0, 5) : '',
         duration_minutes: activity.duration_minutes != null ? String(activity.duration_minutes) : '',
         location_id: activity.location_id || '',
