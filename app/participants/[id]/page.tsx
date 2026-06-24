@@ -15,7 +15,7 @@ import {
     Target, FileText, Activity, Plus, Edit, Loader2,
     AlertCircle, ChevronRight, Clock, Users, Heart,
     Home, Scale, Shield, Sparkles, BookHeart, Eye, Lock, X,
-    ClipboardList
+    ClipboardList, GraduationCap
 } from 'lucide-react';
 import AssessmentDetailModal from '@/app/components/AssessmentDetailModal';
 import ReadinessChecklist from '@/app/components/ReadinessChecklist';
@@ -103,7 +103,7 @@ interface JournalEntry {
     updated_at: string;
 }
 
-type TabType = 'overview' | 'intake' | 'goals' | 'plans' | 'notes' | 'assessments' | 'activity' | 'readiness';
+type TabType = 'overview' | 'intake' | 'goals' | 'plans' | 'notes' | 'assessments' | 'activity' | 'curricula' | 'readiness';
 
 // ============================================================================
 // Helper Functions
@@ -314,6 +314,7 @@ export default function ParticipantDetailPage() {
     const [showJournalModal, setShowJournalModal] = useState(false);
     const [groupAttendance, setGroupAttendance] = useState<any[]>([]);
     const [resourceLogs, setResourceLogs] = useState<any[]>([]);
+    const [participantCurricula, setParticipantCurricula] = useState<any[]>([]);
 
     // ========================================================================
     // Data Fetching
@@ -368,6 +369,11 @@ export default function ParticipantDetailPage() {
                 const srRes = await fetch(`/api/service-resource-log?participant_id=${params.id}`);
                 const srData = await srRes.json();
                 setResourceLogs(srData.logs || []);
+
+                // Fetch curriculum enrollments
+                const curRes = await fetch(`/api/participants/${params.id}/curricula`);
+                const curData = await curRes.json();
+                setParticipantCurricula(curData.enrollments || []);
 
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Failed to load participant');
@@ -482,6 +488,7 @@ export default function ParticipantDetailPage() {
         { id: 'notes', label: 'Session Notes', icon: FileText },
         { id: 'assessments', label: 'Assessments', icon: Activity },
         { id: 'activity', label: 'Activity', icon: Users },
+        { id: 'curricula', label: 'Curricula', icon: GraduationCap },
         ...(participant.is_reentry_participant ? [{ id: 'readiness', label: 'Readiness', icon: Shield }] : [])
     ];
 
@@ -1086,6 +1093,71 @@ export default function ParticipantDetailPage() {
                                 );
                             })}
                         </div>
+                    )}
+                </div>
+            )}
+
+            {/* ================================================================ */}
+            {/* CURRICULA TAB */}
+            {/* ================================================================ */}
+            {activeTab === 'curricula' && (
+                <div className="space-y-4">
+                    {participantCurricula.length === 0 ? (
+                        <div className="bg-white rounded-2xl shadow-sm border border-[#E7E9EC] p-12 text-center">
+                            <GraduationCap className="w-14 h-14 mx-auto mb-4 text-gray-300" />
+                            <h3 className="text-lg font-semibold text-gray-700 mb-2">Not enrolled in any curricula</h3>
+                            <p className="text-gray-500 mb-6">Enroll this participant from a curriculum's Enrollments tab.</p>
+                            <Link
+                                href="/curricula"
+                                className="inline-flex items-center gap-2 px-5 py-2.5 text-white font-medium rounded-lg"
+                                style={{ background: 'linear-gradient(135deg, #1A73A8 0%, #30B27A 100%)' }}
+                            >
+                                <GraduationCap className="w-4 h-4" /> Browse Curricula
+                            </Link>
+                        </div>
+                    ) : (
+                        participantCurricula.map((e: any) => {
+                            const pct = e.total_modules > 0 ? Math.round((e.modules_completed / e.total_modules) * 100) : 0;
+                            return (
+                                <Link
+                                    key={e.id}
+                                    href={`/curricula/${e.curriculum_id}`}
+                                    className="block bg-white rounded-2xl shadow-sm border border-[#E7E9EC] p-5 hover:shadow-md transition-shadow"
+                                >
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+                                                <GraduationCap className="w-5 h-5 text-indigo-500" />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-semibold text-[#0E2235]">{e.curriculum_name}</h4>
+                                                {e.curriculum_source && (
+                                                    <p className="text-xs text-gray-400">{e.curriculum_source}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <span className={`text-xs font-medium px-2 py-1 rounded-full capitalize ${
+                                            e.status === 'active' ? 'bg-green-100 text-green-700' :
+                                            e.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                            e.status === 'paused' ? 'bg-amber-100 text-amber-700' :
+                                            'bg-red-100 text-red-700'
+                                        }`}>
+                                            {e.status}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                                        <span>{e.modules_completed}/{e.total_modules} modules</span>
+                                        <span className="font-medium">{pct}%</span>
+                                    </div>
+                                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full rounded-full bg-gradient-to-r from-[#30B27A] to-[#4AC490]"
+                                            style={{ width: `${pct}%` }}
+                                        />
+                                    </div>
+                                </Link>
+                            );
+                        })
                     )}
                 </div>
             )}

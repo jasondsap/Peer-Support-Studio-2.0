@@ -10,6 +10,7 @@ import {
     BookOpen, ClipboardList, MessageSquare,
     Building2, ClipboardCheck, Search,
     Plus, Map, Mail, Library, Tablet,
+    GraduationCap,
 } from 'lucide-react';
 import AllyIntelligenceChat from './components/AllyIntelligenceChat';
 import { todayLocal } from '@/lib/dateUtils';
@@ -315,6 +316,14 @@ export default function HomePage() {
             href: '/lesson-library',
             badge: null,
             color: 'bg-emerald-500',
+        },
+        {
+            title: 'Curriculum Manager',
+            description: 'Deliver and track structured programs',
+            icon: GraduationCap,
+            href: '/curricula',
+            badge: null,
+            color: 'bg-purple-500',
         },
         {
             title: 'Group Attendance',

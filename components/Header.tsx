@@ -11,6 +11,7 @@ import {
     ChevronDown,
     BookOpen,
     MapPin,
+    GraduationCap,
     Check,
     Loader2
 } from 'lucide-react';
@@ -154,6 +155,13 @@ export default function Header() {
                             >
                                 <BookOpen className="w-4 h-4" />
                                 Library
+                            </Link>
+                            <Link
+                                href="/curricula"
+                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-[#1A73A8] hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                <GraduationCap className="w-4 h-4" />
+                                Curricula
                             </Link>
                             <Link
                                 href="/help"
