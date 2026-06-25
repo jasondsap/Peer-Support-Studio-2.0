@@ -806,6 +806,7 @@ export default function ParticipantDetailPage() {
                     {/* Portal Access Card */}
                     <PortalAccessCard
                         participantId={participant.id}
+                        participantEmail={participant.email}
                         participantName={displayName}
                         organizationId={currentOrg?.id || ''}
                     />
