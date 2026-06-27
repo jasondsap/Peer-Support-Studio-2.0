@@ -11,11 +11,8 @@ import {
     LayoutDashboard,
     ChevronDown,
     BookOpen,
-    MapPin,
-    GraduationCap,
     Check,
     Loader2,
-    ClipboardCheck,
     BarChart3,
     Search,
     Target
@@ -201,39 +198,11 @@ export default function Header() {
                                 Dashboard
                             </Link>
                             <Link
-                                href="/participants"
-                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-[#1A73A8] hover:bg-gray-100 rounded-lg transition-colors"
-                            >
-                                <Users className="w-4 h-4" />
-                                Participants
-                            </Link>
-                            <Link
-                                href="/locations"
-                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-[#1A73A8] hover:bg-gray-100 rounded-lg transition-colors"
-                            >
-                                <MapPin className="w-4 h-4" />
-                                Locations
-                            </Link> 
-                            <Link
                                 href="/doc-library"
                                 className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-[#1A73A8] hover:bg-gray-100 rounded-lg transition-colors"
                             >
                                 <BookOpen className="w-4 h-4" />
                                 Library
-                            </Link>
-                            <Link
-                                href="/curricula"
-                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-[#1A73A8] hover:bg-gray-100 rounded-lg transition-colors"
-                            >
-                                <GraduationCap className="w-4 h-4" />
-                                Curricula
-                            </Link>
-                            <Link
-                                href="/session-notes/reviews"
-                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-[#1A73A8] hover:bg-gray-100 rounded-lg transition-colors"
-                            >
-                                <ClipboardCheck className="w-4 h-4" />
-                                Reviews
                             </Link>
                             <Link
                                 href="/analytics"

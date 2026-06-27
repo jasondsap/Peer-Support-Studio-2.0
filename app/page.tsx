@@ -391,6 +391,7 @@ export default function HomePage() {
     // Quick links — keep existing navigation reachable from the dashboard.
     const quickLinks = [
         { title: 'Participants', icon: Users, href: '/participants', color: 'bg-[#1A73A8]' },
+        { title: 'Locations', icon: Building2, href: '/locations', color: 'bg-slate-500' },
         { title: 'Recovery Plans', icon: ClipboardList, href: '/recovery-plans', color: 'bg-[#30B27A]' },
         { title: 'Session Notes', icon: FileText, href: '/session-notes', color: 'bg-amber-500' },
         { title: 'Note Reviewer', icon: ClipboardCheck, href: '/note-reviewer', color: 'bg-amber-400' },
