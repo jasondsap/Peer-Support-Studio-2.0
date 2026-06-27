@@ -245,6 +245,38 @@ const DV_TIMELINE_MAP: Record<string, string> = {
     within_3mo: 'Within 3 months', '3_6mo': '3–6 months ago', '7_12mo': '7–12 months ago', over_1yr: 'Over 1 year ago',
 };
 
+// ── Billing / eligibility lookups (mirror lib/intakeFormTypes option lists) ──
+const PRIMARY_INSURANCE_TYPE_MAP: Record<string, string> = {
+    none: 'Uninsured / Self-Pay', medicaid: 'Medicaid', medicare: 'Medicare',
+    dual: 'Dual Eligible (Medicare + Medicaid)', private: 'Private / Commercial',
+    va: 'VA / TRICARE', marketplace: 'ACA Marketplace', other: 'Other',
+};
+const SUBSCRIBER_REL_MAP: Record<string, string> = {
+    self: 'Self', spouse: 'Spouse', child: 'Child', other: 'Other Dependent',
+};
+const ELIGIBILITY_STATUS_MAP: Record<string, string> = {
+    active: 'Active — Verified', inactive: 'Inactive / Terminated',
+    pending: 'Pending Verification', not_checked: 'Not Yet Checked',
+};
+const ELIGIBILITY_METHOD_MAP: Record<string, string> = {
+    portal: 'Payer Portal', phone: 'Phone Call', clearinghouse: 'Clearinghouse (270/271)', payer_website: 'Payer Website',
+};
+const VERIFIED_FROM_MAP: Record<string, string> = {
+    insurance_card: 'Insurance Card', portal: 'Payer Portal', phone: 'Phone Verification',
+    clearinghouse: 'Clearinghouse', payer_website: 'Payer Website', referral_docs: 'Referral/Discharge Paperwork',
+};
+const CREDENTIAL_MAP: Record<string, string> = {
+    md: 'MD', do: 'DO', lcsw: 'LCSW', lpcc: 'LPCC', lmft: 'LMFT', psyd: 'PsyD', aprn: 'APRN', cadc: 'CADC', other: 'Other',
+};
+const DIAGNOSIS_SOURCE_MAP: Record<string, string> = {
+    referring_provider: 'Referring Provider', treatment_team: 'Treatment Team',
+    hospital_discharge: 'Hospital Discharge', assessment: 'Clinical Assessment on File', self_report: 'Self-Report (unverified)',
+};
+const RELEASE_PARTY_MAP: Record<string, string> = {
+    insurance: 'Insurance / Payer', referring_provider: 'Referring Provider', pcp: 'Primary Care Provider',
+    treatment_team: 'Treatment Team', legal: 'Court / Probation / Parole', family: 'Family Member(s)', other: 'Other',
+};
+
 function formatLookup(val: string | null | undefined, map: Record<string, string>): string | null {
     if (!val) return null;
     return map[val] || val;
@@ -279,14 +311,20 @@ function IntakeSection({ title, icon: Icon, color, children }: {
     );
 }
 
-function IntakeRow({ label, value }: { label: string; value: string | null | undefined }) {
-    if (!value) return null;
+function IntakeRow({ label, value, showEmpty }: { label: string; value: string | null | undefined; showEmpty?: boolean }) {
+    if (!value && !showEmpty) return null;
     return (
         <div className="flex items-start gap-4 px-5 py-3">
             <span className="text-sm text-gray-500 w-44 flex-shrink-0">{label}</span>
-            <span className="text-sm text-gray-900">{value}</span>
+            <span className={`text-sm ${value ? 'text-gray-900' : 'text-gray-400'}`}>{value || '—'}</span>
         </div>
     );
+}
+
+// Format a YYYY-MM-DD / ISO date string for read-mode display; null-safe.
+function fmtDate(val: string | null | undefined): string | null {
+    if (!val) return null;
+    try { return formatDateOnly(val) || null; } catch { return null; }
 }
 
 // ============================================================================
@@ -423,6 +461,29 @@ export default function ParticipantDetailPage() {
             }
         } catch (e) {
             console.error('Delete failed:', e);
+        }
+    };
+
+    // Mark this participant's shared journal entries as viewed by the PSS so the
+    // "X new" badge clears. Optimistically updates the UI; fires when the PSS
+    // opens the shared-journal section.
+    const markJournalViewed = async () => {
+        if (!currentOrg?.id || !params.id) return;
+        if (!journalEntries.some(e => !e.pss_viewed)) return; // nothing new
+
+        setJournalEntries(prev => prev.map(e => ({ ...e, pss_viewed: true })));
+        try {
+            await fetch('/api/journal', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'mark_viewed',
+                    participant_id: params.id,
+                    organization_id: currentOrg.id,
+                }),
+            });
+        } catch {
+            // UI already reflects viewed; a refresh will reconcile if needed.
         }
     };
 
@@ -794,7 +855,7 @@ export default function ParticipantDetailPage() {
                                 ))}
                             </div>
                             <button
-                                onClick={() => setShowJournalModal(true)}
+                                onClick={() => { setShowJournalModal(true); void markJournalViewed(); }}
                                 className="w-full mt-4 py-2.5 text-sm font-medium text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors flex items-center justify-center gap-2"
                             >
                                 <Eye className="w-4 h-4" />
@@ -837,7 +898,10 @@ export default function ParticipantDetailPage() {
                             {/* Action bar */}
                             <div className="flex items-center justify-between">
                                 <div className="text-sm text-gray-500">
-                                    Completed {formatDateOnly(intake.intake_date)}
+                                    {intake.status === 'draft'
+                                        ? <span className="inline-flex items-center px-2 py-0.5 mr-2 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">Draft</span>
+                                        : null}
+                                    {intake.status === 'draft' ? 'Started' : 'Completed'} {formatDateOnly(intake.intake_date)}
                                     {intake.completed_by_name && <> by {intake.completed_by_name}</>}
                                     {intake.updated_at && intake.updated_at !== intake.created_at && (
                                         <> · Updated {new Date(intake.updated_at).toLocaleDateString()}</>
@@ -904,6 +968,109 @@ export default function ParticipantDetailPage() {
                                 <IntakeRow label="Has Primary Provider" value={formatBool(intake.has_primary_provider)} />
                                 {intake.has_primary_provider && <IntakeRow label="Provider Name" value={intake.provider_name} />}
                                 {intake.has_primary_provider && <IntakeRow label="Provider Phone" value={intake.provider_phone} />}
+                            </IntakeSection>
+
+                            {/* ============================================================ */}
+                            {/* Insurance, Eligibility & Authorization (billing-grade) */}
+                            {/* ============================================================ */}
+
+                            {/* Consent & Authorization */}
+                            <IntakeSection title="Consent & Authorization" icon={Shield} color="#7C3AED">
+                                <IntakeRow label="Consent to Treat" value={formatBool(intake.consent_to_treat)} showEmpty />
+                                <IntakeRow label="Consent to Treat — Date" value={fmtDate(intake.consent_to_treat_date)} showEmpty />
+                                <IntakeRow label="Consent to Bill Insurance" value={formatBool(intake.consent_to_bill_insurance)} showEmpty />
+                                <IntakeRow label="Bill Consent — Date" value={fmtDate(intake.consent_to_bill_date)} showEmpty />
+                                <IntakeRow label="Release of Information (ROI)" value={formatBool(intake.consent_to_release_info)} showEmpty />
+                                <IntakeRow label="ROI — Date" value={fmtDate(intake.consent_to_release_date)} showEmpty />
+                                <IntakeRow label="ROI — Authorized Parties" value={formatJsonbArray(intake.consent_to_release_parties, RELEASE_PARTY_MAP)} showEmpty />
+                                <IntakeRow label="Signature on File" value={formatBool(intake.consent_signature_on_file)} showEmpty />
+                                {intake.consent_notes && <IntakeRow label="Consent Notes" value={intake.consent_notes} />}
+                            </IntakeSection>
+
+                            {/* Primary Insurance */}
+                            <IntakeSection title="Primary Insurance" icon={Activity} color="#0891B2">
+                                <IntakeRow label="Insurance Type" value={formatLookup(intake.primary_insurance_type, PRIMARY_INSURANCE_TYPE_MAP)} showEmpty />
+                                {intake.medicaid_mco && <IntakeRow label="Medicaid MCO" value={intake.medicaid_mco} />}
+                                <IntakeRow label="Payer Name" value={intake.primary_payer_name} showEmpty />
+                                {intake.primary_payer_id && <IntakeRow label="Payer ID" value={intake.primary_payer_id} />}
+                                <IntakeRow label="Member / Subscriber ID" value={intake.primary_member_id} showEmpty />
+                                {intake.primary_group_number && <IntakeRow label="Group Number" value={intake.primary_group_number} />}
+                                {intake.primary_plan_name && <IntakeRow label="Plan Name" value={intake.primary_plan_name} />}
+                                <IntakeRow label="Relationship to Subscriber" value={formatLookup(intake.primary_subscriber_relationship, SUBSCRIBER_REL_MAP)} showEmpty />
+                                {intake.primary_subscriber_relationship && intake.primary_subscriber_relationship !== 'self' && (
+                                    <>
+                                        <IntakeRow label="Subscriber Name" value={intake.primary_subscriber_name} showEmpty />
+                                        <IntakeRow label="Subscriber DOB" value={fmtDate(intake.primary_subscriber_dob)} showEmpty />
+                                    </>
+                                )}
+                                <IntakeRow label="Coverage Effective Date" value={fmtDate(intake.primary_effective_date)} showEmpty />
+                                {intake.primary_termination_date && <IntakeRow label="Termination Date" value={fmtDate(intake.primary_termination_date)} />}
+                                {intake.primary_insurance_phone && <IntakeRow label="Insurance Phone" value={intake.primary_insurance_phone} />}
+                                {intake.primary_insurance_verified_from && <IntakeRow label="Verified From" value={formatLookup(intake.primary_insurance_verified_from, VERIFIED_FROM_MAP)} />}
+                                <IntakeRow label="Insurance Card on File" value={formatBool(intake.insurance_card_on_file)} showEmpty />
+                            </IntakeSection>
+
+                            {/* Secondary Insurance */}
+                            <IntakeSection title="Secondary Insurance" icon={Activity} color="#0EA5E9">
+                                <IntakeRow label="Has Secondary Insurance" value={formatBool(intake.has_secondary_insurance)} showEmpty />
+                                {intake.has_secondary_insurance && (
+                                    <>
+                                        <IntakeRow label="Insurance Type" value={formatLookup(intake.secondary_insurance_type, PRIMARY_INSURANCE_TYPE_MAP)} showEmpty />
+                                        <IntakeRow label="Payer Name" value={intake.secondary_payer_name} showEmpty />
+                                        <IntakeRow label="Member ID" value={intake.secondary_member_id} showEmpty />
+                                        {intake.secondary_group_number && <IntakeRow label="Group Number" value={intake.secondary_group_number} />}
+                                        <IntakeRow label="Relationship to Subscriber" value={formatLookup(intake.secondary_subscriber_relationship, SUBSCRIBER_REL_MAP)} showEmpty />
+                                        {intake.secondary_effective_date && <IntakeRow label="Effective Date" value={fmtDate(intake.secondary_effective_date)} />}
+                                    </>
+                                )}
+                            </IntakeSection>
+
+                            {/* Eligibility */}
+                            <IntakeSection title="Eligibility Verification" icon={Calendar} color="#0891B2">
+                                <IntakeRow label="Eligibility Verified" value={formatBool(intake.eligibility_verified)} showEmpty />
+                                <IntakeRow label="Status" value={formatLookup(intake.eligibility_status, ELIGIBILITY_STATUS_MAP)} showEmpty />
+                                <IntakeRow label="Date Verified" value={fmtDate(intake.eligibility_verified_date)} showEmpty />
+                                {intake.eligibility_verified_method && <IntakeRow label="Method" value={formatLookup(intake.eligibility_verified_method, ELIGIBILITY_METHOD_MAP)} />}
+                                {intake.eligibility_verified_by && <IntakeRow label="Verified By" value={intake.eligibility_verified_by} />}
+                                {intake.eligibility_notes && <IntakeRow label="Notes" value={intake.eligibility_notes} />}
+                            </IntakeSection>
+
+                            {/* Prior Authorization */}
+                            <IntakeSection title="Prior Authorization" icon={FileText} color="#D97706">
+                                <IntakeRow label="Prior Auth Required" value={formatBool(intake.prior_auth_required)} showEmpty />
+                                <IntakeRow label="Authorization Number" value={intake.prior_auth_number} showEmpty />
+                                <IntakeRow label="Start Date" value={fmtDate(intake.prior_auth_start_date)} showEmpty />
+                                <IntakeRow label="End / Expiry Date" value={fmtDate(intake.prior_auth_end_date)} showEmpty />
+                                {intake.prior_auth_units_approved != null && <IntakeRow label="Units Approved" value={String(intake.prior_auth_units_approved)} />}
+                            </IntakeSection>
+
+                            {/* Referring Provider */}
+                            <IntakeSection title="Referring Provider" icon={User} color="#6366F1">
+                                <IntakeRow label="Provider Name" value={intake.referring_provider_name} showEmpty />
+                                <IntakeRow label="NPI" value={intake.referring_provider_npi} showEmpty />
+                                {intake.referring_provider_credential && <IntakeRow label="Credential" value={formatLookup(intake.referring_provider_credential, CREDENTIAL_MAP)} />}
+                                {intake.referring_provider_org && <IntakeRow label="Organization" value={intake.referring_provider_org} />}
+                                {intake.referring_provider_phone && <IntakeRow label="Phone" value={intake.referring_provider_phone} />}
+                                <IntakeRow label="Referral / Order on File" value={formatBool(intake.referral_order_on_file)} showEmpty />
+                            </IntakeSection>
+
+                            {/* Diagnosis */}
+                            <IntakeSection title="Diagnosis (ICD-10)" icon={ClipboardList} color="#DC2626">
+                                <IntakeRow
+                                    label="Primary Diagnosis"
+                                    value={intake.primary_diagnosis_code
+                                        ? `${intake.primary_diagnosis_code}${intake.primary_diagnosis_description ? ' — ' + intake.primary_diagnosis_description : ''}`
+                                        : null}
+                                    showEmpty
+                                />
+                                {intake.secondary_diagnosis_code && (
+                                    <IntakeRow
+                                        label="Secondary Diagnosis"
+                                        value={`${intake.secondary_diagnosis_code}${intake.secondary_diagnosis_description ? ' — ' + intake.secondary_diagnosis_description : ''}`}
+                                    />
+                                )}
+                                <IntakeRow label="Diagnosis Source" value={formatLookup(intake.diagnosis_source, DIAGNOSIS_SOURCE_MAP)} showEmpty />
+                                {intake.diagnosis_date && <IntakeRow label="Date Established" value={fmtDate(intake.diagnosis_date)} />}
                             </IntakeSection>
 
                             {/* Education & Employment */}

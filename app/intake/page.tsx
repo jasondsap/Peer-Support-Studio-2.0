@@ -398,6 +398,12 @@ function IntakeContent() {
     const [editLoaded, setEditLoaded] = useState(false);
     const [billingResult, setBillingResult] = useState<BillingReadinessResult | null>(null);
 
+    // Draft / resume state (new-intake flow only — never regresses a completed intake)
+    const [resumeIntakeId, setResumeIntakeId] = useState<string | null>(null);
+    const [draftCheckedFor, setDraftCheckedFor] = useState<string | null>(null);
+    const [draftSaving, setDraftSaving] = useState(false);
+    const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+
     // Participant selection
     const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
     const [participantSearch, setParticipantSearch] = useState('');
@@ -468,6 +474,36 @@ function IntakeContent() {
         }
     }, [isEditMode, editIntakeId, currentOrg?.id, editLoaded, paramParticipantId]);
 
+    // Resume an in-progress draft — when a participant is selected in the
+    // normal (non-edit) flow, look for an existing status='draft' intake and
+    // load it, jumping to the last step they were on.
+    useEffect(() => {
+        if (isEditMode) return;
+        const pid = selectedParticipant?.id;
+        if (!pid || !currentOrg?.id) return;
+        if (draftCheckedFor === pid) return;
+        setDraftCheckedFor(pid);
+
+        fetch(`/api/intake?organization_id=${currentOrg.id}&participant_id=${pid}`)
+            .then(res => res.json())
+            .then(data => {
+                const draft = data.intakes?.find((i: any) => i.status === 'draft');
+                if (!draft) return;
+                setForm(fromDatabase(draft));
+                setResumeIntakeId(draft.id);
+                if (draft.intake_date) setIntakeDate(draft.intake_date.split('T')[0]);
+                if (draft.primary_diagnosis_code && !COMMON_DIAGNOSIS_OPTIONS.some(o => o.value === draft.primary_diagnosis_code)) {
+                    setManualDxEntry(true);
+                }
+                if (draft.secondary_diagnosis_code) {
+                    setManualSecondaryDxEntry(true);
+                }
+                const ls = typeof draft.last_step === 'number' ? draft.last_step : 1;
+                setStep(ls > 0 ? ls : 1);
+            })
+            .catch(() => {});
+    }, [selectedParticipant?.id, currentOrg?.id, isEditMode, draftCheckedFor]);
+
     useEffect(() => {
         if (currentOrg?.id && participantSearch.length >= 2) {
             fetch(`/api/participants?organization_id=${currentOrg.id}&search=${participantSearch}&status=active`)
@@ -519,17 +555,74 @@ function IntakeContent() {
         setForm(prev => ({ ...prev, [field]: value }));
     };
 
+    // Persist the current form as a draft. Returns true on success.
+    // Only valid in the new-intake flow — never flips a completed intake to draft.
+    const saveDraft = async (targetStep: number, silent: boolean): Promise<boolean> => {
+        if (isEditMode) return false;
+        if (!selectedParticipant || !currentOrg?.id) return false;
+
+        setDraftSaving(true);
+        if (!silent) setError('');
+
+        try {
+            const payload = toPayload(form, {
+                ...(resumeIntakeId ? { id: resumeIntakeId } : {}),
+                organization_id: currentOrg.id,
+                participant_id: selectedParticipant.id,
+                intake_date: intakeDate,
+                status: 'draft',
+                last_step: targetStep,
+            });
+
+            const res = await fetch('/api/intake', {
+                method: resumeIntakeId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                if (data.intake?.id && !resumeIntakeId) setResumeIntakeId(data.intake.id);
+                setDraftSavedAt(new Date().toISOString());
+                setDraftSaving(false);
+                return true;
+            }
+            if (!silent) setError(data.error || 'Failed to save draft');
+        } catch (e: any) {
+            if (!silent) setError(e.message || 'Network error');
+        }
+        setDraftSaving(false);
+        return false;
+    };
+
+    // Explicit "Save & Finish Later" — persists a draft then leaves the wizard.
+    const handleSaveAndExit = async () => {
+        const ok = await saveDraft(step, false);
+        if (!ok) return;
+        const dest = selectedParticipant?.id || paramParticipantId;
+        router.push(dest ? `/participants/${dest}` : '/');
+    };
+
     const nextStep = () => {
         if (step < STEPS.length - 1) {
-            setStep(step + 1);
+            const newStep = step + 1;
+            setStep(newStep);
             topRef.current?.scrollIntoView({ behavior: 'smooth' });
+            // Autosave the in-progress draft once we're past participant selection.
+            if (!isEditMode && step >= 1 && selectedParticipant) {
+                void saveDraft(newStep, true);
+            }
         }
     };
 
     const prevStep = () => {
         if (step > 0) {
-            setStep(step - 1);
+            const newStep = step - 1;
+            setStep(newStep);
             topRef.current?.scrollIntoView({ behavior: 'smooth' });
+            if (!isEditMode && step >= 1 && selectedParticipant) {
+                void saveDraft(newStep, true);
+            }
         }
     };
 
@@ -563,16 +656,19 @@ function IntakeContent() {
         setError('');
 
         try {
+            // PUT when editing an existing intake OR finalizing a resumed draft row.
+            const existingIntakeId = (isEditMode && editIntakeId) ? editIntakeId : resumeIntakeId;
             const payload = toPayload(form, {
-                ...(isEditMode && editIntakeId ? { id: editIntakeId } : {}),
+                ...(existingIntakeId ? { id: existingIntakeId } : {}),
                 organization_id: currentOrg.id,
                 participant_id: selectedParticipant.id,
                 intake_date: intakeDate,
                 status: 'completed',
+                last_step: step,
             });
 
             const res = await fetch('/api/intake', {
-                method: isEditMode && editIntakeId ? 'PUT' : 'POST',
+                method: existingIntakeId ? 'PUT' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
@@ -1403,8 +1499,23 @@ function IntakeContent() {
                     )}
                 </div>
 
-                {/* Cancel link */}
-                <div className="mt-3 text-center">
+                {/* Save draft / Cancel */}
+                <div className="mt-3 flex flex-col items-center gap-1.5">
+                    {!isEditMode && step >= 1 && selectedParticipant && (
+                        <button
+                            onClick={handleSaveAndExit}
+                            disabled={draftSaving}
+                            className="text-sm font-medium text-[#1A73A8] hover:underline flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                            {draftSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                            {draftSaving ? 'Saving draft…' : 'Save & Finish Later'}
+                        </button>
+                    )}
+                    {!isEditMode && draftSavedAt && !draftSaving && (
+                        <span className="text-xs text-gray-400">
+                            Draft saved {new Date(draftSavedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                        </span>
+                    )}
                     <button
                         onClick={handleCancel}
                         className="text-sm text-gray-400 hover:text-gray-600 transition-colors"

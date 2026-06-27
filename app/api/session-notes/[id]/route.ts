@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession, getInternalUserId } from '@/lib/auth';
 import { sql, softDelete, logAuditEvent } from '@/lib/db';
 
+const SUPERVISOR_ROLES = ['supervisor', 'admin', 'owner'];
+
 // GET - Fetch a single session note by ID
 export async function GET(
     request: NextRequest,
@@ -29,15 +31,14 @@ export async function GET(
             );
         }
 
-        // Fetch the note - user must own it or be in the same org
+        // Fetch the note - author always; supervisors+ may read team notes in their org.
         const notes = await sql`
-            SELECT 
+            SELECT
                 sn.*,
                 p.first_name || ' ' || p.last_name as participant_name
             FROM session_notes sn
             LEFT JOIN participants p ON sn.participant_id = p.id
             WHERE sn.id = ${noteId}::uuid
-            AND sn.user_id = ${userId}::uuid
             AND sn.is_archived = false
         `;
 
@@ -49,6 +50,20 @@ export async function GET(
         }
 
         const note = notes[0];
+
+        // Authorization: author, or a supervisor+ within the note's organization.
+        const isAuthor = note.user_id === userId;
+        const orgRole = note.organization_id
+            ? session.organizations?.find((o) => o.id === note.organization_id)?.role
+            : undefined;
+        const isSupervisor = !!orgRole && SUPERVISOR_ROLES.includes(orgRole);
+
+        if (!isAuthor && !isSupervisor) {
+            return NextResponse.json(
+                { error: 'Note not found' },
+                { status: 404 }
+            );
+        }
         
         // If participant name exists, add it to metadata
         if (note.participant_name && note.metadata) {
@@ -160,24 +175,49 @@ export async function PATCH(
             );
         }
 
-        // Verify ownership
-        const existingNote = await sql`
-            SELECT id, organization_id FROM session_notes
+        // Fetch the full current row (needed for lock check + version snapshot)
+        const existingRows = await sql`
+            SELECT * FROM session_notes
             WHERE id = ${noteId}::uuid
-            AND user_id = ${userId}::uuid
+            AND is_archived = false
         `;
 
-        if (existingNote.length === 0) {
+        if (existingRows.length === 0) {
             return NextResponse.json(
                 { error: 'Note not found or access denied' },
                 { status: 404 }
             );
         }
 
+        const existing = existingRows[0];
+
+        // Authorization: author, or supervisor+ within the note's organization.
+        const isAuthor = existing.user_id === userId;
+        const orgRole = existing.organization_id
+            ? session.organizations?.find((o) => o.id === existing.organization_id)?.role
+            : undefined;
+        const isSupervisor = !!orgRole && SUPERVISOR_ROLES.includes(orgRole);
+
+        if (!isAuthor && !isSupervisor) {
+            return NextResponse.json(
+                { error: 'Note not found or access denied' },
+                { status: 404 }
+            );
+        }
+
+        // Locked notes (post-approval) are immutable to the author; only a
+        // supervisor+ may explicitly revise them.
+        if (existing.is_locked && !isSupervisor) {
+            return NextResponse.json(
+                { error: 'Note is locked after approval' },
+                { status: 403 }
+            );
+        }
+
         // Build update query based on provided fields
         const allowedFields = ['metadata', 'pss_note', 'pss_summary', 'participant_summary', 'transcript', 'status', 'review_notes'];
         const updateData: Record<string, any> = {};
-        
+
         for (const field of allowedFields) {
             if (updates[field] !== undefined) {
                 updateData[field] = updates[field];
@@ -189,6 +229,32 @@ export async function PATCH(
                 { error: 'No valid fields to update' },
                 { status: 400 }
             );
+        }
+
+        // Snapshot the current row into the immutable version history before
+        // applying the edit (version_number increments per note).
+        try {
+            const versionRows = await sql`
+                SELECT COALESCE(MAX(version_number), 0) + 1 AS next_version
+                FROM session_note_versions
+                WHERE session_note_id = ${noteId}::uuid
+            `;
+            const nextVersion = versionRows[0]?.next_version || 1;
+            await sql`
+                INSERT INTO session_note_versions (
+                    session_note_id, organization_id, version_number, snapshot, edited_by, edit_reason
+                ) VALUES (
+                    ${noteId}::uuid,
+                    ${existing.organization_id || null}::uuid,
+                    ${nextVersion},
+                    ${JSON.stringify(existing)}::jsonb,
+                    ${userId}::uuid,
+                    ${updates.edit_reason || null}
+                )
+            `;
+        } catch (versionError) {
+            console.error('Failed to snapshot note version:', versionError);
+            // Snapshot failures should not block the edit; continue.
         }
 
         // Update the note
@@ -209,7 +275,7 @@ export async function PATCH(
 
         await logAuditEvent(
             userId,
-            existingNote[0].organization_id || null,
+            existing.organization_id || null,
             'update',
             'session_note',
             noteId,

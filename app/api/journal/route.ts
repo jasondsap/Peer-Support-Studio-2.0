@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getSession, getInternalUserId, requireOrgAccess } from "@/lib/auth";
-import { sql } from "@/lib/db";
+import { sql, logAuditEvent } from "@/lib/db";
 
 // GET /api/journal
 export async function GET(req: NextRequest) {
@@ -192,6 +192,86 @@ export async function PUT(req: NextRequest) {
     } catch (error) {
         console.error("Error updating journal entry:", error);
         const message = error instanceof Error ? error.message : "Failed to update journal entry";
+        if (message === "Unauthorized") {
+            return NextResponse.json({ error: message }, { status: 401 });
+        }
+        return NextResponse.json({ error: message }, { status: 500 });
+    }
+}
+
+// PATCH /api/journal - PSS-side actions on a participant's shared entries
+// Currently: { action: 'mark_viewed', participant_id, organization_id, entry_ids? }
+// Marks shared journal entries as viewed by the PSS so the "X new" badge clears.
+// This is distinct from the participant/portal-owned PUT above (which resets
+// pss_viewed on unshare) — do not conflate the two.
+export async function PATCH(req: NextRequest) {
+    try {
+        const body = await req.json();
+        const { action, participant_id, organization_id, entry_ids } = body;
+
+        if (action !== 'mark_viewed') {
+            return NextResponse.json({ error: 'Unsupported action' }, { status: 400 });
+        }
+
+        if (!participant_id || !organization_id) {
+            return NextResponse.json(
+                { error: 'participant_id and organization_id are required' },
+                { status: 400 }
+            );
+        }
+
+        // PSS-side: require an authenticated user who belongs to the org
+        const session = await getSession();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+        try {
+            await requireOrgAccess(organization_id);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
+        }
+
+        let result;
+        if (Array.isArray(entry_ids) && entry_ids.length > 0) {
+            result = await sql`
+                UPDATE journal_entries
+                SET pss_viewed = true, pss_viewed_by = ${userId}, pss_viewed_at = NOW()
+                WHERE participant_id = ${participant_id}
+                AND organization_id = ${organization_id}
+                AND shared_with_pss = true
+                AND pss_viewed = false
+                AND id = ANY(${entry_ids}::uuid[])
+                RETURNING id
+            `;
+        } else {
+            result = await sql`
+                UPDATE journal_entries
+                SET pss_viewed = true, pss_viewed_by = ${userId}, pss_viewed_at = NOW()
+                WHERE participant_id = ${participant_id}
+                AND organization_id = ${organization_id}
+                AND shared_with_pss = true
+                AND pss_viewed = false
+                RETURNING id
+            `;
+        }
+
+        await logAuditEvent(
+            userId, organization_id, 'update', 'journal_entry', participant_id,
+            { action: 'mark_viewed', count: result.length, scope: entry_ids?.length ? 'selected' : 'all' }
+        );
+
+        return NextResponse.json({
+            success: true,
+            marked: result.length,
+            ids: result.map((r: any) => r.id),
+        });
+    } catch (error) {
+        console.error("Error marking journal entries viewed:", error);
+        const message = error instanceof Error ? error.message : "Failed to update journal entries";
         if (message === "Unauthorized") {
             return NextResponse.json({ error: message }, { status: 401 });
         }

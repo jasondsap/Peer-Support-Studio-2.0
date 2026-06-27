@@ -368,9 +368,17 @@ export default function SupervisorReviewPage() {
                                                         </div>
                                                         <div>
                                                             <span className="text-gray-500">Session Note:</span>
-                                                            <span className={`ml-1 font-medium ${service.session_note_id ? 'text-green-600' : 'text-amber-600'}`}>
-                                                                {service.session_note_id ? 'Created' : 'Not created'}
-                                                            </span>
+                                                            {service.session_note_id ? (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); router.push(`/session-notes/${service.session_note_id}`); }}
+                                                                    className="ml-1 font-medium text-green-600 hover:underline inline-flex items-center gap-1"
+                                                                >
+                                                                    <FileText className="w-3.5 h-3.5" />
+                                                                    View note
+                                                                </button>
+                                                            ) : (
+                                                                <span className="ml-1 font-medium text-amber-600">Not created</span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>

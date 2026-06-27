@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const { noteText, saveReview = true } = await request.json();
+        const { noteText, saveReview = true, sessionNoteId = null } = await request.json();
 
         if (!noteText || noteText.trim().length < 50) {
             return NextResponse.json(
@@ -178,6 +178,7 @@ export async function POST(request: NextRequest) {
                     const result = await sql`
                         INSERT INTO note_reviews (
                             user_id,
+                            session_note_id,
                             original_note,
                             quality_score,
                             total_points,
@@ -194,6 +195,7 @@ export async function POST(request: NextRequest) {
                             improved_note
                         ) VALUES (
                             ${userId}::uuid,
+                            ${sessionNoteId || null}::uuid,
                             ${noteText},
                             ${analysis.qualityScore},
                             ${analysis.totalPoints},
@@ -212,6 +214,27 @@ export async function POST(request: NextRequest) {
                         RETURNING id
                     `;
                     savedReviewId = result[0]?.id;
+
+                    // Surface the latest rubric result on the note itself so the
+                    // detail page can show score/billable at a glance.
+                    if (sessionNoteId) {
+                        const callerOrgIds = (session.organizations || []).map((o) => o.id);
+                        try {
+                            await sql`
+                                UPDATE session_notes
+                                SET last_review_score = ${analysis.qualityScore},
+                                    last_review_billable = ${analysis.isBillable},
+                                    last_reviewed_at = NOW()
+                                WHERE id = ${sessionNoteId}::uuid
+                                AND (
+                                    user_id = ${userId}::uuid
+                                    OR organization_id = ANY(${callerOrgIds}::uuid[])
+                                )
+                            `;
+                        } catch (linkErr) {
+                            console.error('Failed to link review to note:', linkErr);
+                        }
+                    }
                 }
             } catch (saveError) {
                 console.error('Failed to save review:', saveError);

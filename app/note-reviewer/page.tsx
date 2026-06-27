@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
     ArrowLeft,
@@ -93,6 +93,32 @@ const CATEGORY_LABELS: Record<string, string> = {
     treatmentPlan: 'Treatment Plan'
 };
 
+// Flatten a saved session note (any shape) into reviewable plain text.
+function flattenNoteToText(note: any): string {
+    if (!note) return '';
+    const pn = note.pss_note || {};
+    const parts: string[] = [];
+
+    if (pn.sessionOverview) parts.push(`Session Overview:\n${pn.sessionOverview}`);
+    const list = (label: string, arr?: string[]) => {
+        if (Array.isArray(arr) && arr.length) {
+            parts.push(`${label}:\n${arr.map((i) => `- ${i}`).join('\n')}`);
+        }
+    };
+    list('Topics Discussed', pn.topicsDiscussed);
+    list('Strengths Observed', pn.strengthsObserved);
+    list('Recovery Support Provided', pn.recoverySupportProvided);
+    list('Action Items', pn.actionItems);
+    list('Follow-Up Needed', pn.followUpNeeded);
+    if (pn.content) parts.push(pn.content);
+    if (note.pss_summary) parts.push(`PSS Summary:\n${note.pss_summary}`);
+
+    // Fall back to the raw transcript if there is no structured body
+    if (parts.length === 0 && note.transcript) parts.push(note.transcript);
+
+    return parts.join('\n\n').trim();
+}
+
 const QUALITY_LABELS: Record<number, { label: string; description: string; color: string }> = {
     1: { label: 'Not Billable', description: 'More than two billing components missing or do not meet medical necessity', color: 'red' },
     2: { label: 'Not Billable', description: 'Missing two billing components or two+ components do not meet medical necessity', color: 'red' },
@@ -101,14 +127,18 @@ const QUALITY_LABELS: Record<number, { label: string; description: string; color
     5: { label: 'Billable & Meets Necessity', description: 'Perfect score - meets all medical necessity requirements', color: 'green' }
 };
 
-export default function NoteReviewerPage() {
+function NoteReviewerInner() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const noteIdParam = searchParams.get('noteId');
     const { data: session, status } = useSession();
     const authLoading = status === 'loading';
     const user = session?.user;
 
     // State
     const [noteText, setNoteText] = useState('');
+    const [sessionNoteId, setSessionNoteId] = useState<string | null>(null);
+    const [loadingNote, setLoadingNote] = useState(false);
     const [isReviewing, setIsReviewing] = useState(false);
     const [result, setResult] = useState<ReviewResult | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -125,6 +155,31 @@ export default function NoteReviewerPage() {
             router.push('/auth/signin');
         }
     }, [user, authLoading, router]);
+
+    // When arriving with ?noteId=, load that saved note and prefill the editor.
+    useEffect(() => {
+        async function loadNote() {
+            if (!noteIdParam || !user) return;
+            setLoadingNote(true);
+            try {
+                const res = await fetch(`/api/session-notes/${noteIdParam}`);
+                if (!res.ok) throw new Error('Failed to load note');
+                const data = await res.json();
+                const text = flattenNoteToText(data.note);
+                if (text) {
+                    setNoteText(text);
+                    setSessionNoteId(noteIdParam);
+                }
+            } catch (err) {
+                console.error('Error loading note for audit:', err);
+                setError('Could not load the selected note. You can paste it manually.');
+            } finally {
+                setLoadingNote(false);
+            }
+        }
+        loadNote();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [noteIdParam, user]);
 
     const handleReview = async () => {
         if (!noteText.trim()) {
@@ -147,7 +202,8 @@ export default function NoteReviewerPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     noteText: noteText.trim(),
-                    saveReview: true
+                    saveReview: true,
+                    sessionNoteId: sessionNoteId || null
                 })
             });
 
@@ -391,7 +447,11 @@ export default function NoteReviewerPage() {
                             <>
                                 <div className="mb-4">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Paste Your Session Note
+                                        {loadingNote
+                                            ? 'Loading note…'
+                                            : sessionNoteId
+                                                ? 'Loaded note (review will be saved to this note)'
+                                                : 'Paste Your Session Note'}
                                     </label>
                                     <textarea
                                         value={noteText}
@@ -665,5 +725,17 @@ export default function NoteReviewerPage() {
                 </div>
             </main>
         </div>
+    );
+}
+
+export default function NoteReviewerPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-gradient-to-br from-slate-200 via-blue-100 to-cyan-100 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-[#1A73A8]" />
+            </div>
+        }>
+            <NoteReviewerInner />
+        </Suspense>
     );
 }

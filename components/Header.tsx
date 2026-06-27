@@ -3,17 +3,18 @@
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useState } from 'react';
-import { 
-    Building2, 
-    Users, 
-    FileText, 
+import {
+    Building2,
+    Users,
+    FileText,
     LayoutDashboard,
     ChevronDown,
     BookOpen,
     MapPin,
     GraduationCap,
     Check,
-    Loader2
+    Loader2,
+    ClipboardCheck
 } from 'lucide-react';
 import UserButton from './UserButton';
 
@@ -162,6 +163,13 @@ export default function Header() {
                             >
                                 <GraduationCap className="w-4 h-4" />
                                 Curricula
+                            </Link>
+                            <Link
+                                href="/session-notes/reviews"
+                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-[#1A73A8] hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                <ClipboardCheck className="w-4 h-4" />
+                                Reviews
                             </Link>
                             <Link
                                 href="/help"

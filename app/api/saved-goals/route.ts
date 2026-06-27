@@ -145,6 +145,8 @@ export async function POST(req: NextRequest) {
             timeframe,
             smart_goal,
             goal_data,
+            source_assessment_id,
+            source_type,
         } = body;
 
         if (!organization_id) {
@@ -162,7 +164,8 @@ export async function POST(req: NextRequest) {
             INSERT INTO saved_goals (
                 user_id, organization_id, participant_id, participant_name,
                 goal_area, desired_outcome, motivation_level, strengths,
-                challenges, timeframe, smart_goal, goal_data, status
+                challenges, timeframe, smart_goal, goal_data, status,
+                source_assessment_id, source_type
             ) VALUES (
                 ${userId},
                 ${organization_id},
@@ -176,7 +179,9 @@ export async function POST(req: NextRequest) {
                 ${timeframe || null},
                 ${smart_goal || null},
                 ${goal_data || null},
-                'active'
+                'active',
+                ${source_assessment_id || null},
+                ${source_type || null}
             )
             RETURNING *
         `;
@@ -187,7 +192,7 @@ export async function POST(req: NextRequest) {
             'create',
             'saved_goal',
             result[0].id,
-            { participant_id: participant_id || null, goal_area: goal_area || null }
+            { participant_id: participant_id || null, goal_area: goal_area || null, source_type: source_type || null, source_assessment_id: source_assessment_id || null }
         );
 
         return NextResponse.json({ goal: result[0] });

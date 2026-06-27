@@ -6,7 +6,8 @@
 import { useState, useEffect } from 'react';
 import {
     X, Users, Home, Brain, Heart, Download, Trash2,
-    Sparkles, Loader2, Target, ChevronDown, ChevronUp, ShieldCheck
+    Sparkles, Loader2, Target, ChevronDown, ChevronUp, ShieldCheck,
+    Plus, Check, ArrowUpRight
 } from 'lucide-react';
 
 // ============================================================================
@@ -94,6 +95,8 @@ const MIRC28_LABELS: Record<number, string> = {
 
 interface Assessment {
     id: string;
+    organization_id?: string;
+    participant_id?: string;
     participant_name?: string;
     participant_first_name?: string;
     participant_last_name?: string;
@@ -125,6 +128,11 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
     const [analyzing, setAnalyzing] = useState(false);
     const [analysis, setAnalysis] = useState(assessment.ai_analysis);
     const [sourcesOpen, setSourcesOpen] = useState(false);
+    // Track per-recommendation goal creation: which one is saving, which created
+    // (index -> new saved_goal id), and any per-index error message.
+    const [creatingGoalIndex, setCreatingGoalIndex] = useState<number | null>(null);
+    const [createdGoals, setCreatedGoals] = useState<Record<number, string>>({});
+    const [goalErrors, setGoalErrors] = useState<Record<number, string>>({});
 
     const isMirc = assessment.assessment_type === 'mirc28';
     const maxScore = isMirc ? 112 : 60;
@@ -206,6 +214,87 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
             console.error('Analysis failed:', e);
         } finally {
             setAnalyzing(false);
+        }
+    };
+
+    // ========================================================================
+    // Create a saved_goal from an AI-recommended goal (closes the loop so the
+    // PSS no longer has to hand-retype recommendations into a goal).
+    // ========================================================================
+    const handleCreateGoal = async (goal: any, index: number) => {
+        if (createdGoals[index] || creatingGoalIndex !== null) return;
+
+        if (!assessment.organization_id) {
+            setGoalErrors(prev => ({ ...prev, [index]: 'Missing organization context — reopen and try again.' }));
+            return;
+        }
+
+        setGoalErrors(prev => {
+            const next = { ...prev };
+            delete next[index];
+            return next;
+        });
+        setCreatingGoalIndex(index);
+
+        try {
+            const title = goal.title || goal.goal || 'Recommended goal';
+            const description = goal.description || goal.rationale || '';
+            const smartGoal = [title, description].filter(Boolean).join(' — ');
+
+            // Action steps become checkable milestones (shape matches lib/milestoneUtils).
+            const actionSteps: string[] = Array.isArray(goal.actionSteps) ? goal.actionSteps : [];
+            const milestones = actionSteps.map((step, i) => ({
+                id: 'ms_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 9) + '_' + i,
+                phase: 'action' as const,
+                title: step,
+                completed: false,
+                completed_at: null,
+                completed_by: null,
+                notes: '',
+                order: i,
+            }));
+
+            const goalData = {
+                source: 'assessment_recommendation',
+                sourceAssessmentId: assessment.id,
+                assessmentType: assessment.assessment_type,
+                domain: goal.domain || null,
+                title,
+                description,
+                rationale: goal.rationale || null,
+                timeframe: goal.timeframe || null,
+                actionSteps,
+                milestones,
+            };
+
+            const res = await fetch('/api/saved-goals', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    organization_id: assessment.organization_id,
+                    participant_id: assessment.participant_id || null,
+                    participant_name: participantName,
+                    goal_area: goal.domain || null,
+                    desired_outcome: description || null,
+                    timeframe: goal.timeframe || null,
+                    smart_goal: smartGoal,
+                    goal_data: JSON.stringify(goalData),
+                    source_assessment_id: assessment.id,
+                    source_type: 'assessment_recommendation',
+                }),
+            });
+
+            const data = await res.json();
+            if (!res.ok || data.error) {
+                throw new Error(data.error || 'Failed to create goal');
+            }
+
+            setCreatedGoals(prev => ({ ...prev, [index]: data.goal?.id || '' }));
+        } catch (e: any) {
+            console.error('Failed to create goal from recommendation:', e);
+            setGoalErrors(prev => ({ ...prev, [index]: e?.message || 'Failed to create goal' }));
+        } finally {
+            setCreatingGoalIndex(null);
         }
     };
 
@@ -590,6 +679,45 @@ export default function AssessmentDetailModal({ assessment, onClose, onDelete, o
                                                 </ul>
                                             </div>
                                         )}
+
+                                        {/* Close the loop: turn this recommendation into a tracked goal */}
+                                        <div className="mt-3 pt-3 border-t border-gray-100">
+                                            {createdGoals[index] !== undefined ? (
+                                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
+                                                        <Check className="w-4 h-4" />
+                                                        Goal created
+                                                    </span>
+                                                    {createdGoals[index] && (
+                                                        <a
+                                                            href={`/goals/${createdGoals[index]}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1 text-sm font-medium text-purple-600 hover:text-purple-700 hover:underline"
+                                                        >
+                                                            View goal
+                                                            <ArrowUpRight className="w-3.5 h-3.5" />
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-1.5">
+                                                    <button
+                                                        onClick={() => handleCreateGoal(goal, index)}
+                                                        disabled={creatingGoalIndex !== null}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50"
+                                                    >
+                                                        {creatingGoalIndex === index
+                                                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                            : <Plus className="w-4 h-4" />}
+                                                        {creatingGoalIndex === index ? 'Creating…' : 'Create goal'}
+                                                    </button>
+                                                    {goalErrors[index] && (
+                                                        <p className="text-xs text-red-600">{goalErrors[index]}</p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 ))
                             ) : (

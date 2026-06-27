@@ -442,6 +442,7 @@ export function toPayload(
         participant_id: string;
         intake_date: string;
         status?: string;
+        last_step?: number;
     }
 ): Record<string, any> {
     return {

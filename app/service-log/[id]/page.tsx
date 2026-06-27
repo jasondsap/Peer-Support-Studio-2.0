@@ -373,6 +373,9 @@ export default function ServiceDetailPage() {
             type: service?.service_type || 'individual',
             setting: service?.setting || ''
         });
+        if (service?.participant_id) {
+            params.set('participantId', service.participant_id);
+        }
         router.push(`/session-notes?${params.toString()}`);
     };
 
@@ -620,6 +623,24 @@ export default function ServiceDetailPage() {
                                 Completed on {new Date(service.completed_at).toLocaleString()}
                             </div>
                         )}
+
+                        <div className="mt-4 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <FileText className="w-4 h-4 text-gray-400" />
+                                <span className="text-sm text-gray-600">Session Note</span>
+                            </div>
+                            {service.session_note_id ? (
+                                <button
+                                    onClick={() => router.push(`/session-notes/${service.session_note_id}`)}
+                                    className="text-sm font-medium text-[#1A73A8] hover:underline inline-flex items-center gap-1"
+                                >
+                                    View note
+                                    <ChevronRight className="w-4 h-4" />
+                                </button>
+                            ) : (
+                                <span className="text-sm font-medium text-amber-600">Not created</span>
+                            )}
+                        </div>
                     </div>
                 )}
 

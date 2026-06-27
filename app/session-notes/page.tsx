@@ -49,6 +49,14 @@ function SessionNotesContent() {
     const prefillLessonId = searchParams.get('lessonId');
     const prefillMode = searchParams.get('mode');
 
+    // Service → note linkage params (when coming from the service log)
+    const prefillServiceId = searchParams.get('serviceId');
+    const prefillParticipantId = searchParams.get('participantId');
+    const prefillDate = searchParams.get('date');
+    const prefillDuration = searchParams.get('duration');
+    const prefillType = searchParams.get('type');
+    const prefillSetting = searchParams.get('setting');
+
     // Session metadata as an object (matching SessionDebrief expectations)
     const [metadata, setMetadata] = useState<SessionMetadata>({
         date: todayLocal(),
@@ -88,6 +96,43 @@ function SessionNotesContent() {
         }
     }, [prefillMode]);
 
+    // Prefill metadata + participant when arriving from the service log so the
+    // resulting note is tied back to the delivered service.
+    useEffect(() => {
+        if (prefillParticipantId) {
+            setSelectedParticipantId(prefillParticipantId);
+        }
+        if (prefillDate || prefillDuration || prefillType || prefillSetting) {
+            setMetadata((prev) => ({
+                ...prev,
+                date: prefillDate ? prefillDate.split('T')[0] : prev.date,
+                duration: prefillDuration || prev.duration,
+                sessionType: (prefillType as SessionMetadata['sessionType']) || prev.sessionType,
+                setting: prefillSetting || prev.setting,
+            }));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Link a freshly-saved note back to the originating service plan (closes the
+    // deliver → document loop). Failures are non-fatal to the save flow.
+    const linkNoteToService = async (noteId: string) => {
+        if (!prefillServiceId || !noteId) return;
+        try {
+            await fetch('/api/service-log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'link-note',
+                    serviceId: prefillServiceId,
+                    sessionNoteId: noteId,
+                }),
+            });
+        } catch (err) {
+            console.error('Failed to link note to service:', err);
+        }
+    };
+
     const fetchParticipants = async () => {
         try {
             const response = await fetch('/api/participants');
@@ -109,14 +154,17 @@ function SessionNotesContent() {
     const handleTranscriptComplete = async (transcript: string) => {
         setIsProcessing(true);
         try {
-            // Call AI to generate notes from transcript
+            // Call AI to generate notes from transcript. saveToDb:false ensures the
+            // generate route does NOT create a row — we persist exactly once below.
             const response = await fetch('/api/session-notes/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     transcript,
                     metadata,
-                    participantId: selectedParticipantId,
+                    participantId: selectedParticipantId || null,
+                    organizationId: currentOrg?.id || null,
+                    saveToDb: false,
                 }),
             });
 
@@ -126,11 +174,9 @@ function SessionNotesContent() {
 
             const result = await response.json();
             setGeneratedNote(result);
-            
-            // TODO: Navigate to review/edit page or show generated note
-            // For now, save directly
-            await saveNote(result);
-            
+
+            // Persist the generated note (single source of truth) and link it.
+            await saveNote(result, transcript);
         } catch (error) {
             console.error('Error generating notes:', error);
             // TODO: Show error to user
@@ -139,16 +185,22 @@ function SessionNotesContent() {
         }
     };
 
-    const saveNote = async (noteData: any) => {
+    // Persist a generated note exactly once, mapping the generate route's
+    // camelCase output onto the API's snake_case body shape.
+    const saveNote = async (generated: any, transcript: string) => {
         setIsSaving(true);
         try {
             const response = await fetch('/api/session-notes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    ...noteData,
                     metadata,
+                    pss_note: generated.pssNote,
+                    pss_summary: generated.pssSummary,
+                    participant_summary: generated.participantSummary,
+                    transcript,
                     participant_id: selectedParticipantId || null,
+                    organization_id: currentOrg?.id || null,
                     source: mode,
                 }),
             });
@@ -158,6 +210,7 @@ function SessionNotesContent() {
             }
 
             const result = await response.json();
+            await linkNoteToService(result.note.id);
             router.push(`/session-notes/${result.note.id}`);
         } catch (error) {
             console.error('Error saving note:', error);
@@ -173,7 +226,11 @@ function SessionNotesContent() {
             const response = await fetch('/api/session-notes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(noteData),
+                body: JSON.stringify({
+                    ...noteData,
+                    participant_id: noteData.participant_id ?? (selectedParticipantId || null),
+                    organization_id: noteData.organization_id ?? (currentOrg?.id || null),
+                }),
             });
 
             if (!response.ok) {
@@ -181,7 +238,8 @@ function SessionNotesContent() {
             }
 
             const result = await response.json();
-            
+            await linkNoteToService(result.note.id);
+
             // Navigate to the saved note or library
             router.push(`/session-notes/${result.note.id}`);
         } catch (error) {
@@ -193,9 +251,10 @@ function SessionNotesContent() {
     };
 
     // ADDED: Handler for Quick Note saved
-    const handleQuickNoteSaved = (note: any) => {
+    const handleQuickNoteSaved = async (note: any) => {
         // Navigate to the saved note
         if (note?.id) {
+            await linkNoteToService(note.id);
             router.push(`/session-notes/${note.id}`);
         }
     };

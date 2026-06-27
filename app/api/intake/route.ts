@@ -227,7 +227,17 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Compute billing readiness and store it
+        // Draft/resume tracking
+        if (typeof body.last_step === 'number') {
+            columns.push('last_step');
+            values.push(body.last_step);
+        }
+        columns.push('last_saved_at');
+        values.push(new Date().toISOString());
+
+        // Compute billing readiness and store it. We persist real holds even for
+        // drafts so an incomplete draft correctly reads as "not billing ready"
+        // (storing [] would make a draft look ready in the participant badge).
         const billingResult = computeBillingReadiness(body);
         columns.push('billing_readiness_holds');
         values.push(JSON.stringify(billingResult.holds));
@@ -337,8 +347,17 @@ export async function PUT(req: NextRequest) {
             }
         }
 
-        // Recompute billing readiness
-        // Merge existing record with updates so the check sees the full picture
+        // Draft/resume tracking
+        if (typeof body.last_step === 'number') {
+            setClauses.push(`last_step = $${paramIdx}`);
+            values.push(body.last_step);
+            paramIdx++;
+        }
+        setClauses.push(`last_saved_at = NOW()`);
+
+        // Recompute billing readiness against the merged record so the check
+        // sees the full picture. Persist real holds even for drafts (an
+        // incomplete draft should read as "not billing ready", not ready).
         const fullRecord = await sql`SELECT * FROM participant_intakes WHERE id = ${id}::uuid`;
         const merged = { ...fullRecord[0], ...body };
         const billingResult = computeBillingReadiness(merged);
