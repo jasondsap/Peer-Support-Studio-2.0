@@ -28,11 +28,17 @@ export async function GET(
 
         const { id } = await params;
 
+        // Org-wide read: the owner OR anyone in the lesson's org may view it.
+        const organizationId = (session as any).currentOrganization?.id || null;
+
         const result = await sql`
             SELECT *
             FROM saved_lessons
             WHERE id = ${id}::uuid
-            AND user_id = ${userId}::uuid
+              AND (
+                    user_id = ${userId}::uuid
+                 OR (${organizationId}::uuid IS NOT NULL AND organization_id = ${organizationId}::uuid)
+              )
         `;
 
         if (result.length === 0) {

@@ -35,6 +35,9 @@ const nextConfig = {
     APP_AWS_ACCESS_KEY_ID: process.env.APP_AWS_ACCESS_KEY_ID,
     APP_AWS_SECRET_ACCESS_KEY: process.env.APP_AWS_SECRET_ACCESS_KEY,
     APP_AWS_REGION: process.env.APP_AWS_REGION,
+    // S3 bucket for participant/intake document attachments
+    APP_AWS_S3_BUCKET: process.env.APP_AWS_S3_BUCKET,
+    PARTICIPANT_DOCS_BUCKET: process.env.PARTICIPANT_DOCS_BUCKET,
 
     // Google APIs
     GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,

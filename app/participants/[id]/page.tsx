@@ -16,7 +16,7 @@ import {
     AlertCircle, ChevronRight, Clock, Users, Heart,
     Home, Scale, Shield, Sparkles, BookHeart, Eye, Lock, X,
     ClipboardList, GraduationCap, Share2, TrendingUp,
-    CheckCircle2
+    CheckCircle2, Paperclip, Download, Trash2, Upload
 } from 'lucide-react';
 import AssessmentDetailModal from '@/app/components/AssessmentDetailModal';
 import AssessmentTrendChart from '@/app/components/AssessmentTrendChart';
@@ -105,7 +105,7 @@ interface JournalEntry {
     updated_at: string;
 }
 
-type TabType = 'overview' | 'intake' | 'goals' | 'plans' | 'notes' | 'assessments' | 'activity' | 'curricula' | 'readiness' | 'referrals';
+type TabType = 'overview' | 'intake' | 'goals' | 'plans' | 'notes' | 'assessments' | 'activity' | 'curricula' | 'readiness' | 'referrals' | 'documents';
 
 interface AssessmentSchedule {
     id: string;
@@ -380,6 +380,9 @@ export default function ParticipantDetailPage() {
     const [participantCurricula, setParticipantCurricula] = useState<any[]>([]);
     const [schedules, setSchedules] = useState<AssessmentSchedule[]>([]);
     const [referrals, setReferrals] = useState<Referral[]>([]);
+    const [documents, setDocuments] = useState<any[]>([]);
+    const [docsUnavailable, setDocsUnavailable] = useState(false);
+    const [docBusyId, setDocBusyId] = useState<string | null>(null);
 
     // ========================================================================
     // Data Fetching
@@ -439,6 +442,17 @@ export default function ParticipantDetailPage() {
                 const curRes = await fetch(`/api/participants/${params.id}/curricula`);
                 const curData = await curRes.json();
                 setParticipantCurricula(curData.enrollments || []);
+
+                // Fetch attached documents (non-fatal; degrades to empty)
+                try {
+                    const docRes = await fetch(`/api/participant-documents?organization_id=${currentOrg.id}&participant_id=${params.id}`);
+                    if (docRes.ok) {
+                        const docData = await docRes.json();
+                        setDocuments(docData.documents || []);
+                    }
+                } catch {
+                    /* non-fatal */
+                }
 
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Failed to load participant');
@@ -587,6 +601,43 @@ export default function ParticipantDetailPage() {
         }
     };
 
+    // Documents — request a short-lived presigned URL then open it.
+    const handleDownloadDocument = async (docId: string) => {
+        if (!currentOrg?.id) return;
+        setDocBusyId(docId);
+        try {
+            const res = await fetch(`/api/participant-documents?organization_id=${currentOrg.id}&id=${docId}&download=1`);
+            const data = await res.json();
+            if (res.ok && data.url) {
+                window.open(data.url, '_blank', 'noopener,noreferrer');
+            } else if (res.status === 503) {
+                setDocsUnavailable(true);
+            }
+        } catch (e) {
+            console.error('Download failed:', e);
+        } finally {
+            setDocBusyId(null);
+        }
+    };
+
+    const handleDeleteDocument = async (docId: string) => {
+        if (!currentOrg?.id) return;
+        if (!confirm('Delete this document? This cannot be undone.')) return;
+        setDocBusyId(docId);
+        try {
+            const res = await fetch(`/api/participant-documents?organization_id=${currentOrg.id}&id=${docId}`, {
+                method: 'DELETE',
+            });
+            if (res.ok) {
+                setDocuments(prev => prev.filter(d => d.id !== docId));
+            }
+        } catch (e) {
+            console.error('Delete failed:', e);
+        } finally {
+            setDocBusyId(null);
+        }
+    };
+
     // Mark this participant's shared journal entries as viewed by the PSS so the
     // "X new" badge clears. Optimistically updates the UI; fires when the PSS
     // opens the shared-journal section.
@@ -672,6 +723,7 @@ export default function ParticipantDetailPage() {
         { id: 'notes', label: 'Session Notes', icon: FileText },
         { id: 'assessments', label: 'Assessments', icon: Activity },
         { id: 'referrals', label: 'Referrals', icon: Share2 },
+        { id: 'documents', label: 'Documents', icon: Paperclip },
         { id: 'activity', label: 'Activity', icon: Users },
         { id: 'curricula', label: 'Curricula', icon: GraduationCap },
         ...(participant.is_reentry_participant ? [{ id: 'readiness', label: 'Readiness', icon: Shield }] : [])
@@ -1839,6 +1891,95 @@ export default function ParticipantDetailPage() {
                         )}
                     </div>
                 </div>
+                </div>
+            )}
+
+            {/* ================================================================ */}
+            {/* DOCUMENTS TAB - S3-backed participant / intake attachments */}
+            {/* ================================================================ */}
+            {activeTab === 'documents' && (
+                <div className="space-y-4">
+                    {docsUnavailable && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-2 text-sm text-amber-800">
+                            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                            Document storage is not configured. Downloads are unavailable.
+                        </div>
+                    )}
+
+                    <div className="bg-white rounded-2xl border border-[#E7E9EC] p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold text-[#0E2235] flex items-center gap-2">
+                                <Paperclip className="w-5 h-5 text-[#1A73A8]" />
+                                Documents
+                            </h3>
+                            <Link
+                                href={`/intake?participant_id=${participant.id}`}
+                                className="text-sm font-medium text-[#1A73A8] hover:underline flex items-center gap-1.5"
+                            >
+                                <Upload className="w-4 h-4" /> Add via Intake
+                            </Link>
+                        </div>
+
+                        {documents.length === 0 ? (
+                            <div className="text-center py-10">
+                                <Paperclip className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                                <p className="text-sm text-gray-500">No documents attached for {displayName}.</p>
+                                <p className="text-xs text-gray-400 mt-1">
+                                    Upload insurance cards, consent forms, and referral orders from the intake form.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {documents.map((d) => {
+                                    const typeLabel = ({
+                                        insurance_card: 'Insurance card',
+                                        consent: 'Consent form',
+                                        referral_order: 'Referral / order',
+                                        other: 'Document',
+                                    } as Record<string, string>)[d.doc_type] || 'Document';
+                                    const sizeKb = d.size_bytes ? Math.max(1, Math.round(d.size_bytes / 1024)) : null;
+                                    return (
+                                        <div
+                                            key={d.id}
+                                            className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:border-gray-200"
+                                        >
+                                            <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                                                <FileText className="w-4 h-4 text-[#1A73A8]" />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-medium text-[#0E2235] truncate">
+                                                    {d.file_name || 'Attached file'}
+                                                </p>
+                                                <p className="text-xs text-gray-500">
+                                                    {typeLabel}
+                                                    {sizeKb != null && ` · ${sizeKb} KB`}
+                                                    {d.created_at && ` · ${formatDateOnly(d.created_at, { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => handleDownloadDocument(d.id)}
+                                                disabled={docBusyId === d.id}
+                                                className="p-2 text-gray-500 hover:text-[#1A73A8] hover:bg-blue-50 rounded-lg disabled:opacity-50"
+                                                title="Download"
+                                            >
+                                                {docBusyId === d.id
+                                                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                    : <Download className="w-4 h-4" />}
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteDocument(d.id)}
+                                                disabled={docBusyId === d.id}
+                                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                                                title="Delete"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 

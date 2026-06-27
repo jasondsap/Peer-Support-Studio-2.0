@@ -42,6 +42,9 @@ export default function AddParticipantPage() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+    const [duplicateMatches, setDuplicateMatches] = useState<
+        { id: string; name: string; date_of_birth?: string }[] | null
+    >(null);
 
     const [formData, setFormData] = useState({
         first_name: '',
@@ -167,7 +170,7 @@ export default function AddParticipantPage() {
         }));
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent, force = false) => {
         e.preventDefault();
 
         if (!selectedOrg) {
@@ -182,6 +185,7 @@ export default function AddParticipantPage() {
 
         setSaving(true);
         setError(null);
+        if (force) setDuplicateMatches(null);
 
         try {
             const res = await fetch('/api/participants', {
@@ -190,13 +194,22 @@ export default function AddParticipantPage() {
                 body: JSON.stringify({
                     ...formData,
                     organization_id: selectedOrg.id,
+                    ...(force ? { force: true } : {}),
                 }),
             });
 
             const data = await res.json();
 
+            // Possible duplicate — surface a confirm prompt rather than failing outright
+            if (res.status === 409 && data.error === 'possible_duplicate') {
+                setDuplicateMatches(data.matches || []);
+                setSaving(false);
+                return;
+            }
+
             if (data.success || data.participant) {
                 setSuccess(true);
+                setDuplicateMatches(null);
                 // If reentry participant, redirect to their page to show readiness
                 const participantId = data.participant?.id;
                 setTimeout(() => {
@@ -269,6 +282,48 @@ export default function AddParticipantPage() {
                     <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
                         <AlertCircle className="w-5 h-5 text-red-500" />
                         <p className="text-red-700">{error}</p>
+                    </div>
+                )}
+
+                {/* Possible Duplicate Warning */}
+                {duplicateMatches && (
+                    <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div className="flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                                <p className="font-semibold text-amber-800">Possible duplicate found</p>
+                                <p className="text-sm text-amber-700 mt-1">
+                                    A participant with the same last name and date of birth already exists:
+                                </p>
+                                <ul className="mt-2 space-y-1">
+                                    {duplicateMatches.map(m => (
+                                        <li key={m.id} className="text-sm text-amber-800">
+                                            <Link href={`/participants/${m.id}`} className="font-medium underline hover:text-amber-900">
+                                                {m.name}
+                                            </Link>
+                                            {m.date_of_birth ? ` — DOB ${m.date_of_birth}` : ''}
+                                        </li>
+                                    ))}
+                                </ul>
+                                <div className="flex flex-wrap gap-3 mt-4">
+                                    <button
+                                        type="button"
+                                        onClick={(e) => handleSubmit(e as any, true)}
+                                        disabled={saving}
+                                        className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
+                                    >
+                                        {saving ? 'Creating…' : 'Create anyway'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setDuplicateMatches(null)}
+                                        className="px-4 py-2 border border-amber-300 text-amber-800 rounded-lg text-sm font-medium hover:bg-amber-100"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 

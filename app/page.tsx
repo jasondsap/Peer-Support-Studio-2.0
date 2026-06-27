@@ -12,6 +12,7 @@ import {
     Plus, Map, Mail, Library, Tablet,
     GraduationCap, AlertTriangle, CalendarDays,
     ClipboardEdit, Inbox, CheckCircle2, ChevronRight,
+    ListChecks, X, Circle,
 } from 'lucide-react';
 import AllyIntelligenceChat from './components/AllyIntelligenceChat';
 
@@ -43,6 +44,19 @@ interface DashboardData {
     todaysGroups: Section<GroupItem>;
 }
 
+// ── Tasks & reminders shape (mirrors GET /api/tasks) ───────────────────────
+interface TaskItem {
+    id: string;
+    title: string;
+    description: string | null;
+    task_type: string | null;
+    due_date: string | null;
+    priority: string;
+    status: string;
+    participant_id: string | null;
+    participant_name: string | null;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 function formatDate(value: string | null | undefined): string {
     if (!value) return '—';
@@ -60,6 +74,12 @@ function relativeFromNow(value: string | null | undefined): string {
     if (days < 30) return `${days}d ago`;
     if (days < 365) return `${Math.floor(days / 30)}mo ago`;
     return `${Math.floor(days / 365)}y ago`;
+}
+function isOverdue(value: string | null | undefined): boolean {
+    if (!value) return false;
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return false;
+    return d.getTime() < Date.now();
 }
 function prettyAssessment(type: string): string {
     const map: Record<string, string> = { barc10: 'BARC-10', mirc28: 'MIRC-28', phq4: 'PHQ-4', phq9: 'PHQ-9', gad7: 'GAD-7' };
@@ -211,6 +231,15 @@ export default function HomePage() {
     const [dashboard, setDashboard] = useState<DashboardData | null>(null);
     const [dashLoading, setDashLoading] = useState(true);
 
+    // Tasks & reminders state (fetched separately from the dashboard so a
+    // failure here never breaks the rest of the page).
+    const [tasks, setTasks] = useState<TaskItem[]>([]);
+    const [tasksLoading, setTasksLoading] = useState(true);
+    const [newTaskTitle, setNewTaskTitle] = useState('');
+    const [newTaskDue, setNewTaskDue] = useState('');
+    const [newTaskParticipant, setNewTaskParticipant] = useState('');
+    const [addingTask, setAddingTask] = useState(false);
+
     const userName = session?.user?.name?.split(' ')[0] || 'there';
 
     // Redirect to login if not authenticated
@@ -265,6 +294,79 @@ export default function HomePage() {
             .finally(() => { if (!cancelled) setDashLoading(false); });
         return () => { cancelled = true; };
     }, [status, organization?.id]);
+
+    // Fetch my open tasks/reminders (independent try/catch from the dashboard).
+    useEffect(() => {
+        if (status !== 'authenticated' || !organization?.id) return;
+        let cancelled = false;
+        setTasksLoading(true);
+        fetch(`/api/tasks?organization_id=${organization.id}&assigned_to=me&status=open`)
+            .then(res => res.json())
+            .then(data => {
+                if (cancelled) return;
+                if (data && Array.isArray(data.tasks)) setTasks(data.tasks as TaskItem[]);
+            })
+            .catch(() => {})
+            .finally(() => { if (!cancelled) setTasksLoading(false); });
+        return () => { cancelled = true; };
+    }, [status, organization?.id]);
+
+    // Reload tasks after a mutation.
+    async function refreshTasks(orgId: string) {
+        try {
+            const res = await fetch(`/api/tasks?organization_id=${orgId}&assigned_to=me&status=open`);
+            const data = await res.json();
+            if (data && Array.isArray(data.tasks)) setTasks(data.tasks as TaskItem[]);
+        } catch { /* non-fatal */ }
+    }
+
+    async function handleAddTask() {
+        const orgId = organization?.id;
+        if (!orgId || !newTaskTitle.trim() || addingTask) return;
+        setAddingTask(true);
+        try {
+            const res = await fetch('/api/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    organization_id: orgId,
+                    title: newTaskTitle.trim(),
+                    due_date: newTaskDue || undefined,
+                    participant_id: newTaskParticipant || undefined,
+                }),
+            });
+            if (res.ok) {
+                setNewTaskTitle('');
+                setNewTaskDue('');
+                setNewTaskParticipant('');
+                await refreshTasks(orgId);
+            }
+        } catch { /* non-fatal */ }
+        finally { setAddingTask(false); }
+    }
+
+    async function handleCompleteTask(id: string) {
+        const orgId = organization?.id;
+        if (!orgId) return;
+        // Optimistic removal from the open list.
+        setTasks(prev => prev.filter(t => t.id !== id));
+        try {
+            await fetch('/api/tasks', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, organization_id: orgId, action: 'complete' }),
+            });
+        } catch { await refreshTasks(orgId); }
+    }
+
+    async function handleDismissTask(id: string) {
+        const orgId = organization?.id;
+        if (!orgId) return;
+        setTasks(prev => prev.filter(t => t.id !== id));
+        try {
+            await fetch(`/api/tasks?id=${id}&organization_id=${orgId}`, { method: 'DELETE' });
+        } catch { await refreshTasks(orgId); }
+    }
 
     // Show loading while checking auth and org
     if (status === 'loading' || orgLoading) {
@@ -362,6 +464,111 @@ export default function HomePage() {
 
                         {/* Work-queue grid */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
+                            {/* My Tasks & Reminders — spans full width */}
+                            <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col overflow-hidden">
+                                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-lg bg-[#30B27A] flex items-center justify-center flex-shrink-0">
+                                            <ListChecks className="w-5 h-5 text-white" />
+                                        </div>
+                                        <h3 className="font-semibold text-gray-900">My Tasks &amp; Reminders</h3>
+                                        {tasks.length > 0 && (
+                                            <span className="ml-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold">
+                                                {tasks.length}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Quick add */}
+                                <div className="px-4 pt-3">
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                        <input
+                                            type="text"
+                                            value={newTaskTitle}
+                                            onChange={e => setNewTaskTitle(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Enter') handleAddTask(); }}
+                                            placeholder="Add a task or follow-up…"
+                                            className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#30B27A]/30 focus:border-[#30B27A]"
+                                        />
+                                        <input
+                                            type="date"
+                                            value={newTaskDue}
+                                            onChange={e => setNewTaskDue(e.target.value)}
+                                            title="Due date (optional)"
+                                            className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#30B27A]/30 focus:border-[#30B27A]"
+                                        />
+                                        <select
+                                            value={newTaskParticipant}
+                                            onChange={e => setNewTaskParticipant(e.target.value)}
+                                            title="Link a participant (optional)"
+                                            className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#30B27A]/30 focus:border-[#30B27A] max-w-[180px]"
+                                        >
+                                            <option value="">No participant</option>
+                                            {dashboard?.myCaseload.items.map(p => (
+                                                <option key={p.id} value={p.id}>{p.name || 'Unnamed'}</option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            onClick={handleAddTask}
+                                            disabled={!newTaskTitle.trim() || addingTask}
+                                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-[#30B27A] text-white text-sm font-medium hover:bg-[#289666] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                                        >
+                                            {addingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                                            Add
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Task list */}
+                                <div className="p-3 flex-1">
+                                    {tasksLoading ? (
+                                        <div className="flex items-center justify-center py-8">
+                                            <Loader2 className="w-5 h-5 animate-spin text-[#30B27A]" />
+                                        </div>
+                                    ) : tasks.length === 0 ? (
+                                        <EmptyState icon={CheckCircle2} message="No open tasks — you're all caught up." />
+                                    ) : (
+                                        <div className="divide-y divide-gray-50">
+                                            {tasks.map(t => {
+                                                const overdue = t.status !== 'done' && isOverdue(t.due_date);
+                                                return (
+                                                    <div
+                                                        key={t.id}
+                                                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg group ${overdue ? 'bg-rose-50' : 'hover:bg-gray-50'}`}
+                                                    >
+                                                        <button
+                                                            onClick={() => handleCompleteTask(t.id)}
+                                                            title="Mark complete"
+                                                            className="flex-shrink-0 text-gray-300 hover:text-[#30B27A] transition-colors"
+                                                        >
+                                                            <Circle className="w-5 h-5" />
+                                                        </button>
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="font-medium text-gray-900 truncate">{t.title}</p>
+                                                            <p className={`text-xs ${overdue ? 'text-rose-600 font-medium' : 'text-gray-500'}`}>
+                                                                {t.due_date ? `${overdue ? 'Overdue · due ' : 'Due '}${formatDate(t.due_date)}` : 'No due date'}
+                                                                {t.priority && t.priority !== 'normal' ? ` · ${t.priority}` : ''}
+                                                                {t.participant_id && t.participant_name ? (
+                                                                    <> · <Link href={`/participants/${t.participant_id}`} className="text-[#1A73A8] hover:underline">{t.participant_name}</Link></>
+                                                                ) : null}
+                                                            </p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleDismissTask(t.id)}
+                                                            title="Dismiss"
+                                                            className="flex-shrink-0 text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
                             {/* My Caseload */}
                             <SectionCard title="My Caseload" icon={Users} accent="bg-[#1A73A8]" count={dashboard?.myCaseload.count} viewAllHref="/participants">
                                 {!dashboard?.myCaseload.items.length ? (

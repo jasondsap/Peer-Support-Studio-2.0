@@ -23,6 +23,9 @@ interface Message {
     content: string;
     content_type: string;
     status: string;
+    delivered_at?: string | null;
+    read_at?: string | null;
+    flagged_crisis?: boolean;
     is_edited: boolean;
     created_at: string;
     sender: {
@@ -45,6 +48,7 @@ interface Conversation {
     participant_id?: string;
     subject?: string;
     status: string;
+    muted?: boolean;
     participant_first_name?: string;
     participant_last_name?: string;
     participant_preferred_name?: string;
@@ -132,7 +136,14 @@ export default function MessageThread({
     const [sending, setSending] = useState(false);
     const [newMessage, setNewMessage] = useState('');
     const [showMenu, setShowMenu] = useState(false);
-    
+    const [muted, setMuted] = useState<boolean>(!!conversation.muted);
+    const [updating, setUpdating] = useState(false);
+
+    // Keep mute state in sync when switching conversations
+    useEffect(() => {
+        setMuted(!!conversation.muted);
+    }, [conversation.id]);
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     
@@ -251,6 +262,56 @@ export default function MessageThread({
     };
 
     // ========================================================================
+    // Conversation actions (Archive / Mute) — PATCH /api/messages/:id
+    // ========================================================================
+
+    const patchConversation = async (payload: Record<string, any>) => {
+        const res = await fetch(`/api/messages/${conversation.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ organization_id: organizationId, ...payload }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+            throw new Error(data.error || 'Update failed');
+        }
+        return data;
+    };
+
+    const handleArchive = async () => {
+        if (updating) return;
+        setUpdating(true);
+        setShowMenu(false);
+        try {
+            await patchConversation({ status: 'archived' });
+            // Archived conversations drop out of the active list — go back.
+            onBack();
+        } catch (error) {
+            console.error('Error archiving conversation:', error);
+            alert('Could not archive this conversation. Please try again.');
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    const handleToggleMute = async () => {
+        if (updating) return;
+        const next = !muted;
+        setUpdating(true);
+        setShowMenu(false);
+        setMuted(next); // optimistic
+        try {
+            await patchConversation({ muted: next });
+        } catch (error) {
+            console.error('Error updating mute:', error);
+            setMuted(!next); // revert
+            alert('Could not update notifications. Please try again.');
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    // ========================================================================
     // Render
     // ========================================================================
 
@@ -292,13 +353,21 @@ export default function MessageThread({
 
                     {showMenu && (
                         <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-                            <button className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 text-gray-700">
+                            <button
+                                onClick={handleArchive}
+                                disabled={updating}
+                                className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 text-gray-700 disabled:opacity-50"
+                            >
                                 <Archive className="w-4 h-4" />
                                 Archive conversation
                             </button>
-                            <button className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 text-gray-700">
-                                <BellOff className="w-4 h-4" />
-                                Mute notifications
+                            <button
+                                onClick={handleToggleMute}
+                                disabled={updating}
+                                className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 text-gray-700 disabled:opacity-50"
+                            >
+                                {muted ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+                                {muted ? 'Unmute notifications' : 'Mute notifications'}
                             </button>
                         </div>
                     )}
@@ -360,7 +429,15 @@ export default function MessageThread({
                                                         {message.sender?.name}
                                                     </p>
                                                 )}
-                                                
+
+                                                {/* Crisis flag (participant-authored, auto-detected) */}
+                                                {message.flagged_crisis && (
+                                                    <div className="mb-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-semibold border border-red-200">
+                                                        <AlertTriangle className="w-3 h-3" />
+                                                        Crisis flag — review
+                                                    </div>
+                                                )}
+
                                                 <div className={`rounded-2xl px-4 py-2 ${
                                                     isOwnMessage
                                                         ? 'bg-[#1A73A8] text-white rounded-br-md'
@@ -397,10 +474,12 @@ export default function MessageThread({
                                                     {isOwnMessage && (
                                                         message.status === 'sending' ? (
                                                             <Clock className="w-3 h-3" />
-                                                        ) : message.status === 'read' ? (
-                                                            <CheckCheck className="w-3 h-3 text-[#1A73A8]" />
+                                                        ) : message.read_at ? (
+                                                            <CheckCheck className="w-3 h-3 text-[#1A73A8]" aria-label="Read" />
+                                                        ) : message.delivered_at ? (
+                                                            <CheckCheck className="w-3 h-3 text-gray-400" aria-label="Delivered" />
                                                         ) : (
-                                                            <Check className="w-3 h-3" />
+                                                            <Check className="w-3 h-3" aria-label="Sent" />
                                                         )
                                                     )}
                                                     {message.is_edited && (
@@ -421,10 +500,10 @@ export default function MessageThread({
             {/* Compose Area */}
             <div className="bg-white border-t border-gray-200 p-4">
                 <div className="flex items-end gap-2">
-                    <button className="p-2 hover:bg-gray-100 rounded-lg text-gray-500">
-                        <Paperclip className="w-5 h-5" />
-                    </button>
-                    
+                    {/* TODO: attachments — hidden until an upload endpoint exists.
+                        message_attachments + S3 wiring are not yet built, so the
+                        paperclip is hidden rather than left as a dead button. */}
+
                     <div className="flex-1 relative">
                         <textarea
                             ref={textareaRef}

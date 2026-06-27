@@ -9,7 +9,7 @@ import {
     Users, Plus, Search, Filter, Loader2,
     User, Phone, Mail, Calendar, Target,
     FileText, ChevronRight, AlertCircle, UserCheck, MapPin,
-    ArrowUpDown
+    ArrowUpDown, ChevronLeft, X, CheckCircle
 } from 'lucide-react';
 
 interface Participant {
@@ -51,7 +51,17 @@ export default function ParticipantsPage() {
     const [sortBy, setSortBy] = useState('last_az');
     const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
     const [locations, setLocations] = useState<{ id: string; name: string; short_name?: string }[]>([]);
-    
+
+    // Pagination
+    const PAGE_SIZE = 50;
+    const [offset, setOffset] = useState(0);
+    const [total, setTotal] = useState(0);
+
+    // Bulk selection
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [bulkSaving, setBulkSaving] = useState(false);
+    const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+
     const currentOrg = (session as any)?.currentOrganization;
     
     // Auth check
@@ -99,11 +109,17 @@ export default function ParticipantsPage() {
         }
     }, [status, currentOrg?.id]);
     
+    // Reset to first page + clear selection whenever filters/search change
+    useEffect(() => {
+        setOffset(0);
+        setSelectedIds(new Set());
+    }, [statusFilter, searchTerm, pssFilter, locationFilter, currentOrg?.id]);
+
     // Fetch participants
     useEffect(() => {
         async function fetchParticipants() {
             if (!currentOrg?.id) return;
-            
+
             try {
                 setLoading(true);
                 const params = new URLSearchParams({
@@ -111,26 +127,78 @@ export default function ParticipantsPage() {
                     status: statusFilter,
                     pss_filter: pssFilter,
                     location_filter: locationFilter,
+                    limit: String(PAGE_SIZE),
+                    offset: String(offset),
                 });
                 if (searchTerm) {
                     params.append('search', searchTerm);
                 }
-                
+
                 const res = await fetch(`/api/participants?${params}`);
                 const data = await res.json();
-                
+
                 if (data.error) throw new Error(data.error);
                 setParticipants(data.participants || []);
+                setTotal(typeof data.total === 'number' ? data.total : (data.participants?.length || 0));
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Failed to fetch participants');
             } finally {
                 setLoading(false);
             }
         }
-        
+
         const debounce = setTimeout(fetchParticipants, 300);
         return () => clearTimeout(debounce);
-    }, [currentOrg?.id, statusFilter, searchTerm, pssFilter, locationFilter]);
+    }, [currentOrg?.id, statusFilter, searchTerm, pssFilter, locationFilter, offset]);
+
+    // Bulk update helper
+    const applyBulkUpdate = async (updates: Record<string, any>) => {
+        if (selectedIds.size === 0 || !currentOrg?.id) return;
+        setBulkSaving(true);
+        setBulkMessage(null);
+        try {
+            const res = await fetch('/api/participants', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    organization_id: currentOrg.id,
+                    ids: Array.from(selectedIds),
+                    updates,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Bulk update failed');
+            setBulkMessage(`Updated ${data.updated ?? selectedIds.size} participant(s)`);
+            setSelectedIds(new Set());
+            // Refresh current page
+            const params = new URLSearchParams({
+                organization_id: currentOrg.id,
+                status: statusFilter,
+                pss_filter: pssFilter,
+                location_filter: locationFilter,
+                limit: String(PAGE_SIZE),
+                offset: String(offset),
+            });
+            if (searchTerm) params.append('search', searchTerm);
+            const refreshed = await fetch(`/api/participants?${params}`);
+            const refreshedData = await refreshed.json();
+            setParticipants(refreshedData.participants || []);
+            setTotal(typeof refreshedData.total === 'number' ? refreshedData.total : 0);
+            setTimeout(() => setBulkMessage(null), 4000);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Bulk update failed');
+        } finally {
+            setBulkSaving(false);
+        }
+    };
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
     
     if (status === 'loading' || !currentOrg) {
         return (
@@ -341,7 +409,92 @@ export default function ParticipantsPage() {
                     <p className="text-red-700">{error}</p>
                 </div>
             )}
-            
+
+            {/* Bulk success message */}
+            {bulkMessage && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <p className="text-green-700">{bulkMessage}</p>
+                </div>
+            )}
+
+            {/* Bulk Action Bar */}
+            {selectedIds.size > 0 && (
+                <div className="mb-4 p-4 bg-[#0E2235] text-white rounded-xl flex flex-col md:flex-row md:items-center gap-3">
+                    <div className="flex items-center gap-2 font-medium">
+                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/20 text-sm">
+                            {selectedIds.size}
+                        </span>
+                        selected
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 md:ml-4">
+                        {/* Reassign PSS */}
+                        <select
+                            disabled={bulkSaving}
+                            defaultValue=""
+                            onChange={(e) => {
+                                if (e.target.value) applyBulkUpdate({ primary_pss_id: e.target.value === '__unassign__' ? '' : e.target.value });
+                                e.target.value = '';
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-sm text-gray-800 disabled:opacity-50"
+                        >
+                            <option value="">Reassign PSS…</option>
+                            <option value="__unassign__">Unassigned</option>
+                            {orgMembers.map(m => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                        </select>
+                        {/* Set location */}
+                        {locations.length > 0 && (
+                            <select
+                                disabled={bulkSaving}
+                                defaultValue=""
+                                onChange={(e) => {
+                                    if (e.target.value) applyBulkUpdate({ location_id: e.target.value === '__unassign__' ? '' : e.target.value });
+                                    e.target.value = '';
+                                }}
+                                className="px-3 py-1.5 rounded-lg text-sm text-gray-800 disabled:opacity-50"
+                            >
+                                <option value="">Set location…</option>
+                                <option value="__unassign__">Unassigned</option>
+                                {locations.map(loc => (
+                                    <option key={loc.id} value={loc.id}>{loc.short_name || loc.name}</option>
+                                ))}
+                            </select>
+                        )}
+                        {/* Change status */}
+                        <select
+                            disabled={bulkSaving}
+                            defaultValue=""
+                            onChange={(e) => {
+                                if (e.target.value) applyBulkUpdate({ status: e.target.value });
+                                e.target.value = '';
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-sm text-gray-800 disabled:opacity-50"
+                        >
+                            <option value="">Change status…</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="discharged">Discharged</option>
+                        </select>
+                        {bulkSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                    </div>
+                    <button
+                        onClick={() => setSelectedIds(new Set())}
+                        className="md:ml-auto inline-flex items-center gap-1 text-sm text-white/80 hover:text-white"
+                    >
+                        <X className="w-4 h-4" /> Clear
+                    </button>
+                </div>
+            )}
+
+            {/* Results count */}
+            {!loading && total > 0 && (
+                <p className="text-sm text-gray-500 mb-3">
+                    Showing {offset + 1}–{Math.min(offset + participants.length, total)} of {total}
+                </p>
+            )}
+
             {/* Participants List */}
             {loading ? (
                 <div className="flex items-center justify-center py-12">
@@ -374,6 +527,20 @@ export default function ParticipantsPage() {
                         <table className="w-full">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
+                                    <th className="px-4 py-3 text-left w-10">
+                                        <input
+                                            type="checkbox"
+                                            className="w-4 h-4 rounded border-gray-300 text-[#1A73A8] focus:ring-[#1A73A8]"
+                                            checked={participants.length > 0 && selectedIds.size >= participants.length && participants.every(p => selectedIds.has(p.id))}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedIds(new Set(participants.map(p => p.id)));
+                                                } else {
+                                                    setSelectedIds(new Set());
+                                                }
+                                            }}
+                                        />
+                                    </th>
                                     <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Name</th>
                                     <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Contact</th>
                                     <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Status</th>
@@ -385,11 +552,19 @@ export default function ParticipantsPage() {
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {sortedParticipants.map((participant) => (
-                                    <tr 
+                                    <tr
                                         key={participant.id}
-                                        className="hover:bg-gray-50 transition-colors cursor-pointer"
+                                        className={`hover:bg-gray-50 transition-colors cursor-pointer ${selectedIds.has(participant.id) ? 'bg-blue-50/60' : ''}`}
                                         onClick={() => router.push(`/participants/${participant.id}`)}
                                     >
+                                        <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                                            <input
+                                                type="checkbox"
+                                                className="w-4 h-4 rounded border-gray-300 text-[#1A73A8] focus:ring-[#1A73A8]"
+                                                checked={selectedIds.has(participant.id)}
+                                                onChange={() => toggleSelect(participant.id)}
+                                            />
+                                        </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#1A73A8] to-[#30B27A] flex items-center justify-center text-white font-medium">
@@ -449,6 +624,30 @@ export default function ParticipantsPage() {
                             </tbody>
                         </table>
                     </div>
+                    {/* Pagination */}
+                    {total > PAGE_SIZE && (
+                        <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 bg-gray-50">
+                            <p className="text-sm text-gray-500">
+                                Page {Math.floor(offset / PAGE_SIZE) + 1} of {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+                                    disabled={offset === 0 || loading}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    <ChevronLeft className="w-4 h-4" /> Prev
+                                </button>
+                                <button
+                                    onClick={() => setOffset(offset + PAGE_SIZE)}
+                                    disabled={offset + participants.length >= total || loading}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    Next <ChevronRight className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

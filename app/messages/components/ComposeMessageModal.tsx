@@ -223,6 +223,15 @@ export default function ComposeMessageModal({
         }
     };
 
+    const handleDiscard = () => {
+        // Reset compose fields and close the wizard.
+        setMessage('');
+        setSubject('');
+        setSelectedRecipientId(preselectedParticipantId || null);
+        setMessageType(null);
+        onClose();
+    };
+
     // ========================================================================
     // Get recipient info for display
     // ========================================================================
@@ -514,14 +523,17 @@ export default function ComposeMessageModal({
                 {step === 'compose' && (
                     <div className="border-t border-gray-200 px-4 py-3 flex items-center justify-between bg-gray-50">
                         <div className="flex items-center gap-2">
-                            <button className="flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                            <button
+                                onClick={handleDiscard}
+                                disabled={sending}
+                                className="flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                            >
                                 <Trash2 className="w-4 h-4" />
                                 Discard
                             </button>
-                            <button className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                                <Paperclip className="w-4 h-4" />
-                                Attach
-                            </button>
+                            {/* TODO: attachments — hidden until an upload endpoint exists.
+                                No message_attachments upload path is wired yet, so the
+                                Attach button is hidden rather than left dead. */}
                         </div>
                         <button
                             onClick={handleSend}

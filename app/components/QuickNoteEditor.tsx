@@ -37,6 +37,19 @@ interface Participant {
 interface QuickNoteEditorProps {
     onBack: () => void;
     onSaved?: (note: QuickNote) => void;
+    // Notes-efficiency: seed the editor from a template or copied note.
+    initialData?: {
+        title?: string;
+        content?: string;
+        sessionType?: string;
+        tags?: string[];
+        participantId?: string;
+    };
+    // Reports current draft upward so the parent can offer "Save as template".
+    onDraftChange?: (body: {
+        kind: 'quick';
+        quick: { title: string; content: string; sessionType: string; tags: string[] };
+    }) => void;
 }
 
 // Simple Markdown Preview Component
@@ -124,16 +137,16 @@ function MarkdownToolbar({ onInsert }: { onInsert: (before: string, after: strin
     );
 }
 
-export default function QuickNoteEditor({ onBack, onSaved }: QuickNoteEditorProps) {
+export default function QuickNoteEditor({ onBack, onSaved, initialData, onDraftChange }: QuickNoteEditorProps) {
     const { data: session } = useSession();
-    
-    // Form state
-    const [title, setTitle] = useState('');
-    const [content, setContent] = useState('');
+
+    // Form state (seeded from initialData when provided)
+    const [title, setTitle] = useState(initialData?.title || '');
+    const [content, setContent] = useState(initialData?.content || '');
     const [date, setDate] = useState(todayLocal());
-    const [sessionType, setSessionType] = useState('general');
-    const [selectedParticipant, setSelectedParticipant] = useState<string>('');
-    const [tags, setTags] = useState<string[]>([]);
+    const [sessionType, setSessionType] = useState(initialData?.sessionType || 'general');
+    const [selectedParticipant, setSelectedParticipant] = useState<string>(initialData?.participantId || '');
+    const [tags, setTags] = useState<string[]>(initialData?.tags || []);
     const [tagInput, setTagInput] = useState('');
     
     // UI state
@@ -158,6 +171,12 @@ export default function QuickNoteEditor({ onBack, onSaved }: QuickNoteEditorProp
         fetchParticipants();
         fetchRecentNotes();
     }, []);
+
+    // Report the current draft upward so the parent can offer "Save as template".
+    useEffect(() => {
+        if (!onDraftChange) return;
+        onDraftChange({ kind: 'quick', quick: { title, content, sessionType, tags } });
+    }, [title, content, sessionType, tags, onDraftChange]);
 
     const fetchParticipants = async () => {
         try {

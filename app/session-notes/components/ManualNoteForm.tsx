@@ -38,19 +38,28 @@ interface ManualNoteFormProps {
         intervention?: string;
         lessonId?: string;
     };
+    // Notes-efficiency: seed form fields from a template or a copied note.
+    initialFormData?: Record<string, any>;
+    initialParticipantId?: string;
+    // Reports the current template-able note structure to the parent so it can
+    // be saved as a template.
+    onDraftChange?: (body: { kind: 'manual'; manual: Record<string, any> }) => void;
 }
 
-export default function ManualNoteForm({ 
-    participants, 
-    onSave, 
+export default function ManualNoteForm({
+    participants,
+    onSave,
     onCancel,
     organizationId,
     staffName: initialStaffName = '',
-    prefillData 
+    prefillData,
+    initialFormData,
+    initialParticipantId,
+    onDraftChange,
 }: ManualNoteFormProps) {
     const [isSaving, setIsSaving] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
-    const [selectedParticipantId, setSelectedParticipantId] = useState<string>('');
+    const [selectedParticipantId, setSelectedParticipantId] = useState<string>(initialParticipantId || '');
     const [participantGoals, setParticipantGoals] = useState<RecoveryGoal[]>([]);
     const [isLoadingGoals, setIsLoadingGoals] = useState(false);
     const [generatedNote, setGeneratedNote] = useState<string | null>(null);
@@ -111,7 +120,49 @@ export default function ManualNoteForm({
 
         // Hidden
         sessionTopic: prefillData?.topic || '',
+
+        // Notes-efficiency: seed from a template or copied note (overrides
+        // the defaults above; dates/attestation are intentionally excluded
+        // from seeds upstream).
+        ...(initialFormData || {}),
     });
+
+    // Report the current template-able note structure upward so the parent can
+    // offer "Save as template". Dates, times, and the treatment-plan
+    // attestation are intentionally excluded so they don't carry between notes.
+    useEffect(() => {
+        if (!onDraftChange) return;
+        onDraftChange({
+            kind: 'manual',
+            manual: {
+                staffName: formData.staffName,
+                sessionType: formData.sessionType,
+                location: formData.location,
+                locationOther: formData.locationOther,
+                groupSize: formData.groupSize,
+                othersPresent: formData.othersPresent,
+                goalDiscussion: formData.goalDiscussion,
+                participantShared: formData.participantShared,
+                directQuotes: formData.directQuotes,
+                strengthsObserved: formData.strengthsObserved,
+                customStrength: formData.customStrength,
+                progressNoted: formData.progressNoted,
+                supportProvided: formData.supportProvided,
+                customSupport: formData.customSupport,
+                sharedExperience: formData.sharedExperience,
+                participantResponse: formData.participantResponse,
+                resourcesDiscussed: formData.resourcesDiscussed,
+                communityConnections: formData.communityConnections,
+                safetyConcerns: formData.safetyConcerns,
+                safetyConcernsNote: formData.safetyConcernsNote,
+                participationLevel: formData.participationLevel,
+                motivationLevel: formData.motivationLevel,
+                treatmentPlanNote: formData.treatmentPlanNote,
+                nextSteps: formData.nextSteps,
+                nextMeetingFocus: formData.nextMeetingFocus,
+            },
+        });
+    }, [formData, onDraftChange]);
 
     // Options
     const locationOptions = [

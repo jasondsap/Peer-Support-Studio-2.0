@@ -30,12 +30,20 @@ export async function GET(request: NextRequest) {
         const searchParams = request.nextUrl.searchParams;
         const status = searchParams.get('status');
         const source = searchParams.get('source'); // Filter by source (manual, recording, dictation, upload)
-        const participantId = searchParams.get('participantId');
+        // Accept both `participantId` (legacy) and `participant_id` (new).
+        const participantId =
+            searchParams.get('participantId') || searchParams.get('participant_id');
         const reviewStatus = searchParams.get('review_status'); // draft|submitted|approved|changes_requested
         const scope = searchParams.get('scope'); // 'team' to list org-wide notes (supervisors+)
         const orgIdParam = searchParams.get('organization_id');
-        const limit = parseInt(searchParams.get('limit') || '50');
-        const offset = parseInt(searchParams.get('offset') || '0');
+        const search = (searchParams.get('search') || '').trim(); // matches name / note text
+        const dateFrom = searchParams.get('date_from'); // inclusive (YYYY-MM-DD)
+        const dateTo = searchParams.get('date_to'); // inclusive (YYYY-MM-DD)
+        // Clamp limit to a sane range; default 50 (preserves existing callers).
+        const rawLimit = parseInt(searchParams.get('limit') || '50');
+        const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 50;
+        const rawOffset = parseInt(searchParams.get('offset') || '0');
+        const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : 0;
 
         // Determine the scope of the query. Default is the caller's own notes.
         // 'team' scope lists every note in the org, but ONLY for supervisors+.
@@ -81,6 +89,32 @@ export async function GET(request: NextRequest) {
             where.push(`sn.source = $${queryParams.length}`);
         }
 
+        // Date range — filter on created_at (the reliable stored timestamp).
+        if (dateFrom) {
+            queryParams.push(dateFrom);
+            where.push(`sn.created_at >= $${queryParams.length}::date`);
+        }
+        if (dateTo) {
+            queryParams.push(dateTo);
+            // inclusive of the whole end day
+            where.push(`sn.created_at < ($${queryParams.length}::date + INTERVAL '1 day')`);
+        }
+
+        // Free-text search across participant name + note text fields.
+        // Requires the participants join (added to both queries below).
+        if (search) {
+            queryParams.push(`%${search}%`);
+            const idx = queryParams.length;
+            where.push(`(
+                COALESCE(p.first_name || ' ' || p.last_name, '') ILIKE $${idx}
+                OR COALESCE(sn.pss_summary, '') ILIKE $${idx}
+                OR COALESCE(sn.participant_summary, '') ILIKE $${idx}
+                OR COALESCE(sn.transcript, '') ILIKE $${idx}
+                OR COALESCE(sn.pss_note::text, '') ILIKE $${idx}
+                OR COALESCE(sn.metadata::text, '') ILIKE $${idx}
+            )`);
+        }
+
         const whereClause = where.join(' AND ');
 
         const listParams = [...queryParams];
@@ -121,16 +155,23 @@ export async function GET(request: NextRequest) {
             listParams
         );
 
-        // Get total count for pagination (same filters, no limit/offset)
+        // Get total count for pagination (same filters, no limit/offset).
+        // Join participants so the free-text search clause can reference `p`.
         const countResult = await sql(
-            `SELECT COUNT(*) as total FROM session_notes sn WHERE ${whereClause}`,
+            `SELECT COUNT(*) as total
+             FROM session_notes sn
+             LEFT JOIN participants p ON sn.participant_id = p.id
+             WHERE ${whereClause}`,
             queryParams
         );
 
+        const total = parseInt(countResult[0]?.total || '0');
+
         return NextResponse.json({
             notes,
+            total,
             pagination: {
-                total: parseInt(countResult[0]?.total || '0'),
+                total,
                 limit,
                 offset
             }
@@ -179,6 +220,8 @@ export async function POST(request: NextRequest) {
             pss_coaching,
             conversation_analysis,
             clinical_data, // For manual notes - stores full clinical template data
+            group_activity_id,     // group -> note bridge linkage
+            curriculum_session_id, // curriculum -> note bridge linkage
         } = body;
 
         // Validate required fields
@@ -244,6 +287,8 @@ export async function POST(request: NextRequest) {
                 status,
                 pss_coaching,
                 conversation_analysis,
+                group_activity_id,
+                curriculum_session_id,
                 is_archived
             ) VALUES (
                 ${userId}::uuid,
@@ -258,6 +303,8 @@ export async function POST(request: NextRequest) {
                 'draft',
                 ${pss_coaching ? JSON.stringify(pss_coaching) : null}::jsonb,
                 ${conversation_analysis ? JSON.stringify(conversation_analysis) : null}::jsonb,
+                ${group_activity_id || null}::uuid,
+                ${curriculum_session_id || null}::uuid,
                 false
             )
             RETURNING *

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getSession, getInternalUserId, requireOrgAccess } from "@/lib/auth";
 import { sql, logAuditEvent } from "@/lib/db";
+import { scanForCrisis, notifyTeamOfCrisis } from "@/app/api/messages/notify";
 
 // GET /api/journal
 export async function GET(req: NextRequest) {
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
             }
 
             const entries = await sql`
-                SELECT id, entry_text, mood, shared_with_pss, pss_viewed, created_at, updated_at
+                SELECT id, entry_text, mood, shared_with_pss, pss_viewed, flagged_crisis, created_at, updated_at
                 FROM journal_entries
                 WHERE participant_id = ${queryParticipantId}
                 AND organization_id = ${queryOrgId}
@@ -140,7 +141,31 @@ export async function POST(req: NextRequest) {
             RETURNING *
         `;
 
-        return NextResponse.json({ entry: result[0] });
+        const entry = result[0];
+
+        // ── Crisis scan on participant-authored entry ──
+        // Don't block the write — flag + notify the care team. Best-effort:
+        // a scan/notify failure must never fail the journal create.
+        try {
+            const scan = scanForCrisis(entry_text, mood);
+            if (scan.flagged) {
+                await sql`
+                    UPDATE journal_entries SET flagged_crisis = true WHERE id = ${entry.id}
+                `;
+                entry.flagged_crisis = true;
+                await notifyTeamOfCrisis({
+                    organizationId,
+                    participantId,
+                    source: 'journal',
+                    matched: scan.matched,
+                    excerpt: entry_text,
+                });
+            }
+        } catch (err) {
+            console.error("Crisis scan (journal) failed:", err);
+        }
+
+        return NextResponse.json({ entry });
     } catch (error) {
         console.error("Error creating journal entry:", error);
         const message = error instanceof Error ? error.message : "Failed to create journal entry";

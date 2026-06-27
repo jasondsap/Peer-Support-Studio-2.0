@@ -2,7 +2,8 @@
 
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef } from 'react';
 import {
     Building2,
     Users,
@@ -15,14 +16,33 @@ import {
     Check,
     Loader2,
     ClipboardCheck,
-    BarChart3
+    BarChart3,
+    Search,
+    Target
 } from 'lucide-react';
 import UserButton from './UserButton';
 
+interface SearchResult {
+    type: string;
+    id: string;
+    participant_id?: string;
+    title: string;
+    subtitle?: string;
+    href: string;
+}
+
 export default function Header() {
+    const router = useRouter();
     const { data: session, status } = useSession();
     const [orgMenuOpen, setOrgMenuOpen] = useState(false);
     const [switching, setSwitching] = useState(false);
+
+    // Global search
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [searchLoading, setSearchLoading] = useState(false);
+    const searchBoxRef = useRef<HTMLDivElement>(null);
 
     const handleSwitchOrg = async (orgId: string) => {
         if (orgId === currentOrg?.id || switching) return;
@@ -43,7 +63,50 @@ export default function Header() {
     
     const organizations = (session as any)?.organizations || [];
     const currentOrg = (session as any)?.currentOrganization;
-    
+
+    // Debounced global search
+    useEffect(() => {
+        const q = searchQuery.trim();
+        if (q.length < 2 || !currentOrg?.id) {
+            setSearchResults([]);
+            setSearchLoading(false);
+            return;
+        }
+        setSearchLoading(true);
+        const handle = setTimeout(async () => {
+            try {
+                const params = new URLSearchParams({ q, organization_id: currentOrg.id });
+                const res = await fetch(`/api/search?${params}`);
+                const data = await res.json();
+                setSearchResults(data.results || []);
+            } catch (e) {
+                console.error('Search failed:', e);
+                setSearchResults([]);
+            } finally {
+                setSearchLoading(false);
+            }
+        }, 250);
+        return () => clearTimeout(handle);
+    }, [searchQuery, currentOrg?.id]);
+
+    // Close search dropdown on outside click
+    useEffect(() => {
+        function onClick(e: MouseEvent) {
+            if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+                setSearchOpen(false);
+            }
+        }
+        document.addEventListener('mousedown', onClick);
+        return () => document.removeEventListener('mousedown', onClick);
+    }, []);
+
+    const handleResultClick = (href: string) => {
+        setSearchOpen(false);
+        setSearchQuery('');
+        setSearchResults([]);
+        router.push(href);
+    };
+
     if (status === 'loading') {
         return (
             <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -189,6 +252,56 @@ export default function Header() {
                         </nav>
                     )}
                     
+                    {/* Global Search */}
+                    {session && currentOrg && (
+                        <div ref={searchBoxRef} className="relative hidden sm:block w-48 lg:w-64 mx-2">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
+                                onFocus={() => setSearchOpen(true)}
+                                placeholder="Search participants…"
+                                className="w-full pl-9 pr-8 py-1.5 text-sm bg-gray-100 border border-transparent rounded-lg focus:outline-none focus:bg-white focus:border-[#1A73A8] focus:ring-2 focus:ring-[#1A73A8]/20"
+                            />
+                            {searchLoading && (
+                                <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
+                            )}
+
+                            {searchOpen && searchQuery.trim().length >= 2 && (
+                                <div className="absolute right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
+                                    {searchResults.length === 0 ? (
+                                        <p className="px-4 py-3 text-sm text-gray-500">
+                                            {searchLoading ? 'Searching…' : 'No results found'}
+                                        </p>
+                                    ) : (
+                                        searchResults.map((r) => (
+                                            <button
+                                                key={`${r.type}-${r.id}`}
+                                                onClick={() => handleResultClick(r.href)}
+                                                className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-3"
+                                            >
+                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                                                    r.type === 'goal' ? 'bg-blue-100 text-blue-600' : 'bg-gradient-to-br from-[#1A73A8] to-[#30B27A] text-white'
+                                                }`}>
+                                                    {r.type === 'goal'
+                                                        ? <Target className="w-4 h-4" />
+                                                        : <Users className="w-4 h-4" />}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium text-[#0E2235] truncate">{r.title}</p>
+                                                    {r.subtitle && (
+                                                        <p className="text-xs text-gray-500 truncate">{r.subtitle}</p>
+                                                    )}
+                                                </div>
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* User Menu */}
                     <UserButton />
                 </div>

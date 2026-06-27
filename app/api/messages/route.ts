@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionWithUserId, requireOrgAccess } from "@/lib/auth";
 import { sql, logAuditEvent } from "@/lib/db";
+import { notifyParticipantOfMessage } from "./notify";
 
 // ============================================================================
 // GET - List conversations for current user
@@ -260,10 +261,29 @@ export async function POST(req: NextRequest) {
 
         // Send initial message if provided
         if (initial_message && conversationId) {
-            await sql`
+            const initialMsg = await sql`
                 INSERT INTO messages (conversation_id, sender_type, sender_user_id, content)
                 VALUES (${conversationId}, 'user', ${session.internalUserId}, ${initial_message})
+                RETURNING id
             `;
+
+            // Audit the SEND (Phase 0 only audited conversation creation).
+            await logAuditEvent(
+                session.internalUserId,
+                organization_id,
+                "send",
+                "message",
+                initialMsg[0]?.id,
+                { conversation_id: conversationId, conversation_type: type, initial: true }
+            );
+
+            // Out-of-band delivery notice to the participant. Best-effort.
+            if (type === 'participant' && participant_id) {
+                await notifyParticipantOfMessage({
+                    organizationId: organization_id,
+                    participantId: participant_id,
+                });
+            }
         }
 
         // Fetch the created conversation

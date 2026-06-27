@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionWithUserId, requireOrgAccess } from "@/lib/auth";
 import { sql, logAuditEvent } from "@/lib/db";
+import {
+    scanForCrisis,
+    notifyParticipantOfMessage,
+    notifyTeamOfCrisis,
+} from "../notify";
 
 // ============================================================================
 // GET - Fetch messages in a conversation
@@ -60,6 +65,9 @@ export async function GET(
                     m.related_type,
                     m.related_id,
                     m.status,
+                    m.delivered_at,
+                    m.read_at,
+                    m.flagged_crisis,
                     m.is_edited,
                     m.edited_at,
                     m.created_at,
@@ -112,6 +120,9 @@ export async function GET(
                     m.related_type,
                     m.related_id,
                     m.status,
+                    m.delivered_at,
+                    m.read_at,
+                    m.flagged_crisis,
                     m.is_edited,
                     m.edited_at,
                     m.created_at,
@@ -165,6 +176,22 @@ export async function GET(
         // Reverse to get chronological order (we fetched DESC for pagination)
         messages.reverse();
 
+        // Mark messages the reader RECEIVED as delivered (first time the
+        // recipient pulls them down). Read state is advanced separately by the
+        // /read endpoint. Best-effort — never fail the fetch over a receipt.
+        try {
+            await sql`
+                UPDATE messages
+                SET delivered_at = NOW()
+                WHERE conversation_id = ${conversationId}
+                  AND status <> 'deleted'
+                  AND (sender_user_id IS DISTINCT FROM ${session.internalUserId})
+                  AND delivered_at IS NULL
+            `;
+        } catch (err) {
+            console.error("Error marking messages delivered:", err);
+        }
+
         return NextResponse.json({
             messages,
             conversation: conversation[0],
@@ -204,7 +231,7 @@ export async function POST(
 
         // Verify user is a member of this conversation
         const membership = await sql`
-            SELECT cm.id
+            SELECT cm.id, c.type AS conversation_type, c.participant_id
             FROM conversation_members cm
             JOIN conversations c ON cm.conversation_id = c.id
             WHERE cm.conversation_id = ${conversationId}
@@ -254,7 +281,7 @@ export async function POST(
 
         // Fetch message with sender info
         const message = await sql`
-            SELECT 
+            SELECT
                 m.*,
                 json_build_object(
                     'id', u.id,
@@ -265,6 +292,63 @@ export async function POST(
             JOIN users u ON m.sender_user_id = u.id
             WHERE m.id = ${newMessage[0].id}
         `;
+
+        const sent = newMessage[0];
+        const conversationType = membership[0].conversation_type;
+        const conversationParticipantId = membership[0].participant_id;
+
+        // ── Audit the SEND (Phase 0 only audited conversation creation) ──
+        await logAuditEvent(
+            session.internalUserId,
+            organization_id,
+            "send",
+            "message",
+            sent.id,
+            { conversation_id: conversationId, conversation_type: conversationType }
+        );
+
+        // ── Crisis scan: PARTICIPANT-authored inbound content only ──
+        // This route currently inserts staff ('user') messages, so the guard is
+        // a no-op here; participant→team sends are authored by the portal. The
+        // scan stays wired (and the flag/notify path proven) so it fires the
+        // moment a participant-authored message flows through. Best-effort.
+        if (sent.sender_type === 'participant') {
+            try {
+                const scan = scanForCrisis(sent.content);
+                if (scan.flagged) {
+                    await sql`
+                        UPDATE messages SET flagged_crisis = true WHERE id = ${sent.id}
+                    `;
+                    (message[0] as any).flagged_crisis = true;
+                    const pid = conversationParticipantId || sent.sender_participant_id;
+                    if (pid) {
+                        await notifyTeamOfCrisis({
+                            organizationId: organization_id,
+                            participantId: pid,
+                            source: 'message',
+                            matched: scan.matched,
+                            excerpt: sent.content,
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error('Crisis scan (message) failed:', err);
+            }
+        }
+
+        // ── Out-of-band delivery notice to the participant (staff → participant) ──
+        // So the participant learns there's a message instead of only seeing it
+        // if they happen to log in. Best-effort; never blocks the send.
+        if (
+            conversationType === 'participant' &&
+            conversationParticipantId &&
+            sent.sender_type === 'user'
+        ) {
+            await notifyParticipantOfMessage({
+                organizationId: organization_id,
+                participantId: conversationParticipantId,
+            });
+        }
 
         return NextResponse.json({
             success: true,

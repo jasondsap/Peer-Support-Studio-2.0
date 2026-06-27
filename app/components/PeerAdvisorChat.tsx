@@ -5,6 +5,7 @@
 'use client';
 
 import { useState, useRef, useEffect, FormEvent } from 'react';
+import { useSession } from 'next-auth/react';
 import ReactMarkdown from 'react-markdown';
 import {
     MessageSquare,
@@ -20,6 +21,12 @@ import {
     History,
     X,
     Sparkles,
+    FileText,
+    Check,
+    Search,
+    UserPlus,
+    AlertCircle,
+    ExternalLink,
 } from 'lucide-react';
 
 // ─── TYPES ───
@@ -49,6 +56,13 @@ interface Conversation {
 
 interface PeerAdvisorChatProps {
     userName?: string;
+}
+
+interface Participant {
+    id: string;
+    first_name: string;
+    last_name: string;
+    preferred_name?: string | null;
 }
 
 const EXAMPLE_QUERIES = [
@@ -159,11 +173,32 @@ function CitationCard({ citation, index }: { citation: Citation; index: number }
                     </p>
                 </div>
             )}
+            {docName && docName !== 'Source' && (
+                <div className="px-2.5 pb-2 -mt-0.5">
+                    <a
+                        href={`/doc-library?q=${encodeURIComponent(docName)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-[#1A73A8] hover:underline"
+                    >
+                        <ExternalLink className="w-3 h-3" />
+                        Open in Reference Library
+                    </a>
+                </div>
+            )}
         </div>
     );
 }
 
-function ChatMessage({ message }: { message: Message }) {
+function ChatMessage({
+    message,
+    onSaveToNote,
+    savedTo,
+}: {
+    message: Message;
+    onSaveToNote: (m: Message) => void;
+    savedTo?: string;
+}) {
     const isUser = message.role === 'user';
     // Filter out empty/invalid citations
     const validCitations = (!isUser && message.citations)
@@ -212,6 +247,25 @@ function ChatMessage({ message }: { message: Message }) {
                         </div>
                     </div>
                 )}
+
+                {!isUser && (
+                    <div className="ml-11 mt-3">
+                        {savedTo ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-2.5 py-1.5">
+                                <Check className="w-3.5 h-3.5" />
+                                Saved to {savedTo}&apos;s session notes
+                            </span>
+                        ) : (
+                            <button
+                                onClick={() => onSaveToNote(message)}
+                                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-[#1A73A8] hover:text-[#1A73A8] transition-colors"
+                            >
+                                <FileText className="w-3.5 h-3.5" />
+                                Save to session note
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -220,6 +274,9 @@ function ChatMessage({ message }: { message: Message }) {
 // ─── MAIN COMPONENT ───
 
 export default function PeerAdvisorChat({ userName }: PeerAdvisorChatProps) {
+    const { data: session } = useSession();
+    const currentOrg = (session as any)?.currentOrganization as { id: string; name: string } | null;
+
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -229,6 +286,80 @@ export default function PeerAdvisorChat({ userName }: PeerAdvisorChatProps) {
     const [historyOpen, setHistoryOpen] = useState(false);
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
+
+    // Save-to-session-note flow
+    const [saveTarget, setSaveTarget] = useState<Message | null>(null);
+    const [participants, setParticipants] = useState<Participant[]>([]);
+    const [participantsLoaded, setParticipantsLoaded] = useState(false);
+    const [participantSearch, setParticipantSearch] = useState('');
+    const [saveLoading, setSaveLoading] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [savedNotes, setSavedNotes] = useState<Record<string, string>>({}); // message.id -> participant name
+
+    // Lazily load this user's caseload for the participant picker
+    const loadParticipants = async () => {
+        if (participantsLoaded || !currentOrg?.id) return;
+        try {
+            const res = await fetch(`/api/participants?organization_id=${currentOrg.id}&pss_filter=mine`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.participants) setParticipants(data.participants);
+            }
+        } catch (err) {
+            console.error('Failed to load participants:', err);
+        } finally {
+            setParticipantsLoaded(true);
+        }
+    };
+
+    const openSaveNote = (message: Message) => {
+        setSaveError(null);
+        setParticipantSearch('');
+        setSaveTarget(message);
+        loadParticipants();
+    };
+
+    const handleSaveNote = async (participant: Participant) => {
+        if (!saveTarget) return;
+        if (!currentOrg?.id) { setSaveError('No organization selected.'); return; }
+        setSaveLoading(true);
+        setSaveError(null);
+        try {
+            const res = await fetch('/api/session-notes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    organization_id: currentOrg.id,
+                    participant_id: participant.id,
+                    source: 'advisor',
+                    metadata: {
+                        source: 'advisor',
+                        created_from: 'peer_advisor',
+                        captured_at: new Date().toISOString(),
+                    },
+                    pss_note: { content: saveTarget.content },
+                }),
+            });
+            if (!res.ok) {
+                const d = await res.json().catch(() => ({}));
+                setSaveError(d.error || 'Could not save note.');
+                return;
+            }
+            const name = `${participant.preferred_name || participant.first_name} ${participant.last_name}`;
+            setSavedNotes(prev => ({ ...prev, [saveTarget.id]: name }));
+            setSaveTarget(null);
+        } catch (err) {
+            console.error('Save note error:', err);
+            setSaveError('Could not save note. Please try again.');
+        } finally {
+            setSaveLoading(false);
+        }
+    };
+
+    const filteredParticipants = participants.filter(p => {
+        const name = `${p.first_name} ${p.last_name} ${p.preferred_name || ''}`.toLowerCase();
+        return name.includes(participantSearch.toLowerCase());
+    });
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -519,7 +650,12 @@ export default function PeerAdvisorChat({ userName }: PeerAdvisorChatProps) {
                     ) : (
                         <div className="space-y-5">
                             {messages.map(message => (
-                                <ChatMessage key={message.id} message={message} />
+                                <ChatMessage
+                                    key={message.id}
+                                    message={message}
+                                    onSaveToNote={openSaveNote}
+                                    savedTo={savedNotes[message.id]}
+                                />
                             ))}
                             {loading && <TypingIndicator />}
                             <div ref={messagesEndRef} />
@@ -560,6 +696,78 @@ export default function PeerAdvisorChat({ userName }: PeerAdvisorChatProps) {
                     Your knowledgeable colleague, not a clinician — always use professional judgment.
                 </p>
             </div>
+
+            {/* Save-to-session-note: participant picker */}
+            {saveTarget && (
+                <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh]">
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-8 h-8 rounded-lg bg-[#1A73A8]/10 flex items-center justify-center flex-shrink-0">
+                                    <FileText className="w-4 h-4 text-[#1A73A8]" />
+                                </div>
+                                <h3 className="text-sm font-semibold text-[#0E2235] truncate">Save to a session note</h3>
+                            </div>
+                            <button
+                                onClick={() => setSaveTarget(null)}
+                                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                <X className="w-4 h-4 text-gray-500" />
+                            </button>
+                        </div>
+
+                        <div className="px-5 py-3 border-b border-gray-100">
+                            <p className="text-xs text-gray-500 mb-2">
+                                Choose the participant this guidance is for. A draft note will be created from the advisor&apos;s answer.
+                            </p>
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    value={participantSearch}
+                                    onChange={(e) => setParticipantSearch(e.target.value)}
+                                    placeholder="Search participants..."
+                                    autoFocus
+                                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1A73A8]/40 focus:border-[#1A73A8] placeholder:text-gray-400"
+                                />
+                            </div>
+                            {saveError && (
+                                <p className="mt-2 text-xs text-red-600 flex items-center gap-1">
+                                    <AlertCircle className="w-3.5 h-3.5" /> {saveError}
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto px-2 py-2">
+                            {!participantsLoaded ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+                                </div>
+                            ) : filteredParticipants.length === 0 ? (
+                                <p className="text-xs text-gray-400 text-center py-8">
+                                    {participants.length === 0 ? 'No participants found on your caseload.' : 'No matches.'}
+                                </p>
+                            ) : (
+                                filteredParticipants.map(p => (
+                                    <button
+                                        key={p.id}
+                                        disabled={saveLoading}
+                                        onClick={() => handleSaveNote(p)}
+                                        className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 text-sm text-gray-700 flex items-center justify-between disabled:opacity-50 transition-colors"
+                                    >
+                                        <span>{p.preferred_name || p.first_name} {p.last_name}</span>
+                                        {saveLoading ? (
+                                            <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                                        ) : (
+                                            <UserPlus className="w-4 h-4 text-[#1A73A8]" />
+                                        )}
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

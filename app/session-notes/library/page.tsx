@@ -52,10 +52,17 @@ export default function SessionNotesLibraryPage() {
     const router = useRouter();
     const { data: session, status: authStatus } = useSession();
 
+    const PAGE_SIZE = 25;
+
     const [notes, setNotes] = useState<SessionNote[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('');
+    const [dateFrom, setDateFrom] = useState<string>('');
+    const [dateTo, setDateTo] = useState<string>('');
+    const [page, setPage] = useState(0);
+    const [total, setTotal] = useState(0);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
     // Auth check
@@ -65,23 +72,41 @@ export default function SessionNotesLibraryPage() {
         }
     }, [authStatus, router]);
 
-    // Fetch notes
+    // Debounce the search box so we don't hit the server on every keystroke.
+    useEffect(() => {
+        const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 350);
+        return () => clearTimeout(t);
+    }, [searchQuery]);
+
+    // Reset to first page whenever a filter changes.
+    useEffect(() => {
+        setPage(0);
+    }, [debouncedSearch, filterStatus, dateFrom, dateTo]);
+
+    // Fetch notes (server-side search + pagination)
     useEffect(() => {
         async function fetchNotes() {
             if (authStatus !== 'authenticated') return;
 
+            setIsLoading(true);
             try {
                 const params = new URLSearchParams();
                 if (filterStatus) params.set('status', filterStatus);
+                if (debouncedSearch) params.set('search', debouncedSearch);
+                if (dateFrom) params.set('date_from', dateFrom);
+                if (dateTo) params.set('date_to', dateTo);
+                params.set('limit', String(PAGE_SIZE));
+                params.set('offset', String(page * PAGE_SIZE));
 
                 const response = await fetch(`/api/session-notes?${params.toString()}`);
-                
+
                 if (!response.ok) {
                     throw new Error('Failed to fetch notes');
                 }
-                
+
                 const data = await response.json();
                 setNotes(data.notes || []);
+                setTotal(data.total ?? data.pagination?.total ?? 0);
             } catch (err) {
                 console.error('Error fetching notes:', err);
             } finally {
@@ -92,19 +117,11 @@ export default function SessionNotesLibraryPage() {
         if (authStatus === 'authenticated') {
             fetchNotes();
         }
-    }, [authStatus, filterStatus]);
+    }, [authStatus, filterStatus, debouncedSearch, dateFrom, dateTo, page]);
 
-    // Filter notes by search query
-    const filteredNotes = notes.filter(note => {
-        if (!searchQuery) return true;
-        const query = searchQuery.toLowerCase();
-        return (
-            note.pss_note?.sessionOverview?.toLowerCase().includes(query) ||
-            note.pss_note?.topicsDiscussed?.some(t => t.toLowerCase().includes(query)) ||
-            note.metadata?.participantName?.toLowerCase().includes(query) ||
-            note.participant_name?.toLowerCase().includes(query)
-        );
-    });
+    // Server already filtered/paginated — render rows as-is.
+    const filteredNotes = notes;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
     // Delete note
     const handleDelete = async (noteId: string) => {
@@ -124,8 +141,10 @@ export default function SessionNotesLibraryPage() {
         setActiveMenu(null);
     };
 
-    // Loading state
-    if (authStatus === 'loading' || isLoading) {
+    // Loading state — only block the whole page on the very first auth load.
+    // Subsequent fetches (search/pagination) show an inline spinner so the
+    // search box keeps focus.
+    if (authStatus === 'loading') {
         return (
             <div className="min-h-screen bg-gradient-to-b from-white via-[#E8F4F8] to-[#E0F2F1] flex items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-[#1A73A8]" />
@@ -141,7 +160,7 @@ export default function SessionNotesLibraryPage() {
                     <div className="flex items-center justify-between">
                         <div>
                             <h1 className="text-2xl font-bold text-[#0E2235]">Session Notes Library</h1>
-                            <p className="text-sm text-gray-500">{filteredNotes.length} notes</p>
+                            <p className="text-sm text-gray-500">{total} notes</p>
                         </div>
                         <button
                             onClick={() => router.push('/session-notes')}
@@ -183,17 +202,59 @@ export default function SessionNotesLibraryPage() {
                             <option value="approved">Approved</option>
                         </select>
                     </div>
+
+                    {/* Date range */}
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="date"
+                            value={dateFrom}
+                            onChange={(e) => setDateFrom(e.target.value)}
+                            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A73A8] focus:border-transparent"
+                            title="From date"
+                        />
+                        <span className="text-gray-400 text-sm">to</span>
+                        <input
+                            type="date"
+                            value={dateTo}
+                            onChange={(e) => setDateTo(e.target.value)}
+                            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A73A8] focus:border-transparent"
+                            title="To date"
+                        />
+                        {(dateFrom || dateTo || filterStatus || searchQuery) && (
+                            <button
+                                onClick={() => {
+                                    setDateFrom('');
+                                    setDateTo('');
+                                    setFilterStatus('');
+                                    setSearchQuery('');
+                                }}
+                                className="text-sm text-gray-500 hover:text-gray-700 underline whitespace-nowrap"
+                            >
+                                Clear
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
             {/* Notes List */}
             <main className="max-w-6xl mx-auto px-4 pb-8">
-                {filteredNotes.length === 0 ? (
+                {isLoading ? (
+                    <div className="bg-white rounded-xl shadow-md p-12 flex items-center justify-center">
+                        <Loader2 className="w-8 h-8 animate-spin text-[#1A73A8]" />
+                    </div>
+                ) : filteredNotes.length === 0 ? (
                     <div className="bg-white rounded-xl shadow-md p-12 text-center">
                         <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <h2 className="text-xl font-bold text-[#0E2235] mb-2">No Session Notes Yet</h2>
+                        <h2 className="text-xl font-bold text-[#0E2235] mb-2">
+                            {debouncedSearch || filterStatus || dateFrom || dateTo
+                                ? 'No notes match your filters'
+                                : 'No Session Notes Yet'}
+                        </h2>
                         <p className="text-gray-500 mb-6">
-                            Create your first session note using voice dictation or recording.
+                            {debouncedSearch || filterStatus || dateFrom || dateTo
+                                ? 'Try adjusting your search or date range.'
+                                : 'Create your first session note using voice dictation or recording.'}
                         </p>
                         <button
                             onClick={() => router.push('/session-notes')}
@@ -339,6 +400,35 @@ export default function SessionNotesLibraryPage() {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {/* Pagination */}
+                {!isLoading && total > PAGE_SIZE && (
+                    <div className="flex items-center justify-between mt-6">
+                        <p className="text-sm text-gray-500">
+                            Showing {page * PAGE_SIZE + 1}–
+                            {Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                                disabled={page === 0}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                Previous
+                            </button>
+                            <span className="text-sm text-gray-500">
+                                Page {page + 1} of {totalPages}
+                            </span>
+                            <button
+                                onClick={() => setPage((p) => (p + 1 < totalPages ? p + 1 : p))}
+                                disabled={page + 1 >= totalPages}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                Next
+                            </button>
+                        </div>
                     </div>
                 )}
             </main>

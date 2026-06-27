@@ -15,7 +15,8 @@ import {
     ArrowLeft, ArrowRight, CheckCircle2, Loader2,
     Search, X, Save, UserPlus, AlertTriangle, Info,
     User, Heart, Stethoscope, GraduationCap,
-    Users, Pill, RotateCcw, Phone, Shield, FileCheck
+    Users, Pill, RotateCcw, Phone, Shield, FileCheck,
+    Upload, Paperclip, Trash2, FileText
 } from 'lucide-react';
 
 import type { IntakeFormData } from '@/lib/intakeFormTypes';
@@ -358,6 +359,201 @@ function SectionDivider({ label }: { label: string }) {
             <div className="h-px flex-1 bg-gray-200" />
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">{label}</span>
             <div className="h-px flex-1 bg-gray-200" />
+        </div>
+    );
+}
+
+// =============================================
+// DOCUMENT UPLOAD (S3-backed "on file" attachments)
+// =============================================
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+    insurance_card: 'Insurance card',
+    consent: 'Consent form',
+    referral_order: 'Referral / order',
+    other: 'Document',
+};
+
+/**
+ * Upload affordance for an intake "on file" field. Requests a presigned PUT
+ * URL, uploads the file to S3, then confirms the metadata row. Lists already-
+ * uploaded files of this doc_type with a remove option. Degrades gracefully
+ * to "uploads unavailable" when S3 isn't configured.
+ */
+function OnFileUpload({
+    orgId,
+    participantId,
+    intakeId,
+    docType,
+}: {
+    orgId?: string;
+    participantId?: string;
+    intakeId?: string | null;
+    docType: 'insurance_card' | 'consent' | 'referral_order';
+}) {
+    const [docs, setDocs] = useState<any[]>([]);
+    const [uploading, setUploading] = useState(false);
+    const [uploadErr, setUploadErr] = useState('');
+    const [unavailable, setUnavailable] = useState(false);
+    const fileRef = useRef<HTMLInputElement>(null);
+
+    const canUpload = Boolean(orgId && participantId);
+
+    const loadDocs = async () => {
+        if (!orgId || !participantId) return;
+        try {
+            const res = await fetch(
+                `/api/participant-documents?organization_id=${orgId}&participant_id=${participantId}`
+            );
+            if (!res.ok) return;
+            const data = await res.json();
+            setDocs((data.documents || []).filter((d: any) => d.doc_type === docType));
+        } catch {
+            /* non-fatal */
+        }
+    };
+
+    useEffect(() => {
+        loadDocs();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [orgId, participantId, docType]);
+
+    const handleFile = async (file: File) => {
+        if (!orgId || !participantId) return;
+        setUploadErr('');
+        setUploading(true);
+        try {
+            // 1) Request a presigned PUT URL
+            const presignRes = await fetch('/api/participant-documents', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    organization_id: orgId,
+                    participant_id: participantId,
+                    intake_id: intakeId || null,
+                    doc_type: docType,
+                    file_name: file.name,
+                    content_type: file.type || 'application/octet-stream',
+                }),
+            });
+            const presign = await presignRes.json();
+            if (!presignRes.ok) {
+                if (presignRes.status === 503) setUnavailable(true);
+                setUploadErr(presign.error || 'Upload failed');
+                return;
+            }
+
+            // 2) PUT the file directly to S3
+            const putRes = await fetch(presign.uploadUrl, {
+                method: 'PUT',
+                headers: { 'Content-Type': file.type || 'application/octet-stream' },
+                body: file,
+            });
+            if (!putRes.ok) {
+                setUploadErr('Upload to storage failed');
+                return;
+            }
+
+            // 3) Confirm — insert the metadata row
+            const confirmRes = await fetch('/api/participant-documents?action=confirm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    organization_id: orgId,
+                    participant_id: participantId,
+                    intake_id: intakeId || null,
+                    doc_type: docType,
+                    file_name: file.name,
+                    content_type: file.type || 'application/octet-stream',
+                    s3_key: presign.s3_key,
+                    size_bytes: file.size,
+                }),
+            });
+            const confirm = await confirmRes.json();
+            if (!confirmRes.ok) {
+                setUploadErr(confirm.error || 'Failed to save document');
+                return;
+            }
+            setDocs(prev => [confirm.document, ...prev]);
+        } catch (e: any) {
+            setUploadErr(e.message || 'Upload error');
+        } finally {
+            setUploading(false);
+            if (fileRef.current) fileRef.current.value = '';
+        }
+    };
+
+    const handleRemove = async (id: string) => {
+        if (!orgId) return;
+        try {
+            const res = await fetch(
+                `/api/participant-documents?organization_id=${orgId}&id=${id}`,
+                { method: 'DELETE' }
+            );
+            if (res.ok) setDocs(prev => prev.filter(d => d.id !== id));
+        } catch {
+            /* non-fatal */
+        }
+    };
+
+    if (unavailable) {
+        return (
+            <p className="text-xs text-gray-400 mt-2 flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5" />
+                File uploads unavailable (storage not configured).
+            </p>
+        );
+    }
+
+    return (
+        <div className="mt-2 space-y-2">
+            <input
+                ref={fileRef}
+                type="file"
+                className="hidden"
+                onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void handleFile(f);
+                }}
+            />
+            <button
+                type="button"
+                disabled={!canUpload || uploading}
+                onClick={() => fileRef.current?.click()}
+                title={canUpload ? undefined : 'Select a participant first'}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-[#1A73A8] hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
+            >
+                {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                {uploading ? 'Uploading…' : 'Upload file'}
+            </button>
+
+            {uploadErr && (
+                <p className="text-xs text-red-600 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5" /> {uploadErr}
+                </p>
+            )}
+
+            {docs.length > 0 && (
+                <ul className="space-y-1">
+                    {docs.map(d => (
+                        <li
+                            key={d.id}
+                            className="flex items-center gap-2 text-xs bg-green-50 border border-green-200 rounded-lg px-2.5 py-1.5"
+                        >
+                            <Paperclip className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                            <span className="truncate flex-1 text-green-800">{d.file_name || 'Attached file'}</span>
+                            <button
+                                type="button"
+                                onClick={() => handleRemove(d.id)}
+                                className="p-0.5 text-gray-400 hover:text-red-600"
+                                title="Remove"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
         </div>
     );
 }
@@ -959,6 +1155,12 @@ function IntakeContent() {
                                     onChange={v => updateForm('consent_signature_on_file', v)}
                                     infoText="Confirms the participant's signed consent forms are on file. Required for claim submission."
                                 />
+                                <OnFileUpload
+                                    orgId={currentOrg?.id}
+                                    participantId={selectedParticipant?.id}
+                                    intakeId={editIntakeId || resumeIntakeId}
+                                    docType="consent"
+                                />
                                 {form.consent_signature_on_file === false && (
                                     <SectionNote text="Claims cannot be submitted without a signature on file." type="warning" />
                                 )}
@@ -1180,8 +1382,14 @@ function IntakeContent() {
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <SelectInput label="Verified From" value={form.primary_insurance_verified_from} onChange={v => updateForm('primary_insurance_verified_from', v)} options={INSURANCE_VERIFIED_FROM_OPTIONS} />
-                                        <div className="flex items-end pb-1">
+                                        <div className="pb-1">
                                             <YesNoToggle label="Insurance Card on File?" value={form.insurance_card_on_file ? true : form.insurance_card_on_file === false ? false : null} onChange={v => updateForm('insurance_card_on_file', v)} />
+                                            <OnFileUpload
+                                                orgId={currentOrg?.id}
+                                                participantId={selectedParticipant?.id}
+                                                intakeId={editIntakeId || resumeIntakeId}
+                                                docType="insurance_card"
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -1285,6 +1493,12 @@ function IntakeContent() {
                                     <TextInput label="Phone" value={form.referring_provider_phone} onChange={v => updateForm('referring_provider_phone', v)} placeholder="(555) 555-5555" type="tel" />
                                 </div>
                                 <YesNoToggle label="Referral / order on file?" value={form.referral_order_on_file ? true : form.referral_order_on_file === false ? false : null} onChange={v => updateForm('referral_order_on_file', v)} />
+                                <OnFileUpload
+                                    orgId={currentOrg?.id}
+                                    participantId={selectedParticipant?.id}
+                                    intakeId={editIntakeId || resumeIntakeId}
+                                    docType="referral_order"
+                                />
                             </div>
 
                             <SectionDivider label="Diagnosis on File" />

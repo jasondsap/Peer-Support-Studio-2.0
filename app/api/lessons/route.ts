@@ -24,6 +24,10 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Stamp the creator's current org so teammates can see the lesson.
+        // May be null if no org is selected (kept working for the owner).
+        const organizationId = (session as any).currentOrganization?.id || null;
+
         const body = await request.json();
         const {
             title,
@@ -53,6 +57,7 @@ export async function POST(request: NextRequest) {
         const result = await sql`
             INSERT INTO saved_lessons (
                 user_id,
+                organization_id,
                 title,
                 topic,
                 facilitator_guide,
@@ -70,6 +75,7 @@ export async function POST(request: NextRequest) {
                 updated_at
             ) VALUES (
                 ${userId}::uuid,
+                ${organizationId}::uuid,
                 ${title},
                 ${topic},
                 ${facilitator_guide || null},
@@ -123,26 +129,37 @@ export async function GET(request: NextRequest) {
             );
         }
 
+        // Org-wide visibility: return every lesson in the caller's current org,
+        // plus the caller's own lessons (covers legacy rows whose organization_id
+        // was never backfilled — those are NULL and would otherwise disappear).
+        const organizationId = (session as any).currentOrganization?.id || null;
+
         const lessons = await sql`
-            SELECT 
-                id,
-                title,
-                topic,
-                session_type,
-                session_length,
-                setting_type,
-                group_size,
-                recovery_model,
-                group_composition,
-                facilitator_guide,
-                participant_handout,
-                lesson_json,
-                gamma_presentation_url,
-                created_at,
-                updated_at
-            FROM saved_lessons
-            WHERE user_id = ${userId}::uuid
-            ORDER BY created_at DESC
+            SELECT
+                sl.id,
+                sl.user_id,
+                sl.organization_id,
+                sl.title,
+                sl.topic,
+                sl.session_type,
+                sl.session_length,
+                sl.setting_type,
+                sl.group_size,
+                sl.recovery_model,
+                sl.group_composition,
+                sl.facilitator_guide,
+                sl.participant_handout,
+                sl.lesson_json,
+                sl.gamma_presentation_url,
+                sl.created_at,
+                sl.updated_at,
+                TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS author_name,
+                (sl.user_id = ${userId}::uuid) AS is_mine
+            FROM saved_lessons sl
+            LEFT JOIN users u ON u.id = sl.user_id
+            WHERE sl.user_id = ${userId}::uuid
+               OR (${organizationId}::uuid IS NOT NULL AND sl.organization_id = ${organizationId}::uuid)
+            ORDER BY sl.created_at DESC
             LIMIT 500
         `;
 

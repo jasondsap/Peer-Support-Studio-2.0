@@ -197,27 +197,28 @@ export default function HelpCenter() {
             route: '/peer-advisor',
             icon: <MessageSquare className="w-6 h-6" />,
             color: '#00BCD4',
-            description: 'Voice-based AI advisor for guidance, support, and problem-solving. Have natural conversations about challenging situations, brainstorm ideas, or practice difficult conversations.',
+            description: 'A chat-based AI advisor that answers your peer support questions with evidence-based guidance. Every response is grounded in SAMHSA and NAADAC source documents, and shows the exact citations it drew from so you can verify and dig deeper.',
             quickStart: [
-                'Click "Start Voice Session" to begin',
-                'Speak naturally about what\'s on your mind',
-                'The AI responds with empathic voice feedback',
-                'Interrupt anytime - it\'s a natural conversation',
-                'Click "End & Summarize" when finished',
-                'Generate an AI summary with action items'
+                'Open Peer Advisor and type your question in the chat box',
+                'Or tap one of the example questions to get started',
+                'Read the answer - it\'s written in plain language with key points',
+                'Expand the "Evidence Sources" to see the cited documents and pages',
+                'Ask follow-up questions; the advisor remembers the conversation',
+                'Use the History panel to revisit past conversations anytime'
             ],
             tips: [
-                'Use it to brainstorm group session ideas',
-                'Practice difficult conversations before having them',
-                'Process challenging participant situations',
-                'Get support when feeling overwhelmed',
-                'Review summaries to capture key insights',
-                'Use tool suggestions to continue work in other apps'
+                'Ask specific questions for the most useful answers (e.g. "How do I support someone starting buprenorphine?")',
+                'Use it to brainstorm group session ideas or talking points',
+                'Check the cited sources when you need to back up your approach',
+                'Process challenging participant situations and get practical next steps',
+                'Start a New Chat for a fresh topic so each conversation stays focused',
+                'Your past conversations are saved in History so you can return to them'
             ],
             faqs: [
-                { question: 'Is my voice conversation recorded?', answer: 'Conversations are processed in real-time but not permanently stored. Summaries you generate are saved to your library.' },
-                { question: 'What can I talk about?', answer: 'Anything related to your peer support work - challenging situations, brainstorming, emotional support, skill practice, and more.' },
-                { question: 'How does the AI know about peer support?', answer: 'The Peer Advisor is trained specifically for peer support contexts with trauma-informed, strength-based approaches.' }
+                { question: 'Is this a voice tool?', answer: 'No. Peer Advisor is a text chat. You type your questions and read the answers - there is no recording or microphone involved.' },
+                { question: 'Where do the answers come from?', answer: 'Responses are grounded in authoritative source documents (SAMHSA TIPs, the 10 Guiding Principles, peer core competencies, and the NAADAC Code of Ethics). Each answer lists the specific sources and pages it used, which you can open in the Reference Library.' },
+                { question: 'Are my conversations saved?', answer: 'Yes. Your conversations are saved to your account so you can revisit them from the History panel. You can delete any conversation at any time.' },
+                { question: 'Does this replace clinical judgment?', answer: 'No. Peer Advisor is a knowledgeable colleague, not a clinician. Use it for guidance and ideas, but always apply your own professional judgment.' }
             ]
         },
         {

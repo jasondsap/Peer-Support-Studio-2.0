@@ -32,10 +32,13 @@ export async function GET(
             SELECT
                 a.*,
                 l.name AS location_name,
-                TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS facilitator_name
+                TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS facilitator_name,
+                COALESCE(sl.title, lt.title) AS lesson_title
             FROM group_activities a
             LEFT JOIN locations l ON l.id = a.location_id
             LEFT JOIN users u ON u.id = a.facilitator_id
+            LEFT JOIN saved_lessons sl ON a.lesson_source = 'saved' AND sl.id = a.lesson_id
+            LEFT JOIN lesson_templates lt ON a.lesson_source = 'template' AND lt.id = a.lesson_id
             WHERE a.id = ${id}::uuid AND a.organization_id = ${ctx.organizationId}
         `;
         if (rows.length === 0) {
@@ -76,6 +79,12 @@ export async function PATCH(
         const { id } = await params;
         const body = await request.json();
 
+        // Attached-lesson link: only apply when a valid source accompanies the id.
+        // Passing lesson_id: null with lesson_source: null detaches.
+        const lessonProvided = Object.prototype.hasOwnProperty.call(body, 'lesson_id');
+        const validLessonSource = ['saved', 'template'].includes(body.lesson_source) ? body.lesson_source : null;
+        const validLessonId = body.lesson_id && validLessonSource ? body.lesson_id : null;
+
         // Editing/archiving requires supervisor+ (creators can still edit their own via the create flow).
         if (!EDIT_ROLES.includes(ctx.role)) {
             const owned = await sql`
@@ -100,6 +109,8 @@ export async function PATCH(
                 headcount_total = COALESCE(${body.headcount_total ?? null}, headcount_total),
                 notes = COALESCE(${body.notes ?? null}, notes),
                 status = COALESCE(${body.status ?? null}, status),
+                lesson_id = CASE WHEN ${lessonProvided} THEN ${validLessonId}::uuid ELSE lesson_id END,
+                lesson_source = CASE WHEN ${lessonProvided} THEN ${validLessonSource} ELSE lesson_source END,
                 updated_at = NOW()
             WHERE id = ${id}::uuid AND organization_id = ${ctx.organizationId}
             RETURNING *

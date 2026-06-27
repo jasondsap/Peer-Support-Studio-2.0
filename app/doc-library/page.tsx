@@ -237,6 +237,13 @@ export default function DocLibraryPage() {
         }
     }, [status, router]);
 
+    // Deep-link support: ?q=<label> pre-filters the library (e.g. from an advisor citation)
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const q = new URLSearchParams(window.location.search).get('q');
+        if (q) setSearch(q);
+    }, []);
+
     // Load documents
     useEffect(() => {
         async function loadDocs() {

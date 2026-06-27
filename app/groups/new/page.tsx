@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { ArrowLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Loader2, Paperclip } from 'lucide-react';
 import { todayLocal } from '@/lib/dateUtils';
+import LessonPicker, { AttachableLesson } from '@/app/components/LessonPicker';
 
 const TYPE_OPTIONS = [
     { value: 'recovery_group', label: 'Recovery Group' },
@@ -26,6 +27,12 @@ export default function NewActivityPage() {
     const [locations, setLocations] = useState<any[]>([]);
     const [members, setMembers] = useState<any[]>([]);
     const [saving, setSaving] = useState(false);
+    const [lessonOpen, setLessonOpen] = useState(false);
+    const [lesson, setLesson] = useState<{ id: string | null; source: string | null; title: string | null }>({
+        id: null,
+        source: null,
+        title: null,
+    });
 
     const [form, setForm] = useState({
         name: '',
@@ -77,6 +84,8 @@ export default function NewActivityPage() {
                     start_time: form.start_time || null,
                     location_id: form.location_id || null,
                     facilitator_id: form.facilitator_id || null,
+                    lesson_id: lesson.id,
+                    lesson_source: lesson.source,
                 }),
             });
             const data = await res.json();
@@ -203,7 +212,34 @@ export default function NewActivityPage() {
                             <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                             <textarea className={inputCls} rows={3} value={form.notes} onChange={(e) => set('notes', e.target.value)} />
                         </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Attached lesson (optional)</label>
+                            <div className="flex items-center gap-2">
+                                <div className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 truncate">
+                                    {lesson.id ? lesson.title || 'Lesson attached' : <span className="text-gray-400">No lesson attached</span>}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setLessonOpen(true)}
+                                    className="px-3 py-2 text-sm font-medium text-[#1A73A8] border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-1.5 whitespace-nowrap"
+                                >
+                                    <Paperclip className="w-4 h-4" />
+                                    {lesson.id ? 'Change' : 'Attach'}
+                                </button>
+                            </div>
+                        </div>
                     </div>
+
+                    <LessonPicker
+                        open={lessonOpen}
+                        onClose={() => setLessonOpen(false)}
+                        onSelect={(l: AttachableLesson | null) => {
+                            setLesson({ id: l?.id ?? null, source: l?.source ?? null, title: l?.title ?? null });
+                            setLessonOpen(false);
+                        }}
+                        currentLesson={{ id: lesson.id, title: lesson.title }}
+                    />
 
                     <div className="flex gap-3 mt-8">
                         <button

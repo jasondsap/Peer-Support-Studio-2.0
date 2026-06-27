@@ -48,7 +48,7 @@ export default function ProfileSettingsPage() {
     // Auth check
     useEffect(() => {
         if (status === 'unauthenticated') {
-            router.push('/login');
+            router.push('/auth/signin');
         }
     }, [status, router]);
 

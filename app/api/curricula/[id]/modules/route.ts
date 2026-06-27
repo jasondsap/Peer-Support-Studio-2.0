@@ -3,6 +3,15 @@ import { getSession, getInternalUserId } from '@/lib/auth';
 import { sql, logAuditEvent, validateUUID } from '@/lib/db';
 
 const MANAGE_ROLES = ['owner', 'admin', 'supervisor'];
+const LESSON_SOURCES = ['saved', 'template'];
+
+// Normalize an attached-lesson pair: only keep a valid uuid + known source together.
+function normalizeLesson(lessonId: any, lessonSource: any): { id: string | null; source: string | null } {
+    if (lessonId && validateUUID(lessonId) && LESSON_SOURCES.includes(lessonSource)) {
+        return { id: lessonId, source: lessonSource };
+    }
+    return { id: null, source: null };
+}
 
 async function getCtx() {
     const session = await getSession();
@@ -69,9 +78,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             FROM curriculum_modules WHERE curriculum_id = ${params.id}::uuid
         `;
 
+        const lesson = normalizeLesson(m.lesson_id, m.lesson_source);
+
         const row = await sql`
             INSERT INTO curriculum_modules
-                (curriculum_id, module_number, title, description, minimum_hours, minimum_minutes, learning_objectives, sort_order)
+                (curriculum_id, module_number, title, description, minimum_hours, minimum_minutes, learning_objectives, sort_order, lesson_id, lesson_source)
             VALUES (
                 ${params.id}::uuid,
                 ${m.module_number ?? next[0].n},
@@ -80,7 +91,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
                 ${m.minimum_hours ?? null},
                 ${m.minimum_minutes ?? null},
                 ${objectives},
-                ${m.sort_order ?? next[0].s}
+                ${m.sort_order ?? next[0].s},
+                ${lesson.id}::uuid,
+                ${lesson.source}
             )
             RETURNING *
         `;
@@ -124,6 +137,21 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
             RETURNING *
         `;
         if (result.length === 0) return NextResponse.json({ error: 'Module not found' }, { status: 404 });
+
+        // Only touch the attached-lesson columns when the caller sends lesson_id
+        // (lets an "attach lesson" action change just the link; null detaches).
+        // Done as a separate UPDATE so ordinary edits never clobber an existing link.
+        if (Object.prototype.hasOwnProperty.call(body, 'lesson_id')) {
+            const lesson = normalizeLesson(body.lesson_id, body.lesson_source);
+            const relinked = await sql`
+                UPDATE curriculum_modules
+                SET lesson_id = ${lesson.id}::uuid, lesson_source = ${lesson.source}
+                WHERE id = ${module_id}::uuid AND curriculum_id = ${params.id}::uuid
+                RETURNING *
+            `;
+            return NextResponse.json({ success: true, module: relinked[0] });
+        }
+
         return NextResponse.json({ success: true, module: result[0] });
     } catch (error) {
         console.error('Modules PUT error:', error);

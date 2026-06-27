@@ -19,8 +19,13 @@ import {
     MapPin,
     BarChart3,
     Trash2,
+    Paperclip,
+    FileText,
+    Download,
+    ExternalLink,
 } from 'lucide-react';
 import { formatDateOnly } from '@/lib/dateUtils';
+import LessonPicker, { AttachableLesson } from '@/app/components/LessonPicker';
 
 interface Module {
     id: string;
@@ -29,6 +34,9 @@ interface Module {
     description: string | null;
     minimum_minutes: number | null;
     minimum_hours: number | null;
+    lesson_id?: string | null;
+    lesson_source?: string | null;
+    lesson_title?: string | null;
 }
 
 interface Curriculum {
@@ -115,6 +123,8 @@ export default function CurriculumDetailPage() {
     const curriculumId = params.id as string;
     const { data: session, status: authStatus } = useSession();
     const orgId = (session as any)?.currentOrganization?.id;
+    const role = (session as any)?.currentOrganization?.role || '';
+    const canManage = ['owner', 'admin', 'supervisor'].includes(role);
 
     const [curriculum, setCurriculum] = useState<Curriculum | null>(null);
     const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
@@ -147,6 +157,16 @@ export default function CurriculumDetailPage() {
     const [editLocationId, setEditLocationId] = useState('');
     const [editNotes, setEditNotes] = useState('');
     const [editAttendance, setEditAttendance] = useState<Record<string, AttendanceStatus>>({});
+
+    // Lesson attach (per-module) + reports + group→note bridge state.
+    const [attachModule, setAttachModule] = useState<Module | null>(null);
+    const [reports, setReports] = useState<any>(null);
+    const [reportsLoading, setReportsLoading] = useState(false);
+    const [draftPrompt, setDraftPrompt] = useState<
+        { sessionId: string; moduleTitle: string; duration: number | null; attendees: { participant_id: string; name: string }[] } | null
+    >(null);
+    const [draftingNotes, setDraftingNotes] = useState(false);
+    const [draftResult, setDraftResult] = useState<string | null>(null);
 
     useEffect(() => {
         if (authStatus === 'unauthenticated') {
@@ -257,8 +277,27 @@ export default function CurriculumDetailPage() {
                 }),
             });
             if (res.ok) {
+                const data = await res.json().catch(() => null);
                 setShowLogSession(false);
                 await Promise.all([fetchSessions(), fetchEnrollments()]);
+
+                // Offer to draft a session note for each PRESENT attendee.
+                const sessionId = data?.session?.id;
+                if (sessionId) {
+                    const present = enrollments
+                        .filter((e) => attendance[e.participant_id] === 'present')
+                        .map((e) => ({ participant_id: e.participant_id, name: displayName(e) }));
+                    const moduleTitle = curriculum?.modules.find((m) => m.id === logModuleId)?.title || 'Session';
+                    if (present.length > 0) {
+                        setDraftResult(null);
+                        setDraftPrompt({
+                            sessionId,
+                            moduleTitle,
+                            duration: logDuration ? Number(logDuration) : null,
+                            attendees: present,
+                        });
+                    }
+                }
             }
         } catch (e) {
             console.error(e);
@@ -266,6 +305,93 @@ export default function CurriculumDetailPage() {
             setLogging(false);
         }
     };
+
+    // Group → note bridge: create one draft session note per present attendee by
+    // calling the shared POST /api/session-notes. Linking columns (curriculum_session_id,
+    // source) are passed through so notes attach to this delivery once the notes API
+    // persists them.
+    const draftNotesForSession = async () => {
+        if (!draftPrompt) return;
+        setDraftingNotes(true);
+        let created = 0;
+        try {
+            for (const a of draftPrompt.attendees) {
+                const metadata = {
+                    groupTopic: draftPrompt.moduleTitle,
+                    sessionType: 'group',
+                    source: 'curriculum',
+                    curriculum_name: curriculum?.name || null,
+                    duration_minutes: draftPrompt.duration,
+                    sessionDate: new Date().toISOString().slice(0, 10),
+                };
+                const pss_note = {
+                    sessionOverview: `Group curriculum session: ${draftPrompt.moduleTitle}${
+                        curriculum?.name ? ` (${curriculum.name})` : ''
+                    }${draftPrompt.duration ? ` — ${draftPrompt.duration} min` : ''}.`,
+                    topicsDiscussed: [draftPrompt.moduleTitle],
+                    strengthsObserved: [],
+                    recoverySupportProvided: [],
+                    actionItems: [],
+                    followUpNeeded: [],
+                };
+                const res = await fetch('/api/session-notes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        metadata,
+                        pss_note,
+                        source: 'curriculum',
+                        organization_id: orgId,
+                        participant_id: a.participant_id,
+                        curriculum_session_id: draftPrompt.sessionId,
+                    }),
+                });
+                if (res.ok) created++;
+            }
+            setDraftResult(`Created ${created} draft note${created === 1 ? '' : 's'}. Find them under Session Notes to finish and submit.`);
+        } catch (e) {
+            console.error(e);
+            setDraftResult('Some notes could not be drafted. Please try again from Session Notes.');
+        } finally {
+            setDraftingNotes(false);
+        }
+    };
+
+    const fetchReports = async () => {
+        setReportsLoading(true);
+        try {
+            const res = await fetch(`/api/curricula/${curriculumId}/reports`);
+            if (res.ok) setReports(await res.json());
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setReportsLoading(false);
+        }
+    };
+
+    // Attach / change / detach a lesson on a module.
+    const attachLessonToModule = async (lesson: AttachableLesson | null) => {
+        if (!attachModule) return;
+        try {
+            const res = await fetch(`/api/curricula/${curriculumId}/modules`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    module_id: attachModule.id,
+                    lesson_id: lesson?.id ?? null,
+                    lesson_source: lesson?.source ?? null,
+                }),
+            });
+            if (res.ok) await fetchCurriculum();
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setAttachModule(null);
+        }
+    };
+
+    const lessonHref = (m: Module) =>
+        m.lesson_source === 'template' ? `/lesson-library/${m.lesson_id}` : `/lesson/${m.lesson_id}`;
 
     const deleteSession = async (sessionId: string) => {
         if (!confirm('Delete this session? Attendance records will be removed. Module completions stay intact.')) return;
@@ -313,6 +439,12 @@ export default function CurriculumDetailPage() {
     useEffect(() => {
         if (editSession) setEditLocationId((editSession as any).location_id || '');
     }, [editSession]);
+
+    // Refresh reports each time the tab is opened so it reflects newly logged sessions.
+    useEffect(() => {
+        if (tab === 'reports') fetchReports();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tab]);
 
     const cycleEditAttendance = (participantId: string) => {
         setEditAttendance((prev) => {
@@ -510,6 +642,29 @@ export default function CurriculumDetailPage() {
                                         <div className="flex-1">
                                             <div className="text-sm font-medium text-[#0E2235]">{m.title}</div>
                                             {m.description && <div className="text-sm text-gray-500">{m.description}</div>}
+                                            <div className="flex items-center gap-3 mt-1">
+                                                {m.lesson_id ? (
+                                                    <a
+                                                        href={lessonHref(m)}
+                                                        className="text-xs font-medium text-[#1A73A8] hover:underline inline-flex items-center gap-1"
+                                                    >
+                                                        <FileText className="w-3.5 h-3.5" />
+                                                        Deliver this lesson{m.lesson_title ? `: ${m.lesson_title}` : ''}
+                                                        <ExternalLink className="w-3 h-3" />
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-xs text-gray-400">No lesson attached</span>
+                                                )}
+                                                {canManage && (
+                                                    <button
+                                                        onClick={() => setAttachModule(m)}
+                                                        className="text-xs text-gray-500 hover:text-[#1A73A8] inline-flex items-center gap-1"
+                                                    >
+                                                        <Paperclip className="w-3.5 h-3.5" />
+                                                        {m.lesson_id ? 'Change' : 'Attach lesson'}
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                         {m.minimum_minutes != null && (
                                             <span className="text-xs text-gray-400 flex items-center gap-1 mt-1">
@@ -676,12 +831,99 @@ export default function CurriculumDetailPage() {
                 )}
 
                 {tab === 'reports' && (
-                    <div className="bg-white rounded-2xl shadow-sm border border-[#E7E9EC] p-12 text-center">
-                        <BarChart3 className="w-14 h-14 mx-auto mb-4 text-gray-300" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Reports coming soon</h3>
-                        <p className="text-gray-500 max-w-md mx-auto">
-                            Completion reports, attendance summaries, and certificate generation will live here.
-                        </p>
+                    <div className="space-y-6">
+                        <div className="flex justify-end gap-2">
+                            <a
+                                href={`/api/curricula/${curriculumId}/export?type=roster`}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+                            >
+                                <Download className="w-4 h-4" /> Roster / grant CSV
+                            </a>
+                            <a
+                                href={`/api/curricula/${curriculumId}/export?type=attendance`}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+                            >
+                                <Download className="w-4 h-4" /> Attendance CSV
+                            </a>
+                        </div>
+
+                        {reportsLoading || !reports ? (
+                            <div className="bg-white rounded-2xl shadow-sm border border-[#E7E9EC] p-12 flex justify-center">
+                                <Loader2 className="w-7 h-7 animate-spin text-[#1A73A8]" />
+                            </div>
+                        ) : (
+                            <>
+                                {/* Summary cards */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    {[
+                                        { label: 'Active', value: reports.enrollment_totals?.active ?? 0 },
+                                        { label: 'Completed', value: reports.enrollment_totals?.completed ?? 0 },
+                                        { label: 'Sessions logged', value: reports.attendance?.session_count ?? 0 },
+                                        { label: 'Avg present / session', value: reports.attendance?.avg_present_per_session ?? 0 },
+                                    ].map((s) => (
+                                        <div key={s.label} className="bg-white rounded-2xl shadow-sm border border-[#E7E9EC] p-5">
+                                            <div className="text-2xl font-bold text-[#0E2235]">{s.value}</div>
+                                            <div className="text-xs text-gray-500 mt-1">{s.label}</div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Per-module completion */}
+                                <div className="bg-white rounded-2xl shadow-sm border border-[#E7E9EC] overflow-hidden">
+                                    <div className="px-6 py-4 border-b border-gray-100">
+                                        <h3 className="font-semibold text-[#0E2235]">Module completion</h3>
+                                        <p className="text-xs text-gray-500 mt-0.5">
+                                            Participants who have completed each module ({reports.enrollment_totals?.total ?? 0} enrolled)
+                                        </p>
+                                    </div>
+                                    {(reports.per_module || []).length === 0 ? (
+                                        <p className="px-6 py-8 text-center text-gray-400 text-sm">No modules defined.</p>
+                                    ) : (
+                                        (reports.per_module || []).map((m: any) => {
+                                            const denom = reports.enrollment_totals?.total || 0;
+                                            const pct = denom > 0 ? Math.round((m.completed_count / denom) * 100) : 0;
+                                            return (
+                                                <div key={m.module_id} className="px-6 py-3 border-b border-gray-50">
+                                                    <div className="flex items-center justify-between text-sm mb-1">
+                                                        <span className="text-[#0E2235]">
+                                                            <span className="text-gray-400">#{m.module_number}</span> {m.title}
+                                                        </span>
+                                                        <span className="text-gray-500">
+                                                            {m.completed_count}/{denom} · {pct}%
+                                                        </span>
+                                                    </div>
+                                                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full rounded-full bg-gradient-to-r from-[#30B27A] to-[#4AC490]"
+                                                            style={{ width: `${pct}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+
+                                {/* Attendance summary */}
+                                <div className="bg-white rounded-2xl shadow-sm border border-[#E7E9EC] p-6">
+                                    <h3 className="font-semibold text-[#0E2235] mb-3">Attendance summary</h3>
+                                    <div className="grid grid-cols-3 gap-4 text-center">
+                                        <div>
+                                            <div className="text-xl font-bold text-[#0E2235]">{reports.attendance?.session_count ?? 0}</div>
+                                            <div className="text-xs text-gray-500">Sessions</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xl font-bold text-green-700">{reports.attendance?.present_count ?? 0}</div>
+                                            <div className="text-xs text-gray-500">Present marks</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xl font-bold text-[#0E2235]">{reports.attendance?.total_attendance ?? 0}</div>
+                                            <div className="text-xs text-gray-500">Total attendance rows</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
             </main>
@@ -989,6 +1231,75 @@ export default function CurriculumDetailPage() {
                                 </div>
                             </>
                         )}
+                    </div>
+                </div>
+            )}
+
+            <LessonPicker
+                open={!!attachModule}
+                onClose={() => setAttachModule(null)}
+                onSelect={attachLessonToModule}
+                currentLesson={attachModule ? { id: attachModule.lesson_id ?? null, title: attachModule.lesson_title } : null}
+            />
+
+            {draftPrompt && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                            <h3 className="text-lg font-semibold text-[#0E2235]">Draft notes for attendees</h3>
+                            <button onClick={() => setDraftPrompt(null)} className="p-1 text-gray-400 hover:text-gray-600">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="px-6 py-4">
+                            {draftResult ? (
+                                <p className="text-sm text-gray-700">{draftResult}</p>
+                            ) : (
+                                <>
+                                    <p className="text-sm text-gray-600 mb-3">
+                                        Create a draft session note for each of the{' '}
+                                        <span className="font-medium text-[#0E2235]">{draftPrompt.attendees.length}</span> present
+                                        attendee{draftPrompt.attendees.length === 1 ? '' : 's'} of{' '}
+                                        <span className="font-medium text-[#0E2235]">{draftPrompt.moduleTitle}</span>. Each note is
+                                        prefilled with the lesson name and duration; you finish and submit them under Session Notes.
+                                    </p>
+                                    <div className="max-h-32 overflow-y-auto text-xs text-gray-500 border border-gray-100 rounded-lg p-2 mb-1">
+                                        {draftPrompt.attendees.map((a) => (
+                                            <div key={a.participant_id}>{a.name}</div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+                            {draftResult ? (
+                                <button
+                                    onClick={() => setDraftPrompt(null)}
+                                    className="px-5 py-2 text-white font-medium rounded-lg hover:opacity-90"
+                                    style={{ background: 'linear-gradient(135deg, #1A73A8 0%, #30B27A 100%)' }}
+                                >
+                                    Done
+                                </button>
+                            ) : (
+                                <>
+                                    <button
+                                        onClick={() => setDraftPrompt(null)}
+                                        className="px-4 py-2 text-gray-600 font-medium rounded-lg hover:bg-gray-100"
+                                    >
+                                        Skip
+                                    </button>
+                                    <button
+                                        onClick={draftNotesForSession}
+                                        disabled={draftingNotes}
+                                        className="px-5 py-2 text-white font-medium rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+                                        style={{ background: 'linear-gradient(135deg, #1A73A8 0%, #30B27A 100%)' }}
+                                    >
+                                        {draftingNotes ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                                        Draft notes
+                                    </button>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

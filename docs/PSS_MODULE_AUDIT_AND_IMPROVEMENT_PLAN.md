@@ -1,5 +1,15 @@
 # Peer Support Studio — Module Audit & Improvement Plan
 
+> **IMPLEMENTATION STATUS (2026-06-27):** Phases 0–3 below have been implemented on branch
+> `feat/audit-phases-0-3` (commits: Phase 0 `0551f39f`, Phase 1 `9d8fbd66`, Phase 2 `fb31a485`,
+> Phase 3 pending commit). **Before testing locally you must apply the SQL migrations in order:**
+> `docs/migrations/PHASE1_migration.sql`, `PHASE2_migration.sql`, `PHASE3_migration.sql` (run them
+> in the Neon SQL Editor against the "Peer Support Studio" DB — they are idempotent). For S3
+> uploads (Phase 3 intake documents) set `APP_AWS_S3_BUCKET` in `.env.local` + Amplify.
+> Known follow-ups: advisor citation deep-linking opens the doc (not the exact page); participant→PSS
+> message crisis-scan/read-receipts fire only once the separate portal repo posts through these routes;
+> saved_lessons.organization_id backfill is a commented manual UPDATE in the Phase 3 migration.
+
 **Date:** 2026-06-26
 **Scope:** Full audit of every module in `pss-neon-cognito`, evaluating (a) workflow completeness — "are we finishing the full process?", (b) efficiency for the Peer Support Specialist (PSS), and (c) standard-of-work / compliance.
 **Benchmark:** The target feature set is RDP (Recovery Data Platform), the Salesforce-based electronic recovery record demoed in `docs/Meeting Transcripts.pdf`. PSS's intended edge is layering AI/voice/RAG on top of that standard.

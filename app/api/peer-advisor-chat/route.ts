@@ -55,10 +55,12 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
             }
         } else {
-            // Create new conversation
+            // Create new conversation — derive a readable title from the first query
+            const rawTitle = query.trim().replace(/\s+/g, ' ');
+            const title = rawTitle.length > 60 ? rawTitle.slice(0, 57).trimEnd() + '…' : rawTitle;
             const newConv = await sql`
-                INSERT INTO advisor_conversations (user_id, organization_id)
-                VALUES (${userId}::uuid, ${orgId}::uuid)
+                INSERT INTO advisor_conversations (user_id, organization_id, title)
+                VALUES (${userId}::uuid, ${orgId}::uuid, ${title})
                 RETURNING id
             `;
             convId = newConv[0].id;

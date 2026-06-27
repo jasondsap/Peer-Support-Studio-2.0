@@ -52,7 +52,7 @@ export default function ReferralsPage() {
     const [edits, setEdits] = useState<Record<string, { status: string; follow_up_date: string; notes: string }>>({});
 
     useEffect(() => {
-        if (status === 'unauthenticated') router.push('/login');
+        if (status === 'unauthenticated') router.push('/auth/signin');
     }, [status, router]);
 
     const fetchReferrals = useCallback(async () => {

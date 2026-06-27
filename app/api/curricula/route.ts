@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, getInternalUserId } from '@/lib/auth';
-import { sql, logAuditEvent } from '@/lib/db';
+import { sql, logAuditEvent, validateUUID } from '@/lib/db';
 
 const MANAGE_ROLES = ['owner', 'admin', 'supervisor'];
 
@@ -76,9 +76,13 @@ export async function POST(request: NextRequest) {
                 if (!m?.title || !m.title.trim()) continue;
                 const objectives = Array.isArray(m.learning_objectives) && m.learning_objectives.length
                     ? m.learning_objectives : null;
+                // Optionally carry an attached lesson through bulk create.
+                const lessonId = m.lesson_id && validateUUID(m.lesson_id) && ['saved', 'template'].includes(m.lesson_source)
+                    ? m.lesson_id : null;
+                const lessonSource = lessonId ? m.lesson_source : null;
                 const row = await sql`
                     INSERT INTO curriculum_modules
-                        (curriculum_id, module_number, title, description, minimum_hours, minimum_minutes, learning_objectives, sort_order)
+                        (curriculum_id, module_number, title, description, minimum_hours, minimum_minutes, learning_objectives, sort_order, lesson_id, lesson_source)
                     VALUES (
                         ${curriculum.id}::uuid,
                         ${m.module_number ?? i + 1},
@@ -87,7 +91,9 @@ export async function POST(request: NextRequest) {
                         ${m.minimum_hours ?? null},
                         ${m.minimum_minutes ?? null},
                         ${objectives},
-                        ${m.sort_order ?? i}
+                        ${m.sort_order ?? i},
+                        ${lessonId}::uuid,
+                        ${lessonSource}
                     )
                     RETURNING *
                 `;

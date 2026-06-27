@@ -33,7 +33,14 @@ export async function GET(request: NextRequest) {
         const pssFilter = searchParams.get('pss_filter') || 'all';
         const locationFilter = searchParams.get('location_filter') || 'all';
 
+        // Pagination — default 50 per page, capped at 200
+        const rawLimit = parseInt(searchParams.get('limit') || '50', 10);
+        const rawOffset = parseInt(searchParams.get('offset') || '0', 10);
+        const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 50;
+        const offset = Number.isFinite(rawOffset) ? Math.max(rawOffset, 0) : 0;
+
         let participants;
+        let total = 0;
 
         if (organizationId) {
             // Verify org access before touching PHI
@@ -85,20 +92,48 @@ export async function GET(request: NextRequest) {
                 paramIndex++;
             }
 
-            // Search filter
+            // Search filter — matches name, email, or phone (digits-only for phone)
             if (search && search.length >= 2) {
                 const searchPattern = `%${search.toLowerCase()}%`;
+                const digitsOnly = search.replace(/\D/g, '');
                 conditions.push(`(
                     LOWER(p.first_name) LIKE $${paramIndex}
                     OR LOWER(p.last_name) LIKE $${paramIndex}
                     OR LOWER(COALESCE(p.preferred_name, '')) LIKE $${paramIndex}
                     OR LOWER(p.first_name || ' ' || p.last_name) LIKE $${paramIndex}
+                    OR LOWER(COALESCE(p.email, '')) LIKE $${paramIndex}
+                    ${digitsOnly.length >= 3
+                        ? `OR regexp_replace(COALESCE(p.phone, ''), '\\D', '', 'g') LIKE $${paramIndex + 1}`
+                        : ''}
                 )`);
                 values.push(searchPattern);
                 paramIndex++;
+                if (digitsOnly.length >= 3) {
+                    values.push(`%${digitsOnly}%`);
+                    paramIndex++;
+                }
             }
 
             const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+            // Total count for pagination (uses the same filters/values, no limit)
+            try {
+                const countRows = await sql(
+                    `SELECT COUNT(*)::int AS total FROM participants p ${whereClause}`,
+                    values
+                );
+                total = countRows?.[0]?.total ?? 0;
+            } catch (e) {
+                console.error('Error counting participants:', e);
+            }
+
+            // Append pagination params
+            const limitParam = paramIndex;
+            values.push(limit);
+            paramIndex++;
+            const offsetParam = paramIndex;
+            values.push(offset);
+            paramIndex++;
 
             const queryText = `
                 SELECT 
@@ -118,7 +153,7 @@ export async function GET(request: NextRequest) {
                 LEFT JOIN locations l ON l.id = p.location_id
                 ${whereClause}
                 ORDER BY p.last_name, p.first_name
-                LIMIT 100
+                LIMIT $${limitParam} OFFSET $${offsetParam}
             `;
 
             participants = await sql(queryText, values);
@@ -173,9 +208,16 @@ export async function GET(request: NextRequest) {
                     LIMIT 100
                 `;
             }
+            total = Array.isArray(participants) ? participants.length : 0;
         }
 
-        return NextResponse.json({ success: true, participants });
+        return NextResponse.json({
+            success: true,
+            participants,
+            total,
+            limit,
+            offset,
+        });
     } catch (error) {
         console.error('Error fetching participants:', error);
         return NextResponse.json(
@@ -233,6 +275,38 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Duplicate detection — only when DOB is provided and not forced.
+        // Match on last_name (case-insensitive) + date_of_birth within the same org.
+        const force = body.force === true;
+        if (!force && date_of_birth) {
+            try {
+                const dupes = await sql`
+                    SELECT id, first_name, last_name, preferred_name, date_of_birth
+                    FROM participants
+                    WHERE organization_id = ${organization_id}::uuid
+                      AND LOWER(last_name) = LOWER(${last_name})
+                      AND date_of_birth = ${date_of_birth}
+                    LIMIT 10
+                `;
+                if (dupes.length > 0) {
+                    return NextResponse.json(
+                        {
+                            error: 'possible_duplicate',
+                            matches: dupes.map((d: any) => ({
+                                id: d.id,
+                                name: `${d.preferred_name || d.first_name} ${d.last_name}`,
+                                date_of_birth: d.date_of_birth,
+                            })),
+                        },
+                        { status: 409 }
+                    );
+                }
+            } catch (e) {
+                // Never block creation on a failed duplicate check.
+                console.error('Duplicate check failed, continuing:', e);
+            }
+        }
+
         // Assign a kiosk check-in code unique within the org.
         const kioskCode = await generateUniqueKioskCode(organization_id);
 
@@ -286,6 +360,119 @@ export async function POST(request: NextRequest) {
         console.error('Error creating participant:', error);
         return NextResponse.json(
             { error: 'Failed to create participant' },
+            { status: 500 }
+        );
+    }
+}
+
+// PATCH - Bulk update participants (reassign PSS / set location / change status)
+export async function PATCH(request: NextRequest) {
+    try {
+        const session = await getSession();
+
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        const body = await request.json();
+        const { organization_id, ids, updates } = body || {};
+
+        if (!organization_id) {
+            return NextResponse.json(
+                { error: 'organization_id is required' },
+                { status: 400 }
+            );
+        }
+
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return NextResponse.json(
+                { error: 'ids must be a non-empty array' },
+                { status: 400 }
+            );
+        }
+
+        if (!updates || typeof updates !== 'object') {
+            return NextResponse.json(
+                { error: 'updates object is required' },
+                { status: 400 }
+            );
+        }
+
+        // Verify org access before touching PHI
+        try {
+            await requireOrgAccess(organization_id);
+        } catch {
+            return NextResponse.json(
+                { error: 'Organization access denied' },
+                { status: 403 }
+            );
+        }
+
+        // Only allow a small, safe set of bulk-editable fields
+        const allowedFields = ['primary_pss_id', 'location_id', 'status'];
+        const setClauses: string[] = [];
+        const values: unknown[] = [];
+        let paramIndex = 1;
+
+        for (const field of allowedFields) {
+            if (field in updates) {
+                const raw = updates[field];
+                const val = raw === '' ? null : raw;
+                if ((field === 'primary_pss_id' || field === 'location_id')) {
+                    setClauses.push(`${field} = $${paramIndex}::uuid`);
+                } else {
+                    setClauses.push(`${field} = $${paramIndex}`);
+                }
+                values.push(val);
+                paramIndex++;
+            }
+        }
+
+        if (setClauses.length === 0) {
+            return NextResponse.json(
+                { error: 'No valid fields to update' },
+                { status: 400 }
+            );
+        }
+
+        // ids and org as final params — org scoping enforced in WHERE
+        const idsParam = paramIndex;
+        values.push(ids);
+        paramIndex++;
+        const orgParam = paramIndex;
+        values.push(organization_id);
+        paramIndex++;
+
+        const updateQuery = `
+            UPDATE participants
+            SET ${setClauses.join(', ')}, updated_at = NOW()
+            WHERE id = ANY($${idsParam}::uuid[])
+              AND organization_id = $${orgParam}::uuid
+            RETURNING id
+        `;
+
+        const result = await sql(updateQuery, values);
+        const updatedIds = (result || []).map((r: any) => r.id);
+
+        await logAuditEvent(
+            userId,
+            organization_id,
+            'update',
+            'participant',
+            updatedIds.join(','),
+            { action: 'bulk_update', count: updatedIds.length, updated_fields: Object.keys(updates) }
+        );
+
+        return NextResponse.json({ success: true, updated: updatedIds.length, ids: updatedIds });
+    } catch (error) {
+        console.error('Error bulk-updating participants:', error);
+        return NextResponse.json(
+            { error: 'Failed to update participants' },
             { status: 500 }
         );
     }

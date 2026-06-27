@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { todayLocal } from '@/lib/dateUtils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
     FileText, Mic, Upload, MessageSquare, FileEdit, StickyNote,  // ADDED: StickyNote
     ArrowLeft, ChevronRight, Loader2, BookOpen,
-    Clock, Users, Calendar, Building2, User
+    Clock, Users, Calendar, Building2, User,
+    LayoutTemplate, Copy, Save, ChevronDown, Trash2  // ADDED: notes-efficiency
 } from 'lucide-react';
 import SessionDebrief from './components/SessionDebrief';
 import ManualNoteForm from './components/ManualNoteForm';
@@ -30,6 +31,325 @@ interface SessionMetadata {
     sessionType: 'individual' | 'group' | 'check-in' | 'crisis';
     setting: string;
     participantName?: string;
+}
+
+// ── Notes-efficiency: template body shape ───────────────────────────────────
+// A template/seed body discriminated by `kind`:
+//   { kind: 'manual', manual: {...partial ManualNoteForm formData} }
+//   { kind: 'quick',  quick: { title, content, sessionType, tags } }
+type TemplateBody = {
+    kind: 'manual' | 'quick';
+    manual?: Record<string, any>;
+    quick?: { title?: string; content?: string; sessionType?: string; tags?: string[] };
+};
+
+interface NoteTemplate {
+    id: string;
+    name: string;
+    description?: string | null;
+    body: TemplateBody;
+    is_shared: boolean;
+    use_count: number;
+}
+
+// Build a manual-form seed from a previously saved note (copy-my-last-note).
+// Dates/identifiers/attestations are intentionally NOT carried forward.
+function seedManualFromNote(note: any): TemplateBody {
+    const md = note?.metadata || {};
+    const pn = md.peerNoteData || {};
+    return {
+        kind: 'manual',
+        manual: {
+            staffName: md.staffName || '',
+            sessionType: md.sessionType === 'group' ? 'group' : 'individual',
+            groupSize: md.groupSize || '',
+            othersPresent: md.othersPresent || '',
+            goalDiscussion: pn.goalDiscussion || '',
+            participantShared: pn.participantShared || note?.pss_note?.sessionOverview || '',
+            directQuotes: pn.directQuotes || '',
+            strengthsObserved: Array.isArray(pn.strengthsObserved) ? pn.strengthsObserved : [],
+            progressNoted: pn.progressNoted || '',
+            supportProvided: Array.isArray(pn.supportProvided) ? pn.supportProvided : [],
+            sharedExperience: pn.sharedExperience || '',
+            participantResponse: pn.participantResponse || '',
+            resourcesDiscussed: pn.resourcesDiscussed || '',
+            communityConnections: pn.communityConnections || '',
+            safetyConcerns: !!pn.safetyConcerns,
+            safetyConcernsNote: pn.safetyConcernsNote || '',
+            participationLevel: md.participationLevel || '',
+            motivationLevel: md.motivationLevel || '',
+            treatmentPlanNote: pn.treatmentPlanNote || '',
+            nextSteps: pn.nextSteps || '',
+            nextMeetingFocus: pn.nextMeetingFocus || '',
+        },
+    };
+}
+
+// Build a quick-note seed from a previously saved note.
+function seedQuickFromNote(note: any): TemplateBody {
+    const md = note?.metadata || {};
+    return {
+        kind: 'quick',
+        quick: {
+            title: '', // don't carry the old (often date-stamped) title
+            content: note?.pss_note?.content || note?.pss_summary || '',
+            sessionType: md.sessionType || 'general',
+            tags: Array.isArray(md.tags) ? md.tags : [],
+        },
+    };
+}
+
+interface NoteTemplateBarProps {
+    kind: 'manual' | 'quick';
+    organizationId?: string;
+    participants: Participant[];
+    onApply: (seed: TemplateBody, participantId?: string) => void;
+    getDraft: () => TemplateBody | null;
+}
+
+// Toolbar shown above the Manual/Quick note forms: start-from-template,
+// copy-my-last-note, and save-as-template.
+function NoteTemplateBar({ kind, organizationId, participants, onApply, getDraft }: NoteTemplateBarProps) {
+    const [templates, setTemplates] = useState<NoteTemplate[]>([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState('');
+    const [copyParticipantId, setCopyParticipantId] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [message, setMessage] = useState<string | null>(null);
+
+    const loadTemplates = useCallback(async () => {
+        if (!organizationId) return;
+        try {
+            const res = await fetch(
+                `/api/note-templates?organization_id=${organizationId}&kind=${kind}`
+            );
+            if (res.ok) {
+                const data = await res.json();
+                setTemplates(data.templates || []);
+            }
+        } catch (e) {
+            console.error('Failed to load note templates:', e);
+        }
+    }, [organizationId, kind]);
+
+    useEffect(() => {
+        loadTemplates();
+    }, [loadTemplates]);
+
+    const flash = (msg: string) => {
+        setMessage(msg);
+        setTimeout(() => setMessage(null), 2500);
+    };
+
+    const handleApplyTemplate = () => {
+        const tpl = templates.find((t) => t.id === selectedTemplateId);
+        if (!tpl?.body) {
+            flash('Select a template first');
+            return;
+        }
+        onApply(tpl.body);
+        flash(`Applied "${tpl.name}"`);
+        // Best-effort use_count bump — never blocks the apply.
+        fetch('/api/note-templates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apply_id: tpl.id }),
+        }).catch(() => {});
+    };
+
+    const handleCopyLast = async () => {
+        if (!copyParticipantId) {
+            flash('Choose a participant to copy from');
+            return;
+        }
+        setBusy(true);
+        try {
+            const res = await fetch(
+                `/api/session-notes?participant_id=${copyParticipantId}&limit=1`
+            );
+            const data = await res.json();
+            const note = data?.notes?.[0];
+            if (!note) {
+                flash('No previous note found for this participant');
+                return;
+            }
+            const seed = kind === 'quick' ? seedQuickFromNote(note) : seedManualFromNote(note);
+            onApply(seed, copyParticipantId);
+            flash('Copied your last note');
+        } catch (e) {
+            console.error('Copy last note failed:', e);
+            flash('Could not copy last note');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const handleSaveAsTemplate = async () => {
+        if (!organizationId) {
+            flash('No organization selected');
+            return;
+        }
+        const draft = getDraft();
+        if (!draft) {
+            flash('Fill in the note first');
+            return;
+        }
+        const name = window.prompt('Template name?');
+        if (!name || !name.trim()) return;
+        setBusy(true);
+        try {
+            const res = await fetch('/api/note-templates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    organization_id: organizationId,
+                    name: name.trim(),
+                    body: draft,
+                    is_shared: true,
+                }),
+            });
+            if (res.ok) {
+                flash('Saved as template');
+                await loadTemplates();
+            } else {
+                const d = await res.json().catch(() => ({}));
+                flash(d.error || 'Failed to save template');
+            }
+        } catch (e) {
+            console.error('Save as template failed:', e);
+            flash('Failed to save template');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const handleDeleteTemplate = async () => {
+        const tpl = templates.find((t) => t.id === selectedTemplateId);
+        if (!tpl || !organizationId) return;
+        if (!window.confirm(`Delete template "${tpl.name}"?`)) return;
+        setBusy(true);
+        try {
+            const res = await fetch(
+                `/api/note-templates?id=${tpl.id}&organization_id=${organizationId}`,
+                { method: 'DELETE' }
+            );
+            if (res.ok) {
+                setSelectedTemplateId('');
+                flash('Template deleted');
+                await loadTemplates();
+            } else {
+                const d = await res.json().catch(() => ({}));
+                flash(d.error || 'Could not delete template');
+            }
+        } catch (e) {
+            console.error('Delete template failed:', e);
+            flash('Could not delete template');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 shadow-sm">
+            <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+                {/* Start from template */}
+                <div className="flex-1 min-w-[220px]">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 flex items-center gap-1">
+                        <LayoutTemplate className="w-3.5 h-3.5" />
+                        Start from template
+                    </label>
+                    <div className="flex gap-2">
+                        <div className="relative flex-1">
+                            <select
+                                value={selectedTemplateId}
+                                onChange={(e) => setSelectedTemplateId(e.target.value)}
+                                className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg appearance-none bg-white text-sm focus:ring-2 focus:ring-[#1A73A8]"
+                            >
+                                <option value="">
+                                    {templates.length ? 'Select a template…' : 'No templates yet'}
+                                </option>
+                                {templates.map((t) => (
+                                    <option key={t.id} value={t.id}>
+                                        {t.name}
+                                        {t.use_count ? ` (${t.use_count})` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleApplyTemplate}
+                            disabled={!selectedTemplateId || busy}
+                            className="px-3 py-2 bg-[#1A73A8] text-white rounded-lg text-sm font-medium hover:bg-[#155a8a] disabled:opacity-40"
+                        >
+                            Apply
+                        </button>
+                        {selectedTemplateId && (
+                            <button
+                                type="button"
+                                onClick={handleDeleteTemplate}
+                                disabled={busy}
+                                title="Delete template"
+                                className="px-2 py-2 border border-gray-300 rounded-lg text-gray-400 hover:text-red-600 hover:border-red-300"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Copy my last note */}
+                <div className="flex-1 min-w-[220px]">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 flex items-center gap-1">
+                        <Copy className="w-3.5 h-3.5" />
+                        Copy my last note
+                    </label>
+                    <div className="flex gap-2">
+                        <div className="relative flex-1">
+                            <select
+                                value={copyParticipantId}
+                                onChange={(e) => setCopyParticipantId(e.target.value)}
+                                className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg appearance-none bg-white text-sm focus:ring-2 focus:ring-[#1A73A8]"
+                            >
+                                <option value="">Select participant…</option>
+                                {participants.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.first_name} {p.last_name}
+                                    </option>
+                                ))}
+                            </select>
+                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleCopyLast}
+                            disabled={!copyParticipantId || busy}
+                            className="px-3 py-2 border border-[#1A73A8] text-[#1A73A8] rounded-lg text-sm font-medium hover:bg-blue-50 disabled:opacity-40"
+                        >
+                            Copy
+                        </button>
+                    </div>
+                </div>
+
+                {/* Save as template */}
+                <div>
+                    <button
+                        type="button"
+                        onClick={handleSaveAsTemplate}
+                        disabled={busy}
+                        className="px-4 py-2 bg-[#30B27A] text-white rounded-lg text-sm font-medium hover:bg-[#28a06c] disabled:opacity-40 flex items-center gap-2"
+                    >
+                        <Save className="w-4 h-4" />
+                        Save as template
+                    </button>
+                </div>
+            </div>
+
+            {message && (
+                <p className="mt-2 text-xs text-[#1A73A8]">{message}</p>
+            )}
+        </div>
+    );
 }
 
 function SessionNotesContent() {
@@ -74,6 +394,35 @@ function SessionNotesContent() {
 
     // Generated content
     const [generatedNote, setGeneratedNote] = useState<any>(null);
+
+    // ── Notes-efficiency: template / copy-last-note seeds ───────────────────
+    // Applying a template or copying the last note seeds the relevant form.
+    // `seedKey` is bumped on every apply so the form remounts and re-reads its
+    // initial values cleanly.
+    const [manualSeed, setManualSeed] = useState<Record<string, any> | null>(null);
+    const [quickSeed, setQuickSeed] = useState<any | null>(null);
+    const [seedParticipantId, setSeedParticipantId] = useState<string>('');
+    const [seedKey, setSeedKey] = useState(0);
+    const manualDraftRef = useRef<TemplateBody | null>(null);
+    const quickDraftRef = useRef<TemplateBody | null>(null);
+
+    const applySeed = (seed: TemplateBody, participantId?: string) => {
+        if (!seed) return;
+        if (seed.kind === 'quick') {
+            setQuickSeed({ ...(seed.quick || {}), participantId: participantId || '' });
+        } else {
+            setManualSeed(seed.manual || {});
+            setSeedParticipantId(participantId || '');
+        }
+        setSeedKey((k) => k + 1);
+    };
+
+    const handleManualDraft = useCallback((body: TemplateBody) => {
+        manualDraftRef.current = body;
+    }, []);
+    const handleQuickDraft = useCallback((body: TemplateBody) => {
+        quickDraftRef.current = body;
+    }, []);
 
     // Auth check
     useEffect(() => {
@@ -481,11 +830,22 @@ function SessionNotesContent() {
                                 Use this clinical template to document your session with structured fields
                             </p>
                         </div>
+                        <NoteTemplateBar
+                            kind="manual"
+                            organizationId={currentOrg?.id || undefined}
+                            participants={participants}
+                            onApply={applySeed}
+                            getDraft={() => manualDraftRef.current}
+                        />
                         <ManualNoteForm
+                            key={`manual-${seedKey}`}
                             participants={participants}
                             onSave={handleSaveManualNote}
                             onCancel={() => setMode('select')}
                             organizationId={currentOrg?.id || undefined}
+                            initialFormData={manualSeed || undefined}
+                            initialParticipantId={seedParticipantId || undefined}
+                            onDraftChange={handleManualDraft}
                             prefillData={{
                                 topic: prefillTopic || undefined,
                                 intervention: prefillIntervention || undefined,
@@ -497,10 +857,22 @@ function SessionNotesContent() {
 
                 {/* ADDED: Quick Note Mode */}
                 {mode === 'quick-note' && (
-                    <QuickNoteEditor
-                        onBack={() => setMode('select')}
-                        onSaved={handleQuickNoteSaved}
-                    />
+                    <div>
+                        <NoteTemplateBar
+                            kind="quick"
+                            organizationId={currentOrg?.id || undefined}
+                            participants={participants}
+                            onApply={applySeed}
+                            getDraft={() => quickDraftRef.current}
+                        />
+                        <QuickNoteEditor
+                            key={`quick-${seedKey}`}
+                            onBack={() => setMode('select')}
+                            onSaved={handleQuickNoteSaved}
+                            initialData={quickSeed || undefined}
+                            onDraftChange={handleQuickDraft}
+                        />
+                    </div>
                 )}
             </main>
         </div>

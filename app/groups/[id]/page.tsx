@@ -16,8 +16,12 @@ import {
     X,
     Trash2,
     Pencil,
+    FileText,
+    ExternalLink,
+    Paperclip,
 } from 'lucide-react';
 import { formatDateOnly } from '@/lib/dateUtils';
+import LessonPicker, { AttachableLesson } from '@/app/components/LessonPicker';
 
 const TYPE_OPTIONS = [
     { value: 'recovery_group', label: 'Recovery Group' },
@@ -52,6 +56,9 @@ interface Activity {
     facilitator_name: string | null;
     headcount_total: number | null;
     notes: string | null;
+    lesson_id?: string | null;
+    lesson_source?: string | null;
+    lesson_title?: string | null;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -88,6 +95,11 @@ export default function ActivityDetailPage() {
 
     const [showEdit, setShowEdit] = useState(false);
     const [deleting, setDeleting] = useState(false);
+
+    // Group → note bridge state.
+    const [draftOpen, setDraftOpen] = useState(false);
+    const [draftingNotes, setDraftingNotes] = useState(false);
+    const [draftResult, setDraftResult] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         try {
@@ -198,6 +210,59 @@ export default function ActivityDetailPage() {
         }
     };
 
+    // Group → note bridge: one draft session note per present attendee, linked to
+    // this activity via group_activity_id (passed to the shared POST /api/session-notes).
+    const draftNotesForActivity = async () => {
+        if (!activity) return;
+        const present = roster.filter((r) => r.attendance_status !== 'no_show');
+        if (present.length === 0) return;
+        setDraftingNotes(true);
+        let created = 0;
+        try {
+            for (const r of present) {
+                const metadata = {
+                    groupTopic: activity.lesson_title || activity.name,
+                    sessionType: 'group',
+                    source: 'group',
+                    group_name: activity.name,
+                    duration_minutes: activity.duration_minutes,
+                    sessionDate: activity.activity_date ? String(activity.activity_date).slice(0, 10) : undefined,
+                };
+                const pss_note = {
+                    sessionOverview: `Group activity: ${activity.name}${
+                        activity.duration_minutes ? ` — ${activity.duration_minutes} min` : ''
+                    }.`,
+                    topicsDiscussed: [activity.lesson_title || activity.name],
+                    strengthsObserved: [],
+                    recoverySupportProvided: [],
+                    actionItems: [],
+                    followUpNeeded: [],
+                };
+                const res = await fetch('/api/session-notes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        metadata,
+                        pss_note,
+                        source: 'group',
+                        organization_id: currentOrg?.id,
+                        participant_id: r.participant_id,
+                        group_activity_id: activity.id,
+                    }),
+                });
+                if (res.ok) created++;
+            }
+            setDraftResult(`Created ${created} draft note${created === 1 ? '' : 's'}. Finish and submit them under Session Notes.`);
+        } catch {
+            setDraftResult('Some notes could not be drafted. Please try again from Session Notes.');
+        } finally {
+            setDraftingNotes(false);
+        }
+    };
+
+    const lessonHref = (a: Activity) =>
+        a.lesson_source === 'template' ? `/lesson-library/${a.lesson_id}` : `/lesson/${a.lesson_id}`;
+
     if (authStatus === 'loading' || loading) {
         return (
             <div className="min-h-screen bg-[#F8FAFB] flex items-center justify-center">
@@ -276,6 +341,16 @@ export default function ActivityDetailPage() {
                         )}
                         {activity.facilitator_name && <span>Facilitator: {activity.facilitator_name}</span>}
                     </div>
+                    {activity.lesson_id && (
+                        <a
+                            href={lessonHref(activity)}
+                            className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-[#1A73A8] hover:underline"
+                        >
+                            <FileText className="w-4 h-4" />
+                            Deliver this lesson{activity.lesson_title ? `: ${activity.lesson_title}` : ''}
+                            <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                    )}
                     {activity.notes && <p className="text-gray-600 mt-4">{activity.notes}</p>}
                 </div>
 
@@ -304,14 +379,28 @@ export default function ActivityDetailPage() {
                             Attendance
                             <span className="text-sm font-normal text-gray-400">({presentCount})</span>
                         </h2>
-                        <button
-                            onClick={() => setShowAdd(true)}
-                            className="px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 flex items-center gap-2"
-                            style={{ background: 'linear-gradient(135deg, #1A73A8 0%, #30B27A 100%)' }}
-                        >
-                            <UserPlus className="w-4 h-4" />
-                            Add attendee
-                        </button>
+                        <div className="flex items-center gap-2">
+                            {presentCount > 0 && (
+                                <button
+                                    onClick={() => {
+                                        setDraftResult(null);
+                                        setDraftOpen(true);
+                                    }}
+                                    className="px-4 py-2 text-sm font-medium text-[#1A73A8] border border-[#1A73A8]/30 rounded-lg hover:bg-[#1A73A8]/5 flex items-center gap-2"
+                                >
+                                    <FileText className="w-4 h-4" />
+                                    Draft notes
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setShowAdd(true)}
+                                className="px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 flex items-center gap-2"
+                                style={{ background: 'linear-gradient(135deg, #1A73A8 0%, #30B27A 100%)' }}
+                            >
+                                <UserPlus className="w-4 h-4" />
+                                Add attendee
+                            </button>
+                        </div>
                     </div>
 
                     {roster.length === 0 ? (
@@ -434,6 +523,59 @@ export default function ActivityDetailPage() {
                     </div>
                 </div>
             )}
+
+            {/* Draft notes for attendees */}
+            {draftOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                            <h3 className="text-lg font-semibold text-[#0E2235]">Draft notes for attendees</h3>
+                            <button onClick={() => setDraftOpen(false)} className="p-1 text-gray-400 hover:text-gray-600">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="px-6 py-4">
+                            {draftResult ? (
+                                <p className="text-sm text-gray-700">{draftResult}</p>
+                            ) : (
+                                <p className="text-sm text-gray-600">
+                                    Create a draft session note for each of the{' '}
+                                    <span className="font-medium text-[#0E2235]">{presentCount}</span> present attendee
+                                    {presentCount === 1 ? '' : 's'} of{' '}
+                                    <span className="font-medium text-[#0E2235]">{activity.name}</span>. Each note is prefilled
+                                    with the activity name and duration; you finish and submit them under Session Notes.
+                                </p>
+                            )}
+                        </div>
+                        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+                            {draftResult ? (
+                                <button
+                                    onClick={() => setDraftOpen(false)}
+                                    className="px-5 py-2 text-white font-medium rounded-lg hover:opacity-90"
+                                    style={{ background: 'linear-gradient(135deg, #1A73A8 0%, #30B27A 100%)' }}
+                                >
+                                    Done
+                                </button>
+                            ) : (
+                                <>
+                                    <button onClick={() => setDraftOpen(false)} className="px-4 py-2 text-gray-600 font-medium rounded-lg hover:bg-gray-100">
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={draftNotesForActivity}
+                                        disabled={draftingNotes}
+                                        className="px-5 py-2 text-white font-medium rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+                                        style={{ background: 'linear-gradient(135deg, #1A73A8 0%, #30B27A 100%)' }}
+                                    >
+                                        {draftingNotes ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                                        Draft notes
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -453,6 +595,12 @@ function EditActivityModal({
     const [locations, setLocations] = useState<any[]>([]);
     const [members, setMembers] = useState<any[]>([]);
     const [saving, setSaving] = useState(false);
+    const [lessonOpen, setLessonOpen] = useState(false);
+    const [lesson, setLesson] = useState<{ id: string | null; source: string | null; title: string | null }>({
+        id: activity.lesson_id || null,
+        source: activity.lesson_source || null,
+        title: activity.lesson_title || null,
+    });
     const [form, setForm] = useState({
         name: activity.name || '',
         activity_type: activity.activity_type || 'recovery_group',
@@ -498,6 +646,8 @@ function EditActivityModal({
                     start_time: form.start_time || null,
                     location_id: form.location_id || null,
                     facilitator_id: form.facilitator_id || null,
+                    lesson_id: lesson.id,
+                    lesson_source: lesson.source,
                 }),
             });
             if (!res.ok) throw new Error();
@@ -590,7 +740,34 @@ function EditActivityModal({
                         <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                         <textarea className={inputCls} rows={3} value={form.notes} onChange={(e) => set('notes', e.target.value)} />
                     </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Attached lesson</label>
+                        <div className="flex items-center gap-2">
+                            <div className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 truncate">
+                                {lesson.id ? lesson.title || 'Lesson attached' : <span className="text-gray-400">No lesson attached</span>}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setLessonOpen(true)}
+                                className="px-3 py-2 text-sm font-medium text-[#1A73A8] border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-1.5 whitespace-nowrap"
+                            >
+                                <Paperclip className="w-4 h-4" />
+                                {lesson.id ? 'Change' : 'Attach'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
+
+                <LessonPicker
+                    open={lessonOpen}
+                    onClose={() => setLessonOpen(false)}
+                    onSelect={(l: AttachableLesson | null) => {
+                        setLesson({ id: l?.id ?? null, source: l?.source ?? null, title: l?.title ?? null });
+                        setLessonOpen(false);
+                    }}
+                    currentLesson={{ id: lesson.id, title: lesson.title }}
+                />
 
                 <div className="flex gap-3 p-5 border-t border-gray-100">
                     <button

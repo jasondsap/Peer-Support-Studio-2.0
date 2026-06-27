@@ -77,17 +77,22 @@ export async function POST(request: NextRequest) {
         const {
             name, activity_type, primary_audience, activity_date, start_time,
             duration_minutes, location_id, facilitator_id, headcount_total, notes,
+            lesson_id, lesson_source,
         } = body;
 
         if (!name || !activity_date) {
             return NextResponse.json({ error: 'name and activity_date are required' }, { status: 400 });
         }
 
+        // Optional attached lesson (saved lesson or system template).
+        const validLessonSource = ['saved', 'template'].includes(lesson_source) ? lesson_source : null;
+        const validLessonId = lesson_id && validLessonSource ? lesson_id : null;
+
         const result = await sql`
             INSERT INTO group_activities (
                 organization_id, location_id, name, activity_type, primary_audience,
                 activity_date, start_time, duration_minutes, facilitator_id,
-                headcount_total, notes, created_by
+                headcount_total, notes, created_by, lesson_id, lesson_source
             ) VALUES (
                 ${ctx.organizationId}::uuid,
                 ${location_id || null},
@@ -100,7 +105,9 @@ export async function POST(request: NextRequest) {
                 ${facilitator_id || null},
                 ${headcount_total ?? null},
                 ${notes || null},
-                ${ctx.userId}::uuid
+                ${ctx.userId}::uuid,
+                ${validLessonId}::uuid,
+                ${validLessonSource}
             )
             RETURNING *
         `;

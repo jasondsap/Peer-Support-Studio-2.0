@@ -255,7 +255,7 @@ export default function ServiceDetailPage() {
     useEffect(() => {
         if (authStatus === 'loading') return;
         if (authStatus === 'unauthenticated') {
-            router.push('/login');
+            router.push('/auth/signin');
         } else if (session && serviceId) {
             fetchService();
         }

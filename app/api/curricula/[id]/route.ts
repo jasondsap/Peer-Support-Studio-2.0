@@ -28,10 +28,15 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
         if (rows.length === 0) return NextResponse.json({ error: 'Curriculum not found' }, { status: 404 });
         const curriculum = rows[0];
 
+        // Resolve the attached-lesson title from whichever source the module points at.
         const modules = await sql`
-            SELECT * FROM curriculum_modules
-            WHERE curriculum_id = ${params.id}::uuid
-            ORDER BY sort_order, module_number
+            SELECT m.*,
+                COALESCE(sl.title, lt.title) AS lesson_title
+            FROM curriculum_modules m
+            LEFT JOIN saved_lessons sl ON m.lesson_source = 'saved' AND sl.id = m.lesson_id
+            LEFT JOIN lesson_templates lt ON m.lesson_source = 'template' AND lt.id = m.lesson_id
+            WHERE m.curriculum_id = ${params.id}::uuid
+            ORDER BY m.sort_order, m.module_number
         `;
 
         const stats = await sql`

@@ -61,7 +61,7 @@ export default function ResourceNavigator() {
     useEffect(() => {
         // CHANGED: auth check for NextAuth
         if (status === 'unauthenticated') {
-            router.push('/login');
+            router.push('/auth/signin');
         }
     }, [status, router]);
 
