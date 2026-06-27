@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { MIRC28_QUESTIONS, MIRC28_DOMAINS, type Mirc28Domain } from '@/lib/assessments/questionnaires';
+import { syncScheduleOnAssessment } from '@/lib/assessments/scheduleSync';
 
 // MIRC-28 domain structure + question text are derived from the canonical
 // question bank in lib/assessments/questionnaires.ts so the item text, order,
@@ -232,6 +233,14 @@ export async function POST(request: NextRequest) {
                         ]
                     ) as { id: string }[];
                     assessmentId = result[0]?.id;
+
+                    // Keep the reassessment cadence self-sustaining.
+                    await syncScheduleOnAssessment({
+                        organizationId: organization_id,
+                        participantId: participant_id || null,
+                        assessmentType: 'mirc28',
+                        userId,
+                    });
                 }
             }
 

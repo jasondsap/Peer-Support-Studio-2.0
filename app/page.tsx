@@ -658,7 +658,7 @@ export default function HomePage() {
                             {/* Assessments Due */}
                             <SectionCard title="Assessments Due" icon={Activity} accent="bg-purple-500" count={dashboard?.assessmentsDue.count}>
                                 {!dashboard?.assessmentsDue.items.length ? (
-                                    <EmptyState icon={CheckCircle2} message="No assessments due right now." />
+                                    <EmptyState icon={CheckCircle2} message="No assessments due. Completing a BARC-10/MIRC-28 auto-sets a 90-day reassessment; adjust cadence on a participant's Assessments tab." />
                                 ) : (
                                     <div className="divide-y divide-gray-50">
                                         {dashboard.assessmentsDue.items.map(a => (

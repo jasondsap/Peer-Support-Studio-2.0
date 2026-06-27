@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
 import { query, logAuditEvent } from '@/lib/db';
+import { syncScheduleOnAssessment } from '@/lib/assessments/scheduleSync';
 
 // GET /api/recovery-assessments - List assessments
 export async function GET(req: NextRequest) {
@@ -140,10 +141,18 @@ export async function POST(req: NextRequest) {
             { assessment_type, participant_id }
         );
 
-        return NextResponse.json({ 
+        // Keep the reassessment cadence self-sustaining (advance/auto-create).
+        await syncScheduleOnAssessment({
+            organizationId: organization_id,
+            participantId: participant_id || null,
+            assessmentType: assessment_type || 'barc10',
+            userId,
+        });
+
+        return NextResponse.json({
             success: true,
             assessment: result[0],
-            assessmentId: result[0].id 
+            assessmentId: result[0].id
         });
     } catch (error) {
         console.error('Error creating assessment:', error);

@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql, logAuditEvent } from '@/lib/db';
 import type { AssessmentType } from '@/lib/assessments/questionnaires';
+import { syncScheduleOnAssessment } from '@/lib/assessments/scheduleSync';
 
 export const runtime = 'nodejs';
 
@@ -162,6 +163,15 @@ export async function POST(
             RETURNING id
         `) as Array<{ id: string }>;
         const assessmentId = inserted[0].id;
+
+        // A participant self-completing via the invite link still advances their
+        // reassessment cadence (auto-creates a default 90-day one if none).
+        await syncScheduleOnAssessment({
+            organizationId: invite.organization_id,
+            participantId: invite.participant_id,
+            assessmentType: invite.assessment_type,
+            userId: null,
+        });
 
         // Mark invitation completed + capture IP/UA
         await sql`

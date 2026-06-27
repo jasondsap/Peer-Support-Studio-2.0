@@ -501,8 +501,13 @@ export default function ParticipantDetailPage() {
     // Handlers
     // ========================================================================
 
-    // Set / adjust a reassessment cadence for an instrument (upsert).
-    const setCadence = async (assessmentType: string, intervalDays: number) => {
+    // Upsert a reassessment cadence for an instrument. Accepts an interval
+    // (preset or custom) and/or an explicit next-due date ('now'/'today' or
+    // a YYYY-MM-DD string).
+    const upsertCadence = async (
+        assessmentType: string,
+        payload: { interval_days?: number; next_due_date?: string }
+    ) => {
         if (!currentOrg?.id || !params.id) return;
         try {
             const res = await fetch('/api/assessment-schedules', {
@@ -512,7 +517,7 @@ export default function ParticipantDetailPage() {
                     organization_id: currentOrg.id,
                     participant_id: params.id,
                     assessment_type: assessmentType,
-                    interval_days: intervalDays,
+                    ...payload,
                 }),
             });
             const data = await res.json();
@@ -525,6 +530,20 @@ export default function ParticipantDetailPage() {
         } catch (e) {
             console.error('Failed to set cadence:', e);
         }
+    };
+
+    // Preset cadence (30/60/90 or a custom number of days).
+    const setCadence = (assessmentType: string, intervalDays: number) =>
+        upsertCadence(assessmentType, { interval_days: intervalDays });
+
+    // Mark the instrument due now (surfaces immediately in "Assessments Due").
+    const setDueNow = (assessmentType: string) =>
+        upsertCadence(assessmentType, { next_due_date: 'today' });
+
+    // Set an explicit next-due date.
+    const setDueDate = (assessmentType: string, date: string) => {
+        if (!date) return;
+        upsertCadence(assessmentType, { next_due_date: date });
     };
 
     // Mark an instrument reassessed today (stamps completion, pushes next due out).
@@ -1582,7 +1601,9 @@ export default function ParticipantDetailPage() {
                             <h3 className="font-semibold text-[#0E2235]">Reassessment Schedule</h3>
                         </div>
                         <p className="text-sm text-gray-500 mb-4">
-                            Set a cadence for each instrument. Mark an instrument reassessed to reset its next-due date.
+                            Completing an assessment automatically sets (or advances) a 90-day cadence.
+                            Use the presets, a custom interval, an explicit date, or “Due now” to adjust it.
+                            Due items appear in “Assessments Due” on the dashboard.
                         </p>
                         <div className="space-y-3">
                             {(['barc10', 'mirc28'] as const).map(type => {
@@ -1620,6 +1641,38 @@ export default function ParticipantDetailPage() {
                                                     {d}d
                                                 </button>
                                             ))}
+                                            {/* Custom interval (any number of days) */}
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                placeholder="custom"
+                                                title="Custom interval in days — press Enter to set"
+                                                className="w-20 px-2 py-1 text-xs rounded-md border border-gray-300 focus:outline-none focus:ring-1 focus:ring-[#1A73A8]"
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        const v = parseInt((e.target as HTMLInputElement).value, 10);
+                                                        if (Number.isFinite(v) && v > 0) {
+                                                            setCadence(type, v);
+                                                            (e.target as HTMLInputElement).value = '';
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                            {/* Explicit next-due date */}
+                                            <input
+                                                type="date"
+                                                title="Set an explicit next-due date"
+                                                className="px-2 py-1 text-xs rounded-md border border-gray-300 text-gray-600 focus:outline-none focus:ring-1 focus:ring-[#1A73A8]"
+                                                onChange={(e) => e.target.value && setDueDate(type, e.target.value)}
+                                            />
+                                            {/* Due now — surfaces on the dashboard immediately */}
+                                            <button
+                                                onClick={() => setDueNow(type)}
+                                                title="Mark due now (appears in Assessments Due)"
+                                                className="px-2.5 py-1 text-xs rounded-md border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
+                                            >
+                                                Due now
+                                            </button>
                                             {schedule && (
                                                 <>
                                                     <button

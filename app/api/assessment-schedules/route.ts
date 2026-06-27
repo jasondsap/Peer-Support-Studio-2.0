@@ -77,15 +77,32 @@ export async function GET(req: NextRequest) {
     }
 }
 
+// Accept a 'YYYY-MM-DD' date string (or 'now'/'today' for today). Returns the
+// normalized date string, or null if not provided/invalid.
+function normalizeDueDate(value: unknown): string | null {
+    if (value === undefined || value === null || value === "") return null;
+    if (typeof value !== "string") return null;
+    const v = value.trim().toLowerCase();
+    if (v === "now" || v === "today") {
+        return new Date().toISOString().slice(0, 10);
+    }
+    // Strict YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return value.trim();
+    return null;
+}
+
 // POST — upsert a cadence for a participant + instrument.
-//   { organization_id, participant_id, assessment_type, interval_days }
-//   next_due_date = COALESCE(last_completed_at::date, CURRENT_DATE) + interval_days
+//   { organization_id, participant_id, assessment_type, interval_days?, next_due_date? }
+//   - interval_days: any positive number (preset 30/60/90 or custom). Default 90.
+//   - next_due_date: optional explicit date ('YYYY-MM-DD', or 'now'/'today' for
+//     "due now"); overrides the computed (CURRENT_DATE + interval) value.
 export async function POST(req: NextRequest) {
     try {
         const session = await getSessionWithUserId();
         const body = await req.json();
         const { organization_id, participant_id, assessment_type } = body;
-        const intervalDays = normalizeInterval(body.interval_days) ?? 90;
+        const intervalDays = normalizeInterval(body.interval_days);
+        const explicitDue = normalizeDueDate(body.next_due_date);
 
         if (!organization_id || !participant_id || !assessment_type) {
             return NextResponse.json(
@@ -112,19 +129,23 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Participant not found" }, { status: 404 });
         }
 
+        const insertInterval = intervalDays ?? 90;
         const result = await sql`
             INSERT INTO assessment_schedules (
                 organization_id, participant_id, assessment_type,
                 interval_days, next_due_date, is_active, created_by
             ) VALUES (
                 ${organization_id}, ${participant_id}, ${assessment_type},
-                ${intervalDays}, (CURRENT_DATE + ${intervalDays}::int), true, ${session.internalUserId}
+                ${insertInterval},
+                COALESCE(${explicitDue}::date, (CURRENT_DATE + ${insertInterval}::int)),
+                true, ${session.internalUserId}
             )
             ON CONFLICT (participant_id, assessment_type) DO UPDATE SET
-                interval_days = EXCLUDED.interval_days,
-                next_due_date = (
+                interval_days = COALESCE(${intervalDays}::int, assessment_schedules.interval_days),
+                next_due_date = COALESCE(
+                    ${explicitDue}::date,
                     COALESCE(assessment_schedules.last_completed_at::date, CURRENT_DATE)
-                    + EXCLUDED.interval_days
+                        + COALESCE(${intervalDays}::int, assessment_schedules.interval_days)
                 ),
                 is_active = true,
                 updated_at = now()
@@ -137,7 +158,7 @@ export async function POST(req: NextRequest) {
             "update",
             "assessment_schedule",
             result[0].id,
-            { action: "upsert", assessment_type, interval_days: intervalDays, participant_id }
+            { action: "upsert", assessment_type, interval_days: intervalDays, next_due_date: explicitDue, participant_id }
         );
 
         return NextResponse.json({ schedule: result[0] });
