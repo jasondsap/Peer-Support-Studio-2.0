@@ -14,7 +14,8 @@ import {
     GraduationCap,
     Check,
     Loader2,
-    ClipboardCheck
+    ClipboardCheck,
+    BarChart3
 } from 'lucide-react';
 import UserButton from './UserButton';
 
@@ -170,6 +171,13 @@ export default function Header() {
                             >
                                 <ClipboardCheck className="w-4 h-4" />
                                 Reviews
+                            </Link>
+                            <Link
+                                href="/analytics"
+                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-[#1A73A8] hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                <BarChart3 className="w-4 h-4" />
+                                Analytics
                             </Link>
                             <Link
                                 href="/help"

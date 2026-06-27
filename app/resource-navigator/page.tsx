@@ -7,7 +7,7 @@ import {
     Search, MapPin, Phone, Globe, Navigation, Building2,
     Loader2, ArrowLeft, Filter, ChevronDown, ChevronUp,
     Heart, Brain, ExternalLink, Clock, AlertCircle, CheckCircle2,
-    Sparkles, Info, LocateFixed
+    Sparkles, Info, LocateFixed, UserPlus, X, Check, ClipboardList
 } from 'lucide-react';
 
 interface Facility {
@@ -49,12 +49,84 @@ export default function ResourceNavigator() {
     const [isGeolocating, setIsGeolocating] = useState(false);
     const [geoError, setGeoError] = useState<string | null>(null);
 
+    // ── Referral state ──
+    const currentOrg = (session as any)?.currentOrganization as { id: string; name: string } | null;
+    const [participants, setParticipants] = useState<{ id: string; first_name: string; last_name: string; preferred_name?: string | null }[]>([]);
+    const [referFor, setReferFor] = useState<string | null>(null); // facility.id currently being referred
+    const [participantSearch, setParticipantSearch] = useState('');
+    const [referLoading, setReferLoading] = useState(false);
+    const [referError, setReferError] = useState<string | null>(null);
+    const [referredFacilities, setReferredFacilities] = useState<Record<string, string>>({}); // facility.id -> participant name
+
     useEffect(() => {
         // CHANGED: auth check for NextAuth
         if (status === 'unauthenticated') {
             router.push('/login');
         }
     }, [status, router]);
+
+    // Load this user's participants for the referral picker (their caseload first).
+    useEffect(() => {
+        if (!currentOrg?.id) return;
+        (async () => {
+            try {
+                const res = await fetch(`/api/participants?organization_id=${currentOrg.id}&pss_filter=mine`);
+                const data = await res.json();
+                if (data.participants) setParticipants(data.participants);
+            } catch (e) {
+                console.error('Failed to load participants:', e);
+            }
+        })();
+    }, [currentOrg?.id]);
+
+    const openRefer = (facilityId: string) => {
+        setReferError(null);
+        setParticipantSearch('');
+        setReferFor(prev => (prev === facilityId ? null : facilityId));
+    };
+
+    const handleRefer = async (facility: Facility, participant: { id: string; first_name: string; last_name: string; preferred_name?: string | null }) => {
+        if (!currentOrg?.id) { setReferError('No organization selected.'); return; }
+        setReferLoading(true);
+        setReferError(null);
+        try {
+            const res = await fetch('/api/referrals', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    organization_id: currentOrg.id,
+                    participant_id: participant.id,
+                    referred_to: facility.name,
+                    referral_type: 'treatment',
+                    contact_info: {
+                        phone: facility.phone || null,
+                        website: facility.website || null,
+                        address: [facility.address, facility.city, facility.state, facility.zip].filter(Boolean).join(', '),
+                    },
+                    reason: facility.program || facility.category || null,
+                    source: facility,
+                }),
+            });
+            if (!res.ok) {
+                const d = await res.json().catch(() => ({}));
+                setReferError(d.error || 'Could not create referral.');
+                return;
+            }
+            const name = `${participant.preferred_name || participant.first_name} ${participant.last_name}`;
+            setReferredFacilities(prev => ({ ...prev, [facility.id]: name }));
+            setReferFor(null);
+        } catch (e) {
+            console.error('Referral error:', e);
+            setReferError('Could not create referral. Please try again.');
+        } finally {
+            setReferLoading(false);
+        }
+    };
+
+    const filteredParticipants = participants.filter(p => {
+        const name = `${p.first_name} ${p.last_name} ${p.preferred_name || ''}`.toLowerCase();
+        return name.includes(participantSearch.toLowerCase());
+    });
 
     const handleSearch = async () => {
         if (!zipCode.trim()) {
@@ -208,6 +280,13 @@ export default function ResourceNavigator() {
                                 </div>
                             </div>
                         </div>
+                        <button
+                            onClick={() => router.push('/referrals')}
+                            className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                            <ClipboardList className="w-4 h-4" />
+                            Manage Referrals
+                        </button>
                     </div>
                 </div>
             </header>
@@ -457,8 +536,80 @@ export default function ResourceNavigator() {
                                                     </a>
                                                 )}
                                             </div>
+
+                                            {/* ── Refer a participant ── */}
+                                            <div className="mt-4">
+                                                {referredFacilities[facility.id] ? (
+                                                    <div className="inline-flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
+                                                        <Check className="w-4 h-4" />
+                                                        Referred {referredFacilities[facility.id]} here
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => openRefer(facility.id)}
+                                                        className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border border-[#1A73A8] text-[#1A73A8] hover:bg-blue-50 transition-colors"
+                                                    >
+                                                        <UserPlus className="w-4 h-4" />
+                                                        Refer a participant
+                                                    </button>
+                                                )}
+
+                                                {referFor === facility.id && (
+                                                    <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <span className="text-sm font-medium text-gray-700">
+                                                                Refer to {facility.name}
+                                                            </span>
+                                                            <button
+                                                                onClick={() => setReferFor(null)}
+                                                                className="p-1 hover:bg-gray-200 rounded"
+                                                            >
+                                                                <X className="w-4 h-4 text-gray-500" />
+                                                            </button>
+                                                        </div>
+                                                        <input
+                                                            type="text"
+                                                            value={participantSearch}
+                                                            onChange={(e) => setParticipantSearch(e.target.value)}
+                                                            placeholder="Search participants..."
+                                                            autoFocus
+                                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#1A73A8] focus:border-transparent mb-2"
+                                                        />
+                                                        {referError && (
+                                                            <p className="text-xs text-red-600 mb-2 flex items-center gap-1">
+                                                                <AlertCircle className="w-3 h-3" /> {referError}
+                                                            </p>
+                                                        )}
+                                                        <div className="max-h-48 overflow-y-auto space-y-1">
+                                                            {filteredParticipants.length === 0 ? (
+                                                                <p className="text-xs text-gray-400 py-2 text-center">
+                                                                    {participants.length === 0 ? 'No participants found for your caseload.' : 'No matches.'}
+                                                                </p>
+                                                            ) : (
+                                                                filteredParticipants.map((p) => (
+                                                                    <button
+                                                                        key={p.id}
+                                                                        disabled={referLoading}
+                                                                        onClick={() => handleRefer(facility, p)}
+                                                                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-white border border-transparent hover:border-gray-200 text-sm text-gray-700 flex items-center justify-between disabled:opacity-50"
+                                                                    >
+                                                                        <span>
+                                                                            {p.preferred_name || p.first_name} {p.last_name}
+                                                                        </span>
+                                                                        {referLoading ? (
+                                                                            <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                                                                        ) : (
+                                                                            <UserPlus className="w-4 h-4 text-[#1A73A8]" />
+                                                                        )}
+                                                                    </button>
+                                                                ))
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                        
+
                                         <button
                                             onClick={() => setExpandedFacility(
                                                 expandedFacility === facility.id ? null : facility.id

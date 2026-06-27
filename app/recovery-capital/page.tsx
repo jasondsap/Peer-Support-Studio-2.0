@@ -11,6 +11,7 @@ import {
     Mail, X, Download
 } from 'lucide-react';
 import AssessmentDetailModal from '@/app/components/AssessmentDetailModal';
+import AssessmentTrendChart, { getAssessmentMax } from '@/app/components/AssessmentTrendChart';
 import { SendAssessmentCard } from '@/components/SendAssessmentCard';
 import type { AssessmentType } from '@/lib/assessments/questionnaires';
 
@@ -109,6 +110,10 @@ export default function RecoveryCapitalPage() {
     // History
     const [assessmentHistory, setAssessmentHistory] = useState<SavedAssessment[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
+
+    // Outcome-trend selection (participant + instrument) for the history view
+    const [trendParticipantId, setTrendParticipantId] = useState<string>('');
+    const [trendType, setTrendType] = useState<AssessmentType>('barc10');
 
     // Assessment Detail Modal
     const [selectedAssessment, setSelectedAssessment] = useState<SavedAssessment | null>(null);
@@ -309,6 +314,29 @@ export default function RecoveryCapitalPage() {
     const progress = (Object.keys(answers).length / BARC10_QUESTIONS.length) * 100;
     const canProceed = answers[`q${BARC10_QUESTIONS[currentQuestion]?.id}`] !== undefined;
     const allAnswered = Object.keys(answers).length === BARC10_QUESTIONS.length;
+
+    // ── Outcome trend derivation (history view) ────────────────────────────
+    // Identified participants present in history, for the trend selector.
+    const trendParticipants = Array.from(
+        assessmentHistory.reduce((map, a) => {
+            if (!a.participant_id) return map;
+            const name = a.participant_name ||
+                (a.participant_first_name
+                    ? `${a.participant_first_name} ${a.participant_last_name || ''}`.trim()
+                    : 'Unknown');
+            if (!map.has(a.participant_id)) map.set(a.participant_id, name);
+            return map;
+        }, new Map<string, string>()).entries()
+    ).map(([id, name]) => ({ id, name }));
+
+    const effectiveTrendPid =
+        trendParticipantId && trendParticipants.some(p => p.id === trendParticipantId)
+            ? trendParticipantId
+            : (trendParticipants[0]?.id || '');
+
+    const trendData = assessmentHistory.filter(
+        a => a.participant_id === effectiveTrendPid && a.assessment_type === trendType
+    );
 
     if (status === 'loading') {
         return (
@@ -652,6 +680,58 @@ export default function RecoveryCapitalPage() {
                                 ← Back
                             </button>
                         </div>
+
+                        {/* Outcome Trends */}
+                        {trendParticipants.length > 0 && (
+                            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <TrendingUp className="w-5 h-5 text-purple-600" />
+                                    <h3 className="font-semibold text-[#0E2235]">Outcome Trends</h3>
+                                </div>
+                                <div className="flex flex-wrap gap-3 mb-5">
+                                    <select
+                                        value={effectiveTrendPid}
+                                        onChange={(e) => setTrendParticipantId(e.target.value)}
+                                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                                    >
+                                        {trendParticipants.map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                        ))}
+                                    </select>
+                                    <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+                                        {(['barc10', 'mirc28'] as AssessmentType[]).map(t => (
+                                            <button
+                                                key={t}
+                                                onClick={() => setTrendType(t)}
+                                                className={`px-3 py-2 text-sm font-medium ${
+                                                    trendType === t
+                                                        ? 'bg-purple-600 text-white'
+                                                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                {t === 'barc10' ? 'BARC-10' : 'MIRC-28'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                {trendData.length > 0 ? (
+                                    <AssessmentTrendChart
+                                        assessments={trendData.map(a => ({
+                                            id: a.id,
+                                            total_score: a.total_score,
+                                            created_at: a.created_at,
+                                        }))}
+                                        assessmentType={trendType}
+                                        maxScore={getAssessmentMax(trendType)}
+                                        color="#8B5CF6"
+                                    />
+                                ) : (
+                                    <p className="text-sm text-gray-400 py-4 text-center">
+                                        No {trendType === 'barc10' ? 'BARC-10' : 'MIRC-28'} assessments for this participant yet.
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
                         {/* Pending Invitations Section */}
                         {pendingInvitations.length > 0 && (

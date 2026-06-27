@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -10,10 +10,10 @@ import {
     BookOpen, ClipboardList, MessageSquare,
     Building2, ClipboardCheck, Search,
     Plus, Map, Mail, Library, Tablet,
-    GraduationCap,
+    GraduationCap, AlertTriangle, CalendarDays,
+    ClipboardEdit, Inbox, CheckCircle2, ChevronRight,
 } from 'lucide-react';
 import AllyIntelligenceChat from './components/AllyIntelligenceChat';
-import { todayLocal } from '@/lib/dateUtils';
 
 interface Organization {
     id: string;
@@ -21,6 +21,49 @@ interface Organization {
     slug: string;
     type: string;
     role: string;
+}
+
+// ── Dashboard data shape (mirrors GET /api/dashboard) ──────────────────────
+interface CaseloadItem { id: string; name: string; status: string | null; last_session: string | null; last_assessment: string | null; }
+interface NoteItem { id: string; created_at: string; review_status?: string; submitted_at?: string | null; participant_id: string | null; participant_name: string | null; author_name?: string; }
+interface PlanItem { id: string; plan_name: string | null; next_review_date: string | null; participant_id: string | null; participant_name: string | null; }
+interface AssessmentItem { id: string; participant_id: string | null; assessment_type: string; next_due_date: string | null; participant_name: string | null; }
+interface GroupItem { id: string; source: string; name: string; activity_type: string; start_time: string | null; attendee_count?: number; href: string; }
+interface Section<T> { count: number; items: T[]; }
+
+interface DashboardData {
+    role: string;
+    isSupervisor: boolean;
+    activeSupportCount: number;
+    myCaseload: Section<CaseloadItem>;
+    myOpenNotes: Section<NoteItem>;
+    notesAwaitingReview: Section<NoteItem> | null;
+    overduePlanReviews: Section<PlanItem>;
+    assessmentsDue: Section<AssessmentItem>;
+    todaysGroups: Section<GroupItem>;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function formatDate(value: string | null | undefined): string {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return String(value).slice(0, 10);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function relativeFromNow(value: string | null | undefined): string {
+    if (!value) return 'never';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return '—';
+    const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+    if (days <= 0) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < 30) return `${days}d ago`;
+    if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+    return `${Math.floor(days / 365)}y ago`;
+}
+function prettyAssessment(type: string): string {
+    const map: Record<string, string> = { barc10: 'BARC-10', mirc28: 'MIRC-28', phq4: 'PHQ-4', phq9: 'PHQ-9', gad7: 'GAD-7' };
+    return map[type] || type.toUpperCase();
 }
 
 // No Organization Modal Component
@@ -95,13 +138,63 @@ function NoOrganizationModal({ userName }: { userName: string }) {
     );
 }
 
-// Section Header Component
-function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+// ── Reusable dashboard section card ────────────────────────────────────────
+function SectionCard({
+    title, icon: Icon, accent, count, viewAllHref, viewAllLabel, children,
+}: {
+    title: string;
+    icon: any;
+    accent: string;        // tailwind bg-* for icon chip
+    count?: number;
+    viewAllHref?: string;
+    viewAllLabel?: string;
+    children: ReactNode;
+}) {
     return (
-        <div className="mb-4">
-            <h2 className="text-lg font-semibold text-gray-800">{title}</h2>
-            {subtitle && <p className="text-sm text-gray-500">{subtitle}</p>}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-lg ${accent} flex items-center justify-center flex-shrink-0`}>
+                        <Icon className="w-5 h-5 text-white" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900">{title}</h3>
+                    {typeof count === 'number' && count > 0 && (
+                        <span className="ml-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold">
+                            {count}
+                        </span>
+                    )}
+                </div>
+                {viewAllHref && (
+                    <Link href={viewAllHref} className="text-sm text-[#1A73A8] hover:text-[#156a9a] font-medium flex items-center gap-1">
+                        {viewAllLabel || 'View all'}
+                        <ChevronRight className="w-4 h-4" />
+                    </Link>
+                )}
+            </div>
+            <div className="p-3 flex-1">{children}</div>
         </div>
+    );
+}
+
+function EmptyState({ icon: Icon, message }: { icon: any; message: string }) {
+    return (
+        <div className="flex flex-col items-center justify-center text-center py-8 px-4">
+            <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center mb-2">
+                <Icon className="w-5 h-5 text-green-500" />
+            </div>
+            <p className="text-sm text-gray-500">{message}</p>
+        </div>
+    );
+}
+
+function RowLink({ href, children }: { href: string; children: ReactNode }) {
+    return (
+        <Link
+            href={href}
+            className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors group"
+        >
+            {children}
+        </Link>
     );
 }
 
@@ -113,6 +206,10 @@ export default function HomePage() {
     const [organization, setOrganization] = useState<Organization | null>(null);
     const [orgLoading, setOrgLoading] = useState(true);
     const [hasOrganization, setHasOrganization] = useState(false);
+
+    // Dashboard state
+    const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+    const [dashLoading, setDashLoading] = useState(true);
 
     const userName = session?.user?.name?.split(' ')[0] || 'there';
 
@@ -153,20 +250,20 @@ export default function HomePage() {
         fetchOrganization();
     }, [status]);
 
-    // Recovery plan reviews that are past their next_review_date
-    const [overdueReviews, setOverdueReviews] = useState(0);
+    // Fetch the work-queue dashboard once we know the org
     useEffect(() => {
         if (status !== 'authenticated' || !organization?.id) return;
-        fetch(`/api/rc-plans?organization_id=${organization.id}`)
+        let cancelled = false;
+        setDashLoading(true);
+        fetch(`/api/dashboard?organization_id=${organization.id}`)
             .then(res => res.json())
             .then(data => {
-                const today = todayLocal();
-                const count = (data.plans || []).filter((p: any) =>
-                    p.status === 'active' && p.next_review_date && String(p.next_review_date).slice(0, 10) < today
-                ).length;
-                setOverdueReviews(count);
+                if (cancelled) return;
+                if (data && !data.error) setDashboard(data as DashboardData);
             })
-            .catch(() => {});
+            .catch(() => {})
+            .finally(() => { if (!cancelled) setDashLoading(false); });
+        return () => { cancelled = true; };
     }, [status, organization?.id]);
 
     // Show loading while checking auth and org
@@ -187,203 +284,39 @@ export default function HomePage() {
         );
     }
 
-    // Hero cards - Primary actions
-    const heroCards = [
-        {
-            title: 'Participants',
-            description: 'View and manage all participants in your care',
-            icon: Users,
-            href: '/participants',
-            gradient: 'from-[#1A73A8] to-[#2B8FBF]',
-            stat: null, // Could add "12 active" etc.
-            action: {
-                label: 'Add New',
-                href: '/participants/new',
-                icon: Plus,
-            },
-        },
-        {
-            title: 'Recovery Plans',
-            description: 'Template-driven planning across 10 recovery domains',
-            icon: ClipboardList,
-            href: '/recovery-plans',
-            gradient: 'from-[#30B27A] to-[#4AC490]',
-            stat: overdueReviews > 0
-                ? `⚠ ${overdueReviews} plan ${overdueReviews === 1 ? 'review' : 'reviews'} overdue`
-                : null,
-            action: {
-                label: 'Create New',
-                href: '/recovery-plans?create=true',
-                icon: Plus,
-            },
-        },
+    const orgId = organization?.id;
+
+    // Quick links — keep existing navigation reachable from the dashboard.
+    const quickLinks = [
+        { title: 'Participants', icon: Users, href: '/participants', color: 'bg-[#1A73A8]' },
+        { title: 'Recovery Plans', icon: ClipboardList, href: '/recovery-plans', color: 'bg-[#30B27A]' },
+        { title: 'Session Notes', icon: FileText, href: '/session-notes', color: 'bg-amber-500' },
+        { title: 'Note Reviewer', icon: ClipboardCheck, href: '/note-reviewer', color: 'bg-amber-400' },
+        { title: 'Service Planner', icon: ClipboardList, href: '/service-log', color: 'bg-amber-600' },
+        { title: 'Goal Generator', icon: Target, href: '/goals/new', color: 'bg-green-500' },
+        { title: 'BARC-10', icon: Activity, href: '/assessments/barc10', color: 'bg-purple-500' },
+        { title: 'Journey Tracker', icon: Map, href: '/journey-tracker', color: 'bg-pink-500' },
+        { title: 'Peer Advisor', icon: MessageSquare, href: '/peer-advisor', color: 'bg-blue-400' },
+        { title: 'Treatment Locator', icon: Search, href: '/resource-navigator', color: 'bg-teal-500' },
+        { title: 'Lesson Builder', icon: BookOpen, href: '/lesson-builder', color: 'bg-indigo-500' },
+        { title: 'Lesson Library', icon: Library, href: '/lesson-library', color: 'bg-emerald-500' },
+        { title: 'Curriculum Manager', icon: GraduationCap, href: '/curricula', color: 'bg-purple-500' },
+        { title: 'Group Attendance', icon: Users, href: '/groups', color: 'bg-cyan-500' },
+        { title: 'Service & Resource Log', icon: ClipboardList, href: '/service-resource-log', color: 'bg-amber-500' },
+        { title: 'Kiosk', icon: Tablet, href: '/settings/kiosk', color: 'bg-violet-500' },
+        { title: 'Messages', icon: Mail, href: '/messages', color: 'bg-sky-500' },
     ];
 
-    // Documentation & Compliance tools
-    const documentationTools = [
-        {
-            title: 'Session Notes',
-            description: 'Document sessions from audio or text',
-            icon: FileText,
-            href: '/session-notes',
-            badge: null,
-            color: 'bg-amber-500',
-        },
-        {
-            title: 'Note Reviewer',
-            description: 'Check if notes meet billing requirements',
-            icon: ClipboardCheck,
-            href: '/note-reviewer',
-            badge: 'AI',
-            color: 'bg-amber-400',
-        },
-        {
-            title: 'Service Planner',
-            description: 'Plan and track service delivery',
-            icon: ClipboardList,
-            href: '/service-log',
-            badge: null,
-            color: 'bg-amber-600',
-        },
-    ];
-
-    // Assessment & Goals tools
-    const assessmentTools = [
-        {
-            title: 'BARC-10',
-            description: 'Recovery Capital (Brief)',
-            icon: Activity,
-            href: '/assessments/barc10',
-            badge: null,
-            color: 'bg-purple-500',
-        },
-        {
-            title: 'MIRC-28',
-            description: 'Recovery Capital (Full)',
-            icon: Activity,
-            href: '/assessments/mirc28',
-            badge: null,
-            color: 'bg-purple-500',
-        },
-        {
-            title: 'Goal Generator',
-            description: 'Create SMART recovery goals',
-            icon: Target,
-            href: '/goals/new',
-            badge: 'AI',
-            color: 'bg-green-500',
-        },
-        {
-            title: 'Journey Tracker',
-            description: 'Track domain progress over time',
-            icon: Map,
-            href: '/journey-tracker',
-            badge: null,
-            color: 'bg-pink-500',
-        },
-    ];
-
-    // Connect & Support tools
-    const connectTools = [
-        {
-            title: 'Peer Advisor',
-            description: 'AI coaching and guidance',
-            icon: MessageSquare,
-            href: '/peer-advisor',
-            badge: 'AI',
-            color: 'bg-blue-400',
-        },
-        {
-            title: 'Treatment Locator',
-            description: 'SAMHSA verified resources',
-            icon: Search,
-            href: '/resource-navigator',
-            badge: null,
-            color: 'bg-teal-500',
-        },
-        {
-            title: 'Lesson Builder',
-            description: 'Create educational content',
-            icon: BookOpen,
-            href: '/lesson-builder',
-            badge: 'AI',
-            color: 'bg-indigo-500',
-        },
-        {
-            title: 'Lesson Library',
-            description: '145 premade lessons. Browse, customize, and use.',
-            icon: Library,
-            href: '/lesson-library',
-            badge: null,
-            color: 'bg-emerald-500',
-        },
-        {
-            title: 'Curriculum Manager',
-            description: 'Deliver and track structured programs',
-            icon: GraduationCap,
-            href: '/curricula',
-            badge: null,
-            color: 'bg-purple-500',
-        },
-        {
-            title: 'Group Attendance',
-            description: 'Log group meetings and track who attended',
-            icon: Users,
-            href: '/groups',
-            badge: null,
-            color: 'bg-cyan-500',
-        },
-        {
-            title: 'Service & Resource Log',
-            description: 'Transportation, volunteer hours, and supplies',
-            icon: ClipboardList,
-            href: '/service-resource-log',
-            badge: null,
-            color: 'bg-amber-500',
-        },
-        {
-            title: 'Kiosk',
-            description: 'Front-desk tablet check-in for groups',
-            icon: Tablet,
-            href: '/settings/kiosk',
-            badge: null,
-            color: 'bg-violet-500',
-        },
-        {
-            title: 'Messages',
-            description: 'Team conversations and direct messages',
-            icon: Mail,
-            href: '/messages',
-            badge: null,
-            color: 'bg-sky-500',
-        },
-    ];
-
-    // Tool Card Component
-    const ToolCard = ({ tool }: { tool: typeof documentationTools[0] }) => (
-        <Link
-            href={tool.href}
-            className="group bg-white rounded-xl p-4 border border-gray-200 hover:shadow-lg hover:border-gray-300 hover:scale-[1.02] transition-all"
-        >
-            <div className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-lg ${tool.color} flex items-center justify-center flex-shrink-0`}>
-                    <tool.icon className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-gray-900 group-hover:text-[#1A73A8] transition-colors truncate">
-                            {tool.title}
-                        </h3>
-                        {tool.badge && (
-                            <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded font-medium flex-shrink-0">
-                                {tool.badge}
-                            </span>
-                        )}
-                    </div>
-                    <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{tool.description}</p>
-                </div>
+    const stat = (label: string, value: number | string, Icon: any, tone: string) => (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4">
+            <div className={`w-12 h-12 rounded-xl ${tone} flex items-center justify-center flex-shrink-0`}>
+                <Icon className="w-6 h-6 text-white" />
             </div>
-        </Link>
+            <div>
+                <p className="text-2xl font-bold text-gray-900 leading-tight">{value}</p>
+                <p className="text-sm text-gray-500">{label}</p>
+            </div>
+        </div>
     );
 
     return (
@@ -392,99 +325,189 @@ export default function HomePage() {
                 {/* Show modal if user has no organization */}
                 {!hasOrganization && <NoOrganizationModal userName={userName} />}
 
-                {/* Welcome Header */}
-                <div className="mb-6">
-                    <h1 className="text-2xl font-bold text-gray-900">
-                        Welcome back, {userName}!
-                    </h1>
-                    <p className="text-gray-600">
-                        {organization ? organization.name : 'Here\'s your dashboard overview'}
-                    </p>
+                {/* Greeting */}
+                <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900">
+                            Welcome back, {userName}!
+                        </h1>
+                        <p className="text-gray-600">
+                            {organization ? `${organization.name} · here's your day` : "Here's your dashboard overview"}
+                        </p>
+                    </div>
+                    <Link
+                        href="/participants/new"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1A73A8] text-white text-sm font-medium hover:bg-[#156a9a] transition-colors shadow-sm"
+                    >
+                        <Plus className="w-4 h-4" /> New Participant
+                    </Link>
                 </div>
 
-                {/* Hero Cards - Primary Actions */}
-                <div className="grid md:grid-cols-2 gap-4 mb-8">
-                    {heroCards.map((card) => (
-                        <Link
-                            key={card.title}
-                            href={card.href}
-                            className="group relative bg-white rounded-2xl p-6 border border-gray-200 hover:shadow-xl hover:scale-[1.01] transition-all overflow-hidden"
-                        >
-                            {/* Gradient accent bar */}
-                            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${card.gradient}`} />
-                            
-                            <div className="flex items-start justify-between">
-                                <div className="flex items-start gap-4">
-                                    <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center flex-shrink-0 shadow-lg`}>
-                                        <card.icon className="w-7 h-7 text-white" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-xl font-bold text-gray-900 group-hover:text-[#1A73A8] transition-colors">
-                                            {card.title}
-                                        </h3>
-                                        <p className="text-gray-500 mt-1">{card.description}</p>
-                                        {card.stat && (
-                                            <p className="text-sm font-medium text-[#1A73A8] mt-2">{card.stat}</p>
-                                        )}
-                                    </div>
-                                </div>
-                                <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-[#1A73A8] group-hover:translate-x-1 transition-all flex-shrink-0" />
-                            </div>
+                {/* Loading skeleton for the dashboard body */}
+                {dashLoading && !dashboard ? (
+                    <div className="flex items-center justify-center py-20">
+                        <Loader2 className="w-7 h-7 animate-spin text-[#1A73A8]" />
+                    </div>
+                ) : (
+                    <>
+                        {/* Stat row */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                            {stat('Active support (14d)', dashboard?.activeSupportCount ?? 0, Activity, 'bg-gradient-to-br from-[#30B27A] to-[#4AC490]')}
+                            {stat('My caseload', dashboard?.myCaseload.count ?? 0, Users, 'bg-gradient-to-br from-[#1A73A8] to-[#2B8FBF]')}
+                            {stat('My open notes', dashboard?.myOpenNotes.count ?? 0, ClipboardEdit, 'bg-gradient-to-br from-amber-500 to-amber-400')}
+                            {dashboard?.isSupervisor
+                                ? stat('Awaiting my review', dashboard?.notesAwaitingReview?.count ?? 0, Inbox, 'bg-gradient-to-br from-purple-500 to-purple-400')
+                                : stat('Overdue plan reviews', dashboard?.overduePlanReviews.count ?? 0, AlertTriangle, 'bg-gradient-to-br from-rose-500 to-rose-400')}
+                        </div>
 
-                            {/* Quick action button */}
-                            {card.action && (
-                                <div className="mt-4 pt-4 border-t border-gray-100">
-                                    <button
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            router.push(card.action!.href);
-                                        }}
-                                        className="flex items-center gap-2 text-sm font-medium text-[#1A73A8] hover:text-[#156a9a] transition-colors"
-                                    >
-                                        <card.action.icon className="w-4 h-4" />
-                                        {card.action.label}
-                                    </button>
-                                </div>
+                        {/* Work-queue grid */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
+                            {/* My Caseload */}
+                            <SectionCard title="My Caseload" icon={Users} accent="bg-[#1A73A8]" count={dashboard?.myCaseload.count} viewAllHref="/participants">
+                                {!dashboard?.myCaseload.items.length ? (
+                                    <EmptyState icon={Users} message="No participants assigned to you yet." />
+                                ) : (
+                                    <div className="divide-y divide-gray-50">
+                                        {dashboard.myCaseload.items.map(p => (
+                                            <RowLink key={p.id} href={`/participants/${p.id}`}>
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-gray-900 truncate group-hover:text-[#1A73A8]">{p.name || 'Unnamed'}</p>
+                                                    <p className="text-xs text-gray-500">Last note {relativeFromNow(p.last_session)}</p>
+                                                </div>
+                                                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1A73A8] flex-shrink-0" />
+                                            </RowLink>
+                                        ))}
+                                    </div>
+                                )}
+                            </SectionCard>
+
+                            {/* My Open Notes */}
+                            <SectionCard title="My Open Notes" icon={ClipboardEdit} accent="bg-amber-500" count={dashboard?.myOpenNotes.count} viewAllHref="/session-notes">
+                                {!dashboard?.myOpenNotes.items.length ? (
+                                    <EmptyState icon={CheckCircle2} message="No notes awaiting — you're caught up." />
+                                ) : (
+                                    <div className="divide-y divide-gray-50">
+                                        {dashboard.myOpenNotes.items.map(n => (
+                                            <RowLink key={n.id} href={`/session-notes/${n.id}`}>
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-gray-900 truncate group-hover:text-[#1A73A8]">{n.participant_name || 'Note'}</p>
+                                                    <p className="text-xs text-gray-500">
+                                                        {n.review_status === 'changes_requested' ? 'Changes requested' : 'Draft'} · {formatDate(n.created_at)}
+                                                    </p>
+                                                </div>
+                                                {n.review_status === 'changes_requested'
+                                                    ? <span className="text-xs font-medium text-rose-600 flex-shrink-0">Action needed</span>
+                                                    : <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1A73A8] flex-shrink-0" />}
+                                            </RowLink>
+                                        ))}
+                                    </div>
+                                )}
+                            </SectionCard>
+
+                            {/* Needs My Review (supervisors only) */}
+                            {dashboard?.isSupervisor && dashboard.notesAwaitingReview && (
+                                <SectionCard title="Needs My Review" icon={Inbox} accent="bg-purple-500" count={dashboard.notesAwaitingReview.count} viewAllHref="/session-notes/reviews">
+                                    {!dashboard.notesAwaitingReview.items.length ? (
+                                        <EmptyState icon={CheckCircle2} message="No notes awaiting review — all clear." />
+                                    ) : (
+                                        <div className="divide-y divide-gray-50">
+                                            {dashboard.notesAwaitingReview.items.map(n => (
+                                                <RowLink key={n.id} href={`/session-notes/${n.id}`}>
+                                                    <div className="min-w-0">
+                                                        <p className="font-medium text-gray-900 truncate group-hover:text-[#1A73A8]">{n.participant_name || 'Note'}</p>
+                                                        <p className="text-xs text-gray-500">
+                                                            {n.author_name ? `by ${n.author_name} · ` : ''}submitted {relativeFromNow(n.submitted_at || n.created_at)}
+                                                        </p>
+                                                    </div>
+                                                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1A73A8] flex-shrink-0" />
+                                                </RowLink>
+                                            ))}
+                                        </div>
+                                    )}
+                                </SectionCard>
                             )}
-                        </Link>
-                    ))}
-                </div>
 
-                {/* Documentation & Compliance */}
-                <div className="mb-8">
-                    <SectionHeader 
-                        title="Documentation & Compliance" 
-                        subtitle="Daily documentation and billing tools"
-                    />
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {documentationTools.map((tool) => (
-                            <ToolCard key={tool.title} tool={tool} />
-                        ))}
-                    </div>
-                </div>
+                            {/* Overdue Plan Reviews */}
+                            <SectionCard title="Overdue Plan Reviews" icon={AlertTriangle} accent="bg-rose-500" count={dashboard?.overduePlanReviews.count} viewAllHref="/recovery-plans">
+                                {!dashboard?.overduePlanReviews.items.length ? (
+                                    <EmptyState icon={CheckCircle2} message="No overdue reviews — plans are up to date." />
+                                ) : (
+                                    <div className="divide-y divide-gray-50">
+                                        {dashboard.overduePlanReviews.items.map(pl => (
+                                            <RowLink key={pl.id} href={`/recovery-plans?view=${pl.id}`}>
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-gray-900 truncate group-hover:text-[#1A73A8]">
+                                                        {pl.participant_name || pl.plan_name || 'Recovery plan'}
+                                                    </p>
+                                                    <p className="text-xs text-rose-600">Review was due {formatDate(pl.next_review_date)}</p>
+                                                </div>
+                                                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1A73A8] flex-shrink-0" />
+                                            </RowLink>
+                                        ))}
+                                    </div>
+                                )}
+                            </SectionCard>
 
-                {/* Assessment & Goals */}
-                <div className="mb-8">
-                    <SectionHeader 
-                        title="Assessment & Goals" 
-                        subtitle="Measure progress and set objectives"
-                    />
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {assessmentTools.map((tool) => (
-                            <ToolCard key={tool.title} tool={tool} />
-                        ))}
-                    </div>
-                </div>
+                            {/* Assessments Due */}
+                            <SectionCard title="Assessments Due" icon={Activity} accent="bg-purple-500" count={dashboard?.assessmentsDue.count}>
+                                {!dashboard?.assessmentsDue.items.length ? (
+                                    <EmptyState icon={CheckCircle2} message="No assessments due right now." />
+                                ) : (
+                                    <div className="divide-y divide-gray-50">
+                                        {dashboard.assessmentsDue.items.map(a => (
+                                            <RowLink key={a.id} href={a.participant_id ? `/participants/${a.participant_id}` : '/participants'}>
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-gray-900 truncate group-hover:text-[#1A73A8]">{a.participant_name || 'Participant'}</p>
+                                                    <p className="text-xs text-gray-500">{prettyAssessment(a.assessment_type)} · due {formatDate(a.next_due_date)}</p>
+                                                </div>
+                                                <span className="text-xs font-medium text-amber-600 flex-shrink-0">Due</span>
+                                            </RowLink>
+                                        ))}
+                                    </div>
+                                )}
+                            </SectionCard>
 
-                {/* Connect & Support */}
+                            {/* Today's Groups */}
+                            <SectionCard title="Today's Groups" icon={CalendarDays} accent="bg-cyan-500" count={dashboard?.todaysGroups.count} viewAllHref="/groups">
+                                {!dashboard?.todaysGroups.items.length ? (
+                                    <EmptyState icon={CalendarDays} message="No groups scheduled today." />
+                                ) : (
+                                    <div className="divide-y divide-gray-50">
+                                        {dashboard.todaysGroups.items.map(g => (
+                                            <RowLink key={`${g.source}-${g.id}`} href={g.href}>
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-gray-900 truncate group-hover:text-[#1A73A8]">{g.name}</p>
+                                                    <p className="text-xs text-gray-500">
+                                                        {g.start_time ? String(g.start_time).slice(0, 5) : 'All day'}
+                                                        {typeof g.attendee_count === 'number' ? ` · ${g.attendee_count} attending` : ''}
+                                                    </p>
+                                                </div>
+                                                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1A73A8] flex-shrink-0" />
+                                            </RowLink>
+                                        ))}
+                                    </div>
+                                )}
+                            </SectionCard>
+                        </div>
+                    </>
+                )}
+
+                {/* Quick links — keep all existing navigation reachable */}
                 <div className="mb-8">
-                    <SectionHeader 
-                        title="Connect & Support" 
-                        subtitle="Communication and resources"
-                    />
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {connectTools.map((tool) => (
-                            <ToolCard key={tool.title} tool={tool} />
+                    <h2 className="text-lg font-semibold text-gray-800 mb-1">Quick Links</h2>
+                    <p className="text-sm text-gray-500 mb-4">Jump to any tool</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+                        {quickLinks.map(link => (
+                            <Link
+                                key={link.title}
+                                href={link.href}
+                                className="group bg-white rounded-xl p-3 border border-gray-200 hover:shadow-md hover:border-gray-300 transition-all flex items-center gap-2.5"
+                            >
+                                <div className={`w-8 h-8 rounded-lg ${link.color} flex items-center justify-center flex-shrink-0`}>
+                                    <link.icon className="w-4 h-4 text-white" />
+                                </div>
+                                <span className="text-sm font-medium text-gray-700 group-hover:text-[#1A73A8] truncate">{link.title}</span>
+                            </Link>
                         ))}
                     </div>
                 </div>
@@ -498,8 +521,8 @@ export default function HomePage() {
             </div>
 
             {/* Ally Intelligence Chat - Floating Assistant */}
-            {organization?.id && (
-                <AllyIntelligenceChat organizationId={organization.id} />
+            {orgId && (
+                <AllyIntelligenceChat organizationId={orgId} />
             )}
         </div>
     );

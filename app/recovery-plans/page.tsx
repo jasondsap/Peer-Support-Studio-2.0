@@ -472,6 +472,7 @@ function RecoveryPlansContent() {
             if (data.plan) {
                 setSelectedPlan(data.plan);
                 setExpandedDomains(new Set(data.plan.domains?.map((d: PlanDomain) => d.id) || []));
+                fetchVersionCount(planId);
             }
         } catch (e) { console.error(e); }
         finally { setDetailLoading(false); }
@@ -920,16 +921,44 @@ function RecoveryPlansContent() {
     );
 
     const revisePlan = async () => {
-        if (!selectedPlan?.signatures?.length) return;
-        if (!confirm('Revise this plan? Both signatures will be removed, and the plan must be re-acknowledged after changes are made.')) return;
+        if (!selectedPlan?.signatures?.length || !currentOrg?.id) return;
+        if (!confirm('Revise this plan? The signed plan will be saved to the revision history, both signatures will be removed, and the plan must be re-acknowledged after changes are made.')) return;
+        const reason = (prompt('Optional: note why this plan is being revised (saved with the snapshot).', '') || '').trim();
         setUpdatingId(selectedPlan.id);
         try {
-            for (const sig of selectedPlan.signatures) {
-                await fetch(`/api/rc-plans?type=signature&id=${sig.id}`, { method: 'DELETE' });
+            // Server snapshots the signed plan into rc_plan_versions BEFORE removing
+            // signatures, preserving the acknowledged artifact.
+            const res = await fetch('/api/rc-plans', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'revise',
+                    id: selectedPlan.id,
+                    organization_id: currentOrg.id,
+                    reason: reason || undefined,
+                }),
+            });
+            if (!res.ok) {
+                const d = await res.json().catch(() => ({}));
+                alert(d.error || 'Could not revise the plan.');
+                return;
             }
             await fetchPlanDetail(selectedPlan.id);
+            await fetchVersionCount(selectedPlan.id);
         } catch (e) { console.error(e); }
         finally { setUpdatingId(null); }
+    };
+
+    // Count of prior signed snapshots for the selected plan (revision history).
+    const [versionCount, setVersionCount] = useState(0);
+    const fetchVersionCount = async (planId: string) => {
+        if (!currentOrg?.id) return;
+        try {
+            const res = await fetch(`/api/rc-plans?versions=1&id=${planId}&organization_id=${currentOrg.id}`);
+            if (!res.ok) { setVersionCount(0); return; }
+            const data = await res.json();
+            setVersionCount(Array.isArray(data.versions) ? data.versions.length : 0);
+        } catch { setVersionCount(0); }
     };
 
     // ========================================================================
@@ -1639,6 +1668,16 @@ function RecoveryPlansContent() {
                                             className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-[#1A73A8] text-[#1A73A8] rounded-lg hover:bg-blue-100 flex-shrink-0">
                                             <Unlock className="w-3.5 h-3.5" /> Revise Plan
                                         </button>
+                                    </div>
+                                )}
+
+                                {/* ── Revision history note ── */}
+                                {versionCount > 0 && (
+                                    <div className="flex items-center gap-2 text-xs text-gray-500 px-1">
+                                        <Archive className="w-3.5 h-3.5 flex-shrink-0" />
+                                        <span>
+                                            Revision history: {versionCount} prior signed version{versionCount === 1 ? '' : 's'} archived.
+                                        </span>
                                     </div>
                                 )}
 

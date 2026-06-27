@@ -63,6 +63,110 @@ function accessDenied(err: unknown) {
     return NextResponse.json({ error: message }, { status });
 }
 
+// Gather a full, self-contained snapshot of a plan (row + nested domains/goals/
+// activities/outcomes + signatures) so a signed/acknowledged artifact can be
+// preserved verbatim before it is revised. Org-scoped by the caller.
+async function buildPlanSnapshot(planId: string, organizationId: string): Promise<any | null> {
+    const plans = await query(
+        `SELECT * FROM rc_plans WHERE id = $1 AND organization_id = $2`,
+        [planId, organizationId]
+    ) as any[];
+    if (plans.length === 0) return null;
+    const plan = plans[0];
+
+    const domains = await query(
+        `SELECT * FROM rc_plan_domains WHERE plan_id = $1 ORDER BY sort_order, created_at`,
+        [planId]
+    ) as any[];
+    const domainIds = domains.map((d: any) => d.id);
+
+    let goals: any[] = [];
+    if (domainIds.length > 0) {
+        goals = await query(
+            `SELECT * FROM rc_plan_goals WHERE domain_entry_id = ANY($1) ORDER BY sort_order, created_at`,
+            [domainIds]
+        ) as any[];
+    }
+    const goalIds = goals.map((g: any) => g.id);
+
+    let activities: any[] = [];
+    if (goalIds.length > 0) {
+        activities = await query(
+            `SELECT * FROM rc_plan_activities WHERE goal_entry_id = ANY($1) ORDER BY sort_order, created_at`,
+            [goalIds]
+        ) as any[];
+    }
+
+    let outcomes: any[] = [];
+    if (domainIds.length > 0) {
+        outcomes = await query(
+            `SELECT * FROM rc_plan_outcomes WHERE domain_entry_id = ANY($1) ORDER BY recorded_at DESC`,
+            [domainIds]
+        ) as any[];
+    }
+
+    const signatures = await query(
+        `SELECT * FROM rc_plan_signatures WHERE plan_id = $1 ORDER BY signed_at ASC`,
+        [planId]
+    ) as any[];
+
+    const goalsWithActivities = goals.map((g: any) => ({
+        ...g,
+        activities: activities.filter((a: any) => a.goal_entry_id === g.id),
+    }));
+    const domainsWithChildren = domains.map((d: any) => ({
+        ...d,
+        goals: goalsWithActivities.filter((g: any) => g.domain_entry_id === d.id),
+        outcomes: outcomes.filter((o: any) => o.domain_entry_id === d.id),
+    }));
+
+    return { plan, domains: domainsWithChildren, signatures };
+}
+
+// POST { action:'revise', id, organization_id, reason? }
+// Snapshot the current (signed) plan into rc_plan_versions, then remove the
+// signatures so the plan becomes editable again. The snapshot preserves the
+// acknowledged artifact that the old in-place revise flow used to destroy.
+async function revisePlan(session: any, body: any) {
+    const { id, organization_id, reason } = body;
+    if (!id || !organization_id) {
+        return NextResponse.json({ error: 'id and organization_id required' }, { status: 400 });
+    }
+    try { await requireOrgAccess(organization_id); } catch (err) { return accessDenied(err); }
+
+    const userId = await getInternalUserId(session.user.id, session.user.email);
+    if (!userId) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+    const snapshot = await buildPlanSnapshot(id, organization_id);
+    if (!snapshot) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+
+    // Next version number for this plan (monotonic per rc_plan_id).
+    const versionRows = await query(
+        `SELECT COALESCE(MAX(version_number), 0) + 1 AS next FROM rc_plan_versions WHERE rc_plan_id = $1`,
+        [id]
+    ) as any[];
+    const versionNumber = versionRows[0]?.next ?? 1;
+
+    const inserted = await query(
+        `INSERT INTO rc_plan_versions (rc_plan_id, organization_id, version_number, snapshot, reason, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, version_number, created_at`,
+        [id, organization_id, versionNumber, JSON.stringify(snapshot), reason || null, userId]
+    ) as any[];
+
+    // Now unlock: remove signatures so the plan can be edited and re-acknowledged.
+    await query(`DELETE FROM rc_plan_signatures WHERE plan_id = $1`, [id]);
+    await query(`UPDATE rc_plans SET updated_at = NOW() WHERE id = $1`, [id]);
+
+    await logAuditEvent(userId, organization_id, 'revise', 'recovery_plan', id);
+
+    return NextResponse.json({
+        success: true,
+        version: inserted[0],
+        version_number: versionNumber,
+    });
+}
+
 // ============================================================================
 // GET /api/rc-plans
 // ============================================================================
@@ -80,6 +184,21 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
         }
         try { await requireOrgAccess(organizationId); } catch (err) { return accessDenied(err); }
+
+        // ── Revision history for a plan ──
+        // GET ?versions=1&id=<planId>&organization_id=<org>
+        if (searchParams.get('versions') && planId) {
+            const versions = await query(
+                `SELECT v.id, v.version_number, v.reason, v.created_at, v.snapshot,
+                        u.first_name AS created_by_first_name, u.last_name AS created_by_last_name
+                 FROM rc_plan_versions v
+                 LEFT JOIN users u ON v.created_by = u.id
+                 WHERE v.rc_plan_id = $1 AND v.organization_id = $2
+                 ORDER BY v.version_number DESC`,
+                [planId, organizationId]
+            ) as any[];
+            return NextResponse.json({ versions });
+        }
 
         // ── Single plan with full nested data ──
         if (planId) {
@@ -193,6 +312,12 @@ export async function POST(req: NextRequest) {
         if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const body = await req.json();
+
+        // ── Revise: snapshot the signed plan, then unlock by removing signatures ──
+        if (body.action === 'revise') {
+            return await revisePlan(session, body);
+        }
+
         const { organization_id, participant_id, plan_name, notes, domains } = body;
 
         if (!organization_id || !participant_id) {

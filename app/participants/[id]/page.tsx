@@ -15,9 +15,11 @@ import {
     Target, FileText, Activity, Plus, Edit, Loader2,
     AlertCircle, ChevronRight, Clock, Users, Heart,
     Home, Scale, Shield, Sparkles, BookHeart, Eye, Lock, X,
-    ClipboardList, GraduationCap
+    ClipboardList, GraduationCap, Share2, TrendingUp,
+    CheckCircle2
 } from 'lucide-react';
 import AssessmentDetailModal from '@/app/components/AssessmentDetailModal';
+import AssessmentTrendChart from '@/app/components/AssessmentTrendChart';
 import ReadinessChecklist from '@/app/components/ReadinessChecklist';
 import ParticipantSnapshotModal from '@/app/components/ParticipantSnapshotModal';
 import BillingReadinessCard, { BillingStatusBadge } from '@/app/components/BillingReadinessCard';
@@ -103,7 +105,30 @@ interface JournalEntry {
     updated_at: string;
 }
 
-type TabType = 'overview' | 'intake' | 'goals' | 'plans' | 'notes' | 'assessments' | 'activity' | 'curricula' | 'readiness';
+type TabType = 'overview' | 'intake' | 'goals' | 'plans' | 'notes' | 'assessments' | 'activity' | 'curricula' | 'readiness' | 'referrals';
+
+interface AssessmentSchedule {
+    id: string;
+    assessment_type: string;
+    interval_days: number;
+    next_due_date: string | null;
+    last_completed_at: string | null;
+    is_active: boolean;
+    is_overdue?: boolean;
+}
+
+interface Referral {
+    id: string;
+    participant_id: string;
+    referred_to: string;
+    referral_type?: string;
+    contact_info?: string;
+    reason?: string;
+    status?: string;
+    follow_up_date?: string | null;
+    referred_at?: string | null;
+    notes?: string;
+}
 
 // ============================================================================
 // Helper Functions
@@ -353,6 +378,8 @@ export default function ParticipantDetailPage() {
     const [groupAttendance, setGroupAttendance] = useState<any[]>([]);
     const [resourceLogs, setResourceLogs] = useState<any[]>([]);
     const [participantCurricula, setParticipantCurricula] = useState<any[]>([]);
+    const [schedules, setSchedules] = useState<AssessmentSchedule[]>([]);
+    const [referrals, setReferrals] = useState<Referral[]>([]);
 
     // ========================================================================
     // Data Fetching
@@ -423,9 +450,105 @@ export default function ParticipantDetailPage() {
         fetchData();
     }, [currentOrg?.id, params.id]);
 
+    // Reassessment schedules + referrals load separately so a failure (e.g. the
+    // referrals endpoint not yet deployed) never blocks the main participant view.
+    useEffect(() => {
+        async function fetchAux() {
+            if (!currentOrg?.id || !params.id) return;
+
+            // Reassessment cadence schedules
+            try {
+                const res = await fetch(`/api/assessment-schedules?organization_id=${currentOrg.id}&participant_id=${params.id}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setSchedules(data.schedules || []);
+                }
+            } catch {
+                /* non-fatal */
+            }
+
+            // Referrals (read-only consumer; degrade to empty if 404 / not deployed)
+            try {
+                const res = await fetch(`/api/referrals?organization_id=${currentOrg.id}&participant_id=${params.id}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setReferrals(data.referrals || []);
+                } else {
+                    setReferrals([]);
+                }
+            } catch {
+                setReferrals([]);
+            }
+        }
+        fetchAux();
+    }, [currentOrg?.id, params.id]);
+
     // ========================================================================
     // Handlers
     // ========================================================================
+
+    // Set / adjust a reassessment cadence for an instrument (upsert).
+    const setCadence = async (assessmentType: string, intervalDays: number) => {
+        if (!currentOrg?.id || !params.id) return;
+        try {
+            const res = await fetch('/api/assessment-schedules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    organization_id: currentOrg.id,
+                    participant_id: params.id,
+                    assessment_type: assessmentType,
+                    interval_days: intervalDays,
+                }),
+            });
+            const data = await res.json();
+            if (res.ok && data.schedule) {
+                setSchedules(prev => [
+                    ...prev.filter(s => s.assessment_type !== assessmentType),
+                    data.schedule,
+                ]);
+            }
+        } catch (e) {
+            console.error('Failed to set cadence:', e);
+        }
+    };
+
+    // Mark an instrument reassessed today (stamps completion, pushes next due out).
+    const markReassessed = async (schedule: AssessmentSchedule) => {
+        if (!currentOrg?.id) return;
+        try {
+            const res = await fetch('/api/assessment-schedules', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: schedule.id,
+                    organization_id: currentOrg.id,
+                    action: 'complete',
+                }),
+            });
+            const data = await res.json();
+            if (res.ok && data.schedule) {
+                setSchedules(prev => prev.map(s => (s.id === schedule.id ? data.schedule : s)));
+            }
+        } catch (e) {
+            console.error('Failed to mark reassessed:', e);
+        }
+    };
+
+    // Stop tracking a cadence (soft deactivate).
+    const removeCadence = async (schedule: AssessmentSchedule) => {
+        if (!currentOrg?.id) return;
+        try {
+            const res = await fetch(`/api/assessment-schedules?id=${schedule.id}&organization_id=${currentOrg.id}`, {
+                method: 'DELETE',
+            });
+            if (res.ok) {
+                setSchedules(prev => prev.filter(s => s.id !== schedule.id));
+            }
+        } catch (e) {
+            console.error('Failed to remove cadence:', e);
+        }
+    };
 
     const handleAnalyzeAssessment = async (assessmentId: string) => {
         try {
@@ -548,6 +671,7 @@ export default function ParticipantDetailPage() {
         { id: 'plans', label: 'Recovery Plans', icon: Heart },
         { id: 'notes', label: 'Session Notes', icon: FileText },
         { id: 'assessments', label: 'Assessments', icon: Activity },
+        { id: 'referrals', label: 'Referrals', icon: Share2 },
         { id: 'activity', label: 'Activity', icon: Users },
         { id: 'curricula', label: 'Curricula', icon: GraduationCap },
         ...(participant.is_reentry_participant ? [{ id: 'readiness', label: 'Readiness', icon: Shield }] : [])
@@ -1398,6 +1522,102 @@ export default function ParticipantDetailPage() {
                             MIRC-28
                         </Link>
                     </div>
+
+                    {/* Reassessment Schedule (cadence) */}
+                    <div className="bg-white rounded-xl p-5 border border-gray-200">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Clock className="w-5 h-5 text-[#1A73A8]" />
+                            <h3 className="font-semibold text-[#0E2235]">Reassessment Schedule</h3>
+                        </div>
+                        <p className="text-sm text-gray-500 mb-4">
+                            Set a cadence for each instrument. Mark an instrument reassessed to reset its next-due date.
+                        </p>
+                        <div className="space-y-3">
+                            {(['barc10', 'mirc28'] as const).map(type => {
+                                const schedule = schedules.find(s => s.assessment_type === type && s.is_active);
+                                const label = type === 'barc10' ? 'BARC-10' : 'MIRC-28';
+                                const overdue = !!schedule && (
+                                    schedule.is_overdue === true ||
+                                    (!!schedule.next_due_date && new Date(schedule.next_due_date) < new Date(new Date().toDateString()))
+                                );
+                                return (
+                                    <div key={type} className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border border-gray-100">
+                                        <div>
+                                            <p className="font-medium text-[#0E2235]">{label}</p>
+                                            {schedule ? (
+                                                <p className={`text-sm ${overdue ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                                                    Every {schedule.interval_days} days · Next due {schedule.next_due_date ? formatDateOnly(schedule.next_due_date) : '—'}
+                                                    {overdue ? ' · Overdue' : ''}
+                                                    {schedule.last_completed_at ? ` · Last ${formatDateOnly(schedule.last_completed_at)}` : ''}
+                                                </p>
+                                            ) : (
+                                                <p className="text-sm text-gray-400">No cadence set</p>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            {[30, 60, 90].map(d => (
+                                                <button
+                                                    key={d}
+                                                    onClick={() => setCadence(type, d)}
+                                                    className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
+                                                        schedule?.interval_days === d
+                                                            ? 'bg-[#1A73A8] text-white border-[#1A73A8]'
+                                                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                                                    }`}
+                                                >
+                                                    {d}d
+                                                </button>
+                                            ))}
+                                            {schedule && (
+                                                <>
+                                                    <button
+                                                        onClick={() => markReassessed(schedule)}
+                                                        className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-md bg-green-50 text-green-700 hover:bg-green-100"
+                                                    >
+                                                        <CheckCircle2 className="w-3.5 h-3.5" /> Reassessed today
+                                                    </button>
+                                                    <button
+                                                        onClick={() => removeCadence(schedule)}
+                                                        title="Stop tracking"
+                                                        className="p-1 text-gray-400 hover:text-red-500"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Outcome trends (per instrument with history) */}
+                    {(['barc10', 'mirc28'] as const).some(t => assessments.some(a => a.assessment_type === t)) && (
+                        <div className="bg-white rounded-xl p-5 border border-gray-200 space-y-6">
+                            <div className="flex items-center gap-2">
+                                <TrendingUp className="w-5 h-5 text-[#1A73A8]" />
+                                <h3 className="font-semibold text-[#0E2235]">Outcome Trends</h3>
+                            </div>
+                            {(['barc10', 'mirc28'] as const).map(type => {
+                                const list = assessments.filter(a => a.assessment_type === type);
+                                if (list.length === 0) return null;
+                                return (
+                                    <AssessmentTrendChart
+                                        key={type}
+                                        assessments={list.map(a => ({
+                                            id: a.id,
+                                            total_score: a.total_score,
+                                            assessment_date: a.assessment_date,
+                                            created_at: a.created_at,
+                                        }))}
+                                        assessmentType={type}
+                                    />
+                                );
+                            })}
+                        </div>
+                    )}
+
                     {assessments.length === 0 ? (
                         <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
                             <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -1434,6 +1654,71 @@ export default function ParticipantDetailPage() {
                                                 <ChevronRight className="w-5 h-5 text-gray-400" />
                                             </div>
                                         </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ================================================================ */}
+            {/* REFERRALS TAB (read-only) */}
+            {/* ================================================================ */}
+            {activeTab === 'referrals' && (
+                <div className="space-y-4">
+                    {referrals.length === 0 ? (
+                        <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
+                            <Share2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <p className="text-gray-600">No referrals recorded for {displayName}.</p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-4">
+                            {referrals.map(ref => {
+                                const status = (ref.status || 'pending').toLowerCase();
+                                const statusStyle =
+                                    status === 'completed' || status === 'accepted'
+                                        ? 'bg-green-100 text-green-700'
+                                        : status === 'declined' || status === 'cancelled'
+                                        ? 'bg-red-100 text-red-700'
+                                        : status === 'in_progress' || status === 'active'
+                                        ? 'bg-blue-100 text-blue-700'
+                                        : 'bg-amber-100 text-amber-700';
+                                return (
+                                    <div key={ref.id} className="bg-white rounded-xl p-4 border border-gray-200">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="min-w-0">
+                                                <p className="font-semibold text-[#0E2235]">{ref.referred_to}</p>
+                                                {ref.referral_type && (
+                                                    <p className="text-sm text-gray-500 capitalize">{ref.referral_type.replace(/_/g, ' ')}</p>
+                                                )}
+                                                {ref.reason && (
+                                                    <p className="text-sm text-gray-600 mt-1">{ref.reason}</p>
+                                                )}
+                                                {ref.contact_info && (
+                                                    <p className="text-xs text-gray-400 mt-1">{ref.contact_info}</p>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                                                <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${statusStyle}`}>
+                                                    {status.replace(/_/g, ' ')}
+                                                </span>
+                                                {ref.follow_up_date && (
+                                                    <span className="flex items-center gap-1 text-xs text-gray-500">
+                                                        <Calendar className="w-3.5 h-3.5" />
+                                                        Follow-up {formatDateOnly(ref.follow_up_date)}
+                                                    </span>
+                                                )}
+                                                {ref.referred_at && (
+                                                    <span className="text-xs text-gray-400">
+                                                        Referred {formatDateOnly(ref.referred_at)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {ref.notes && (
+                                            <p className="text-sm text-gray-600 mt-3 pt-3 border-t border-gray-100 whitespace-pre-wrap">{ref.notes}</p>
+                                        )}
                                     </div>
                                 );
                             })}
