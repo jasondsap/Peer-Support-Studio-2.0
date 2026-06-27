@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { sql } from '@/lib/db';
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
+import { sql, logAuditEvent } from '@/lib/db';
 
 // GET /api/saved-goals - List saved goals
 export async function GET(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { searchParams } = new URL(req.url);
@@ -19,6 +23,13 @@ export async function GET(req: NextRequest) {
 
         if (!organizationId) {
             return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
+        }
+
+        // Verify org access before touching PHI
+        try {
+            await requireOrgAccess(organizationId);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
 
         // Single goal fetch by ID
@@ -111,9 +122,14 @@ export async function GET(req: NextRequest) {
 // POST /api/saved-goals - Create a new saved goal
 export async function POST(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const body = await req.json();
@@ -135,16 +151,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
         }
 
-        // Get user ID from email
-        const userResult = await sql`
-            SELECT id FROM users WHERE email = ${session.user.email}
-        `;
-
-        if (userResult.length === 0) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        // Verify org access before creating PHI
+        try {
+            await requireOrgAccess(organization_id);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
-
-        const userId = userResult[0].id;
 
         const result = await sql`
             INSERT INTO saved_goals (
@@ -169,6 +181,15 @@ export async function POST(req: NextRequest) {
             RETURNING *
         `;
 
+        await logAuditEvent(
+            userId,
+            organization_id,
+            'create',
+            'saved_goal',
+            result[0].id,
+            { participant_id: participant_id || null, goal_area: goal_area || null }
+        );
+
         return NextResponse.json({ goal: result[0] });
     } catch (error) {
         console.error('Error creating goal:', error);
@@ -182,9 +203,14 @@ export async function POST(req: NextRequest) {
 // PUT /api/saved-goals - Update a saved goal
 export async function PUT(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const body = await req.json();
@@ -192,6 +218,13 @@ export async function PUT(req: NextRequest) {
 
         if (!id || !organization_id) {
             return NextResponse.json({ error: 'id and organization_id required' }, { status: 400 });
+        }
+
+        // Verify org access before mutating PHI
+        try {
+            await requireOrgAccess(organization_id);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
 
         const result = await sql`
@@ -215,6 +248,15 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: 'Goal not found' }, { status: 404 });
         }
 
+        await logAuditEvent(
+            userId,
+            organization_id,
+            'update',
+            'saved_goal',
+            id,
+            { updated_fields: Object.keys(body).filter(k => k !== 'id' && k !== 'organization_id') }
+        );
+
         return NextResponse.json({ goal: result[0] });
     } catch (error) {
         console.error('Error updating goal:', error);
@@ -228,9 +270,14 @@ export async function PUT(req: NextRequest) {
 // DELETE /api/saved-goals - Delete a saved goal
 export async function DELETE(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { searchParams } = new URL(req.url);
@@ -241,6 +288,13 @@ export async function DELETE(req: NextRequest) {
             return NextResponse.json({ error: 'id and organization_id required' }, { status: 400 });
         }
 
+        // Verify org access before deleting PHI
+        try {
+            await requireOrgAccess(organizationId);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
+        }
+
         const result = await sql`
             DELETE FROM saved_goals WHERE id = ${id} AND organization_id = ${organizationId}
             RETURNING id
@@ -249,6 +303,15 @@ export async function DELETE(req: NextRequest) {
         if (result.length === 0) {
             return NextResponse.json({ error: 'Goal not found' }, { status: 404 });
         }
+
+        await logAuditEvent(
+            userId,
+            organizationId,
+            'delete',
+            'saved_goal',
+            id,
+            { action: 'delete' }
+        );
 
         return NextResponse.json({ success: true, deleted_id: id });
     } catch (error) {

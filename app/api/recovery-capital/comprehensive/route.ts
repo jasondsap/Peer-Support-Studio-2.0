@@ -2,61 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { MIRC28_QUESTIONS, MIRC28_DOMAINS, type Mirc28Domain } from '@/lib/assessments/questionnaires';
 
-// MIRC-28 Domain structure (pure computation — stays in route)
-const DOMAINS = {
-    social: {
-        name: "Social Capital",
-        questions: [1, 2, 3, 4, 5, 6, 7],
-        reverseScored: [2, 5, 6]
-    },
-    physical: {
-        name: "Physical Capital",
-        questions: [8, 9, 10, 11, 12, 13, 14],
-        reverseScored: [9, 10, 12]
-    },
-    human: {
-        name: "Human Capital",
-        questions: [15, 16, 17, 18, 19, 20, 21],
-        reverseScored: [16, 17, 18]
-    },
-    cultural: {
-        name: "Cultural Capital",
-        questions: [22, 23, 24, 25, 26, 27, 28],
-        reverseScored: [23, 25]
-    }
-};
+// MIRC-28 domain structure + question text are derived from the canonical
+// question bank in lib/assessments/questionnaires.ts so the item text, order,
+// and reverse-scoring flags stay identical to the participant-facing form.
+const DOMAINS = (Object.keys(MIRC28_DOMAINS) as Mirc28Domain[]).reduce((acc, key) => {
+    const qs = MIRC28_QUESTIONS.filter(q => q.domain === key);
+    acc[key] = {
+        name: MIRC28_DOMAINS[key],
+        questions: qs.map(q => q.id),
+        reverseScored: qs.filter(q => q.reverse).map(q => q.id),
+    };
+    return acc;
+}, {} as Record<Mirc28Domain, { name: string; questions: number[]; reverseScored: number[] }>);
 
-const QUESTION_TEXT: { [key: number]: string } = {
-    1: "I actively support other people who are in recovery.",
-    2: "My family makes my recovery more difficult.",
-    3: "I have at least one friend who supports my recovery.",
-    4: "My family supports my recovery.",
-    5: "Some people in my life do not think I'll make it in my recovery.",
-    6: "I feel alone.",
-    7: "I feel like I'm part of a recovery community.",
-    8: "My housing situation is helpful for my recovery.",
-    9: "I have difficulty getting transportation.",
-    10: "My housing situation is unstable.",
-    11: "I have enough money every week to buy the basic things I need.",
-    12: "Not having enough money makes my recovery more difficult.",
-    13: "I can afford the care I need for my health, mental health, and recovery.",
-    14: "I have reliable access to a phone and the internet.",
-    15: "I am hopeful about my future.",
-    16: "I have difficulty managing stress.",
-    17: "My physical health makes my recovery more difficult.",
-    18: "I struggle with my mental health.",
-    19: "I have the skills to cope with challenges in my recovery.",
-    20: "I am motivated to continue my recovery.",
-    21: "I feel good about myself.",
-    22: "I know where to go in my community if I need help with my recovery.",
-    23: "My community has limited resources for people in recovery.",
-    24: "I participate in activities that give my life meaning.",
-    25: "I lack access to recovery support services in my community.",
-    26: "My cultural or spiritual beliefs support my recovery.",
-    27: "I have a sense of purpose in my life.",
-    28: "I feel connected to my community."
-};
+const QUESTION_TEXT: { [key: number]: string } = Object.fromEntries(
+    MIRC28_QUESTIONS.map(q => [q.id, q.text])
+);
 
 interface Answers { [key: string]: number; }
 
@@ -111,14 +74,17 @@ async function generateComprehensiveAnalysis(
     const domainDetails = Object.entries(DOMAINS).map(([domainKey, domain]) => {
         const domainScore = scores.domains[domainKey as keyof typeof scores.domains];
         const questionDetails = domain.questions.map(qNum => {
-            const rawAnswer = answers[`q${qNum}`] || 2;
+            const rawAnswer = answers[`q${qNum}`];
+            // Unanswered items are excluded from strength/challenge classification
+            // rather than being coerced to a midpoint default.
+            const answered = typeof rawAnswer === 'number';
             const isReverse = domain.reverseScored.includes(qNum);
-            const effectiveScore = isReverse ? (5 - rawAnswer) : rawAnswer;
+            const effectiveScore = answered ? (isReverse ? (5 - rawAnswer) : rawAnswer) : null;
             return {
                 question: QUESTION_TEXT[qNum],
                 rawAnswer, effectiveScore, isReverse,
-                isStrength: effectiveScore >= 3,
-                isChallenge: effectiveScore <= 2
+                isStrength: effectiveScore !== null && effectiveScore >= 3,
+                isChallenge: effectiveScore !== null && effectiveScore <= 2
             };
         });
         return {

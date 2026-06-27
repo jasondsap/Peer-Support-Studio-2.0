@@ -151,7 +151,9 @@ function ComprehensiveAssessmentContent() {
         Object.entries(MIRC_QUESTIONS).forEach(([domain, data]) => {
             let domainTotal = 0;
             data.questions.forEach(q => {
-                const raw = answers[`q${q.id}`] || 2;
+                const raw = answers[`q${q.id}`];
+                // Unanswered items are excluded, never coerced to a midpoint default.
+                if (raw === undefined) return;
                 domainTotal += q.reverse ? (5 - raw) : raw;
             });
             domainScores[domain] = { raw: domainTotal, max: 28, percentage: Math.round((domainTotal / 28) * 100) };

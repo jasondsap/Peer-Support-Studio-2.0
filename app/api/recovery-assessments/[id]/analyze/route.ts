@@ -2,59 +2,35 @@
 // AI analysis endpoint for recovery assessments — via RAG service
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.DATABASE_URL!);
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
+import { sql, logAuditEvent } from '@/lib/db';
+import {
+    BARC10_QUESTIONS as BARC10_CANON,
+    MIRC28_QUESTIONS as MIRC28_CANON,
+} from '@/lib/assessments/questionnaires';
 
 // ============================================================================
-// Question definitions — needed to provide item-level detail to the AI
+// Question definitions — sourced from the single source of truth
+// (lib/assessments/questionnaires.ts) so the AI analyzes the SAME items the
+// participant actually answered. A short display label is derived from the
+// item text for the prompt; the full text is always passed too.
 // ============================================================================
 
-const BARC10_QUESTIONS = [
-    { id: 1, text: "There are more important things to me in life than using substances.", domain: "human", shortLabel: "Purpose & Meaning", reverse: false },
-    { id: 2, text: "In general I am happy with my life.", domain: "human", shortLabel: "Life Satisfaction", reverse: false },
-    { id: 3, text: "I have enough energy to complete the tasks I set myself.", domain: "human", shortLabel: "Energy & Vitality", reverse: false },
-    { id: 4, text: "I am proud of the community I live in and feel part of it.", domain: "social", shortLabel: "Community Connection", reverse: false },
-    { id: 5, text: "I get lots of support from friends.", domain: "social", shortLabel: "Friend Support", reverse: false },
-    { id: 6, text: "I regard my life as challenging and fulfilling without the need for using drugs or alcohol.", domain: "human", shortLabel: "Fulfillment in Recovery", reverse: false },
-    { id: 7, text: "My living space has helped to drive my recovery journey.", domain: "physical", shortLabel: "Supportive Environment", reverse: false },
-    { id: 8, text: "I take full responsibility for my actions.", domain: "human", shortLabel: "Personal Responsibility", reverse: false },
-    { id: 9, text: "I am happy dealing with a range of professional people.", domain: "cultural", shortLabel: "Professional Engagement", reverse: false },
-    { id: 10, text: "I am making good progress on my recovery journey.", domain: "cultural", shortLabel: "Recovery Progress", reverse: false },
-];
+function shortLabelFor(text: string): string {
+    const words = text.replace(/[^a-zA-Z0-9 ]/g, '').trim().split(/\s+/).slice(0, 4);
+    return words.join(' ');
+}
 
-const MIRC28_QUESTIONS = [
-    { id: 1, text: "I actively support other people who are in recovery.", domain: "social", shortLabel: "Peer Support", reverse: false },
-    { id: 2, text: "My family makes my recovery more difficult.", domain: "social", shortLabel: "Family Barriers", reverse: true },
-    { id: 3, text: "I have at least one friend who supports my recovery.", domain: "social", shortLabel: "Friend Support", reverse: false },
-    { id: 4, text: "My family supports my recovery.", domain: "social", shortLabel: "Family Support", reverse: false },
-    { id: 5, text: "Some people in my life do not think I'll make it in my recovery.", domain: "social", shortLabel: "Negative Beliefs", reverse: true },
-    { id: 6, text: "I feel alone.", domain: "social", shortLabel: "Loneliness", reverse: true },
-    { id: 7, text: "I feel like I'm part of a recovery community.", domain: "social", shortLabel: "Community Belonging", reverse: false },
-    { id: 8, text: "My housing situation is helpful for my recovery.", domain: "physical", shortLabel: "Housing Support", reverse: false },
-    { id: 9, text: "I have difficulty getting transportation.", domain: "physical", shortLabel: "Transportation Barriers", reverse: true },
-    { id: 10, text: "My housing situation is unstable.", domain: "physical", shortLabel: "Housing Instability", reverse: true },
-    { id: 11, text: "I have enough money every week to buy the basic things I need.", domain: "physical", shortLabel: "Basic Needs", reverse: false },
-    { id: 12, text: "Not having enough money makes my recovery more difficult.", domain: "physical", shortLabel: "Financial Barriers", reverse: true },
-    { id: 13, text: "I can afford the care I need for my health, mental health, and recovery.", domain: "physical", shortLabel: "Affordable Care", reverse: false },
-    { id: 14, text: "I have reliable access to a phone and the internet.", domain: "physical", shortLabel: "Connectivity", reverse: false },
-    { id: 15, text: "I find it hard to have fun.", domain: "human", shortLabel: "Enjoyment Barriers", reverse: true },
-    { id: 16, text: "I feel physically healthy most days.", domain: "human", shortLabel: "Physical Health", reverse: false },
-    { id: 17, text: "I am struggling with guilt or shame.", domain: "human", shortLabel: "Guilt & Shame", reverse: true },
-    { id: 18, text: "I am experiencing a lot of stress.", domain: "human", shortLabel: "Stress Level", reverse: true },
-    { id: 19, text: "My education and training have prepared me to handle life's challenges.", domain: "human", shortLabel: "Preparedness", reverse: false },
-    { id: 20, text: "I have problems with my mental health.", domain: "human", shortLabel: "Mental Health", reverse: true },
-    { id: 21, text: "I feel my life has purpose and meaning.", domain: "human", shortLabel: "Purpose & Meaning", reverse: false },
-    { id: 22, text: "It's hard for me to trust others.", domain: "cultural", shortLabel: "Trust Barriers", reverse: true },
-    { id: 23, text: "I have opportunities to participate in fun activities that do not involve drugs and alcohol.", domain: "cultural", shortLabel: "Sober Activities", reverse: false },
-    { id: 24, text: "I feel disconnected from my culture or not part of any culture.", domain: "cultural", shortLabel: "Cultural Disconnection", reverse: true },
-    { id: 25, text: "I feel like an outcast.", domain: "cultural", shortLabel: "Social Exclusion", reverse: true },
-    { id: 26, text: "There are helpful services and resources accessible to me.", domain: "cultural", shortLabel: "Resource Access", reverse: false },
-    { id: 27, text: "It's hard to let go of the part of my identity that was linked to my drinking or drug use.", domain: "cultural", shortLabel: "Identity Attachment", reverse: true },
-    { id: 28, text: "My neighborhood or town feels safe.", domain: "cultural", shortLabel: "Neighborhood Safety", reverse: false },
-];
+const BARC10_QUESTIONS = BARC10_CANON.map(q => ({
+    ...q,
+    reverse: false,
+    shortLabel: shortLabelFor(q.text),
+}));
+
+const MIRC28_QUESTIONS = MIRC28_CANON.map(q => ({
+    ...q,
+    shortLabel: shortLabelFor(q.text),
+}));
 
 const BARC10_LABELS: Record<number, string> = {
     1: "Strongly Disagree", 2: "Disagree", 3: "Somewhat Disagree",
@@ -121,9 +97,14 @@ export async function POST(
     { params }: { params: { id: string } }
 ) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const ragApiUrl = process.env.RAG_API_URL;
@@ -148,6 +129,14 @@ export async function POST(
         }
 
         const assessment = assessments[0];
+
+        // Verify the caller can access the org this assessment belongs to
+        try {
+            await requireOrgAccess(assessment.organization_id);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
+        }
+
         const responses = assessment.responses || {};
         const domainScores = assessment.domain_scores || {};
         const totalScore = assessment.total_score;
@@ -373,10 +362,20 @@ Return ONLY valid JSON with this EXACT structure. No markdown, no backticks, no 
 
         // Save analysis to database
         await sql`
-            UPDATE recovery_assessments 
+            UPDATE recovery_assessments
             SET ai_analysis = ${JSON.stringify(analysis)}
             WHERE id = ${assessmentId}::uuid
         `;
+
+        // Log audit event
+        await logAuditEvent(
+            userId,
+            assessment.organization_id,
+            'update',
+            'recovery_assessment',
+            assessmentId,
+            { action: 'ai_analyze' }
+        );
 
         return NextResponse.json({
             success: true,

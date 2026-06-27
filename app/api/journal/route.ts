@@ -4,7 +4,7 @@
 // Studio: PSS reads shared entries (via query params)
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, getSession, getInternalUserId, requireOrgAccess } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
 // GET /api/journal
@@ -18,6 +18,21 @@ export async function GET(req: NextRequest) {
         const queryOrgId = searchParams.get('organization_id');
 
         if (queryParticipantId && queryOrgId) {
+            // Studio access requires an authenticated PSS who belongs to the org
+            const session = await getSession();
+            if (!session?.user?.id) {
+                return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+            }
+            const userId = await getInternalUserId(session.user.id, session.user.email);
+            if (!userId) {
+                return NextResponse.json({ error: "User not found" }, { status: 404 });
+            }
+            try {
+                await requireOrgAccess(queryOrgId);
+            } catch {
+                return NextResponse.json({ error: "Organization access denied" }, { status: 403 });
+            }
+
             if (countOnly === 'true') {
                 const unreadOnly = searchParams.get('unread_only');
                 if (unreadOnly === 'true') {

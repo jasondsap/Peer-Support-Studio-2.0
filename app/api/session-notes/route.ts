@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, getInternalUserId } from '@/lib/auth';
-import { sql } from '@/lib/db';
+import { sql, logAuditEvent } from '@/lib/db';
 
 // GET - Fetch all session notes for the current user
 export async function GET(request: NextRequest) {
@@ -279,7 +279,16 @@ export async function POST(request: NextRequest) {
             RETURNING *
         `;
 
-        return NextResponse.json({ 
+        await logAuditEvent(
+            userId,
+            organization_id || null,
+            'create',
+            'session_note',
+            newNotes[0].id,
+            { source }
+        );
+
+        return NextResponse.json({
             success: true,
             note: newNotes[0]
         }, { status: 201 });

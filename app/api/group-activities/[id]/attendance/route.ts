@@ -120,6 +120,11 @@ export async function PATCH(
         if (result.length === 0) {
             return NextResponse.json({ error: 'Attendance not found' }, { status: 404 });
         }
+
+        await logAuditEvent(ctx.userId, ctx.organizationId, 'update', 'group_attendance', result[0].id, {
+            status: attendance_status,
+        });
+
         return NextResponse.json({ success: true, attendance: result[0] });
     } catch (error: any) {
         console.error('Attendance PATCH error:', error);

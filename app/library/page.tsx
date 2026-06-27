@@ -79,6 +79,12 @@ interface SurveyResponse {
     submitted_at: string;
 }
 
+// Lesson surveys are not wired up yet: app/api/lesson-surveys has no route
+// handlers, so the create/analyze buttons would 404. Hide the affordances
+// until the API exists.
+// TODO: re-enable when /api/lesson-surveys is built (Phase 3)
+const SURVEYS_ENABLED = false;
+
 function LibraryContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -557,7 +563,10 @@ function LibraryContent() {
     };
 
     // Reusable Survey Menu Items Component
-    const SurveyMenuItems = ({ lesson }: { lesson: SavedLesson }) => (
+    const SurveyMenuItems = ({ lesson }: { lesson: SavedLesson }) => {
+        // TODO: re-enable when /api/lesson-surveys is built (Phase 3)
+        if (!SURVEYS_ENABLED) return null;
+        return (
         <>
             <div className="border-t border-gray-100 my-1"></div>
             <button
@@ -583,7 +592,8 @@ function LibraryContent() {
                 )}
             </button>
         </>
-    );
+        );
+    };
 
     if (authStatus === 'loading') {
         return (
@@ -786,10 +796,10 @@ function LibraryContent() {
                                             {lesson.gamma_presentation_url && (
                                                 <span className="text-xs text-[#30B27A]">🎨 Presentation</span>
                                             )}
-                                            {lesson.surveyCount && lesson.surveyCount > 0 && (
+                                            {SURVEYS_ENABLED && lesson.surveyCount && lesson.surveyCount > 0 && (
                                                 <span className="text-xs text-[#8B5CF6]">📊 {lesson.surveyCount} responses</span>
                                             )}
-                                            {lesson.activeSurvey && (
+                                            {SURVEYS_ENABLED && lesson.activeSurvey && (
                                                 <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Survey Active</span>
                                             )}
                                         </div>
@@ -924,13 +934,13 @@ function LibraryContent() {
                                             Presentation Ready
                                         </span>
                                     )}
-                                    {lesson.surveyCount && lesson.surveyCount > 0 && (
+                                    {SURVEYS_ENABLED && lesson.surveyCount && lesson.surveyCount > 0 && (
                                         <span className="inline-flex items-center gap-1 text-xs font-medium text-[#30B27A] bg-[#30B27A]/10 px-2 py-1 rounded-full">
                                             <BarChart3 className="w-3 h-3" />
                                             {lesson.surveyCount} Responses
                                         </span>
                                     )}
-                                    {lesson.activeSurvey && (
+                                    {SURVEYS_ENABLED && lesson.activeSurvey && (
                                         <span className="inline-flex items-center gap-1 text-xs font-medium text-[#8B5CF6] bg-[#8B5CF6]/10 px-2 py-1 rounded-full">
                                             <ClipboardList className="w-3 h-3" />
                                             Survey Active
@@ -1096,7 +1106,8 @@ function LibraryContent() {
             )}
 
             {/* ==================== SEND SURVEY MODAL ==================== */}
-            {sendSurveyLesson && (
+            {/* TODO: re-enable when /api/lesson-surveys is built (Phase 3) */}
+            {SURVEYS_ENABLED && sendSurveyLesson && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
                         <div className="p-6 border-b border-gray-100">
@@ -1288,7 +1299,8 @@ function LibraryContent() {
             )}
 
             {/* ==================== VIEW RESPONSES MODAL ==================== */}
-            {viewResponsesLesson && (
+            {/* TODO: re-enable when /api/lesson-surveys is built (Phase 3) */}
+            {SURVEYS_ENABLED && viewResponsesLesson && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                         <div className="p-6 border-b border-gray-100">

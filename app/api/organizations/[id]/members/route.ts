@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { sql } from '@/lib/db';
+import { sql, logAuditEvent } from '@/lib/db';
 import { sendEmail } from '@/lib/email/resend';
 import { randomInt } from 'crypto';
 import {
@@ -317,10 +317,18 @@ export async function POST(
             // If they were previously removed, reactivate them
             if (member.status === 'inactive' || member.status === 'removed') {
                 await sql`
-                    UPDATE organization_members 
+                    UPDATE organization_members
                     SET status = 'active', role = ${memberRole}, joined_at = NOW()
                     WHERE id = ${member.id}
                 `;
+                await logAuditEvent(
+                    inviterUserId,
+                    orgId,
+                    'update',
+                    'organization_member',
+                    member.id,
+                    { email: email.toLowerCase().trim(), role: memberRole, reactivated: true }
+                );
                 return NextResponse.json({
                     success: true,
                     message: 'Team member reactivated successfully',
@@ -430,6 +438,16 @@ export async function POST(
             )
             RETURNING id, role, status, joined_at
         `;
+
+        // Audit: a new member (with a freshly minted Cognito login) was added.
+        await logAuditEvent(
+            inviterUserId,
+            orgId,
+            'create',
+            'organization_member',
+            membership[0].id,
+            { email: email.toLowerCase().trim(), role: memberRole, is_new_cognito_user: isNewCognitoUser }
+        );
 
         // ── Step 4: Get org name for response ──
         const orgResult = await sql`

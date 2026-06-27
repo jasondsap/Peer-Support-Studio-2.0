@@ -4,9 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.DATABASE_URL!);
+import { sql, logAuditEvent } from '@/lib/db';
 
 // Helper to generate a slug from name
 function generateSlug(name: string): string {
@@ -95,6 +93,16 @@ export async function POST(request: NextRequest) {
             INSERT INTO organization_members (user_id, organization_id, role, status)
             VALUES (${userId}, ${organization.id}, 'admin', 'active')
         `;
+
+        // Audit: org created; creator was granted the admin role.
+        await logAuditEvent(
+            userId,
+            organization.id,
+            'create',
+            'organization',
+            organization.id,
+            { name: organization.name, creator_role: 'admin' }
+        );
 
         return NextResponse.json({
             success: true,

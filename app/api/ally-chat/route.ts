@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getSession } from '@/lib/auth';
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
@@ -36,6 +37,11 @@ Never:
 
 export async function POST(req: NextRequest) {
     try {
+        const session = await getSession();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { messages } = await req.json();
 
         if (!process.env.OPENAI_API_KEY) {

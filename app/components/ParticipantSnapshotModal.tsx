@@ -288,7 +288,7 @@ export default function ParticipantSnapshotModal({
         if (snapshot.assessments.latest) {
             addSection('RECOVERY CAPITAL');
             const latest = snapshot.assessments.latest;
-            const maxScore = latest.assessment_type === 'mirc28' ? 140 : 60;
+            const maxScore = latest.assessment_type === 'mirc28' ? 112 : 60;
             const percentage = Math.round((latest.total_score / maxScore) * 100);
             
             addText(`Latest Score: ${latest.total_score}/${maxScore} (${percentage}%)`, 11, true);
@@ -566,7 +566,7 @@ export default function ParticipantSnapshotModal({
                                                 {snapshot.assessments.latest.total_score}
                                             </p>
                                             <p className="text-xs text-gray-500">
-                                                / {snapshot.assessments.latest.assessment_type === 'mirc28' ? 140 : 60}
+                                                / {snapshot.assessments.latest.assessment_type === 'mirc28' ? 112 : 60}
                                             </p>
                                         </div>
                                         {snapshot.assessments.previous && (

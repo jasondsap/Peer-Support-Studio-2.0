@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { neon } from '@neondatabase/serverless';
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
+import { sql } from '@/lib/db';
 import OpenAI from 'openai';
 
-const sql = neon(process.env.DATABASE_URL!);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ============================================================================
@@ -28,6 +28,15 @@ export async function GET(
     { params }: { params: { id: string } }
 ) {
     try {
+        const session = await getSession();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
         const participantId = params.id;
         const { searchParams } = new URL(request.url);
         const organizationId = searchParams.get('organization_id');
@@ -35,6 +44,9 @@ export async function GET(
         if (!organizationId) {
             return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
         }
+
+        try { await requireOrgAccess(organizationId); }
+        catch { return NextResponse.json({ error: 'Organization access denied' }, { status: 403 }); }
 
         // ====================================================================
         // 1. Fetch Participant Info

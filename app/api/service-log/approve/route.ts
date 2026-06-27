@@ -1,7 +1,7 @@
 // app/api/service-log/approve/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession, getInternalUserId } from '@/lib/auth';
-import { sql } from '@/lib/db';
+import { getSession, getInternalUserId, requireOrgAccess, requireOrgRole } from '@/lib/auth';
+import { sql, logAuditEvent } from '@/lib/db';
 
 // Helper to get internal user ID from session
 async function getInternalUserIdFromSession(session: any): Promise<string | null> {
@@ -27,6 +27,21 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
+        // Derive the plan's organization, then gate by approver role within that org.
+        const planRows = await sql`
+            SELECT id, organization_id, status FROM service_plans WHERE id = ${serviceId}
+        `;
+        if (planRows.length === 0) {
+            return NextResponse.json({ error: 'Service not found' }, { status: 404 });
+        }
+        const organizationId = planRows[0].organization_id as string;
+
+        try {
+            await requireOrgRole(organizationId, ['supervisor', 'admin', 'owner']);
+        } catch {
+            return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+        }
+
         switch (action) {
             case 'approve': {
                 // Create approval record
@@ -49,6 +64,7 @@ export async function POST(request: NextRequest) {
                     UPDATE service_plans
                     SET status = 'approved', updated_at = NOW()
                     WHERE id = ${serviceId}
+                    AND organization_id = ${organizationId}
                     AND status = 'planned'
                     RETURNING *
                 `;
@@ -56,6 +72,8 @@ export async function POST(request: NextRequest) {
                 if (result.length === 0) {
                     return NextResponse.json({ error: 'Service not found or not in planned status' }, { status: 404 });
                 }
+
+                await logAuditEvent(userId, organizationId, 'approve', 'service_plan', serviceId, { action, serviceId });
 
                 return NextResponse.json({ success: true, service: result[0] });
             }
@@ -75,6 +93,8 @@ export async function POST(request: NextRequest) {
                         ${userId}
                     )
                 `;
+
+                await logAuditEvent(userId, organizationId, 'comment', 'service_plan', serviceId, { action, serviceId });
 
                 return NextResponse.json({ success: true });
             }
@@ -100,12 +120,15 @@ export async function POST(request: NextRequest) {
                     UPDATE service_plans
                     SET status = 'draft', updated_at = NOW()
                     WHERE id = ${serviceId}
+                    AND organization_id = ${organizationId}
                     RETURNING *
                 `;
 
                 if (result.length === 0) {
                     return NextResponse.json({ error: 'Service not found' }, { status: 404 });
                 }
+
+                await logAuditEvent(userId, organizationId, 'request-change', 'service_plan', serviceId, { action, serviceId });
 
                 return NextResponse.json({ success: true, service: result[0] });
             }
@@ -129,12 +152,13 @@ export async function POST(request: NextRequest) {
                 // Update service status and verification timestamp
                 const result = await sql`
                     UPDATE service_plans
-                    SET 
+                    SET
                         status = 'verified',
                         verified_at = NOW(),
                         verified_by = ${userId},
                         updated_at = NOW()
                     WHERE id = ${serviceId}
+                    AND organization_id = ${organizationId}
                     AND status = 'completed'
                     RETURNING *
                 `;
@@ -142,6 +166,8 @@ export async function POST(request: NextRequest) {
                 if (result.length === 0) {
                     return NextResponse.json({ error: 'Service not found or not in completed status' }, { status: 404 });
                 }
+
+                await logAuditEvent(userId, organizationId, 'verify', 'service_plan', serviceId, { action, serviceId });
 
                 return NextResponse.json({ success: true, service: result[0] });
             }
@@ -168,6 +194,19 @@ export async function GET(request: NextRequest) {
 
         if (!serviceId) {
             return NextResponse.json({ error: 'Service ID required' }, { status: 400 });
+        }
+
+        // Scope the approval history to the caller's org.
+        const planRows = await sql`
+            SELECT organization_id FROM service_plans WHERE id = ${serviceId}
+        `;
+        if (planRows.length === 0) {
+            return NextResponse.json({ error: 'Service not found' }, { status: 404 });
+        }
+        try {
+            await requireOrgAccess(planRows[0].organization_id as string);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
 
         const approvals = await sql`

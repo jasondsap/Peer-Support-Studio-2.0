@@ -2,11 +2,8 @@
 // Individual assessment operations (GET, PATCH, DELETE)
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.DATABASE_URL!);
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
+import { sql, logAuditEvent } from '@/lib/db';
 
 // GET - Fetch single assessment
 export async function GET(
@@ -14,9 +11,13 @@ export async function GET(
     { params }: { params: { id: string } }
 ) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const assessments = await sql`
@@ -27,9 +28,12 @@ export async function GET(
             return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
         }
 
-        return NextResponse.json({ 
+        try { await requireOrgAccess(assessments[0].organization_id); }
+        catch { return NextResponse.json({ error: 'Organization access denied' }, { status: 403 }); }
+
+        return NextResponse.json({
             success: true,
-            assessment: assessments[0] 
+            assessment: assessments[0]
         });
 
     } catch (error) {
@@ -44,10 +48,25 @@ export async function PATCH(
     { params }: { params: { id: string } }
 ) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        // Verify the assessment exists and the caller can access its org
+        const existing = await sql`
+            SELECT organization_id FROM recovery_assessments WHERE id = ${params.id}::uuid
+        `;
+        if (!existing || existing.length === 0) {
+            return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
+        }
+        const organizationId = existing[0].organization_id;
+        try { await requireOrgAccess(organizationId); }
+        catch { return NextResponse.json({ error: 'Organization access denied' }, { status: 403 }); }
 
         const body = await request.json();
         const { notes, ai_analysis } = body;
@@ -73,13 +92,17 @@ export async function PATCH(
             return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
         }
 
-        // Add the ID as the last parameter
+        // Add the ID and org as the last parameters (org-scoped update)
         values.push(params.id);
+        const idParam = paramIndex;
+        paramIndex++;
+        values.push(organizationId);
+        const orgParam = paramIndex;
 
         const updateQuery = `
-            UPDATE recovery_assessments 
+            UPDATE recovery_assessments
             SET ${updates.join(', ')}
-            WHERE id = $${paramIndex}::uuid
+            WHERE id = $${idParam}::uuid AND organization_id = $${orgParam}::uuid
             RETURNING *
         `;
 
@@ -89,9 +112,11 @@ export async function PATCH(
             return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
         }
 
-        return NextResponse.json({ 
+        await logAuditEvent(userId, organizationId, 'update', 'recovery_assessment', params.id, { updated_fields: updates.map(u => u.split(' ')[0]) });
+
+        return NextResponse.json({
             success: true,
-            assessment: result[0] 
+            assessment: result[0]
         });
 
     } catch (error) {
@@ -106,14 +131,29 @@ export async function DELETE(
     { params }: { params: { id: string } }
 ) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        // Verify the assessment exists and the caller can access its org
+        const existing = await sql`
+            SELECT organization_id FROM recovery_assessments WHERE id = ${params.id}::uuid
+        `;
+        if (!existing || existing.length === 0) {
+            return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
+        }
+        const organizationId = existing[0].organization_id;
+        try { await requireOrgAccess(organizationId); }
+        catch { return NextResponse.json({ error: 'Organization access denied' }, { status: 403 }); }
 
         const result = await sql`
-            DELETE FROM recovery_assessments 
-            WHERE id = ${params.id}::uuid
+            DELETE FROM recovery_assessments
+            WHERE id = ${params.id}::uuid AND organization_id = ${organizationId}::uuid
             RETURNING id
         `;
 
@@ -121,9 +161,11 @@ export async function DELETE(
             return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
         }
 
-        return NextResponse.json({ 
+        await logAuditEvent(userId, organizationId, 'delete', 'recovery_assessment', params.id, {});
+
+        return NextResponse.json({
             success: true,
-            deleted_id: params.id 
+            deleted_id: params.id
         });
 
     } catch (error) {

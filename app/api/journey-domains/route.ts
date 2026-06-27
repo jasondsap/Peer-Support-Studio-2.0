@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.DATABASE_URL!);
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
+import { sql, logAuditEvent } from '@/lib/db';
 
 // GET - Fetch domains for an organization
 export async function GET(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { searchParams } = new URL(request.url);
@@ -18,6 +19,12 @@ export async function GET(request: NextRequest) {
 
         if (!organizationId) {
             return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
+        }
+
+        try {
+            await requireOrgAccess(organizationId);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
 
         const domains = await sql`
@@ -48,9 +55,13 @@ export async function GET(request: NextRequest) {
 // POST - Create a new domain
 export async function POST(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const body = await request.json();
@@ -67,6 +78,12 @@ export async function POST(request: NextRequest) {
 
         if (!organization_id || !domain_key || !domain_label) {
             return NextResponse.json({ error: 'organization_id, domain_key, and domain_label required' }, { status: 400 });
+        }
+
+        try {
+            await requireOrgAccess(organization_id);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
 
         const result = await sql`
@@ -92,6 +109,11 @@ export async function POST(request: NextRequest) {
             RETURNING *
         `;
 
+        await logAuditEvent(userId, organization_id, 'create', 'journey_domain', result[0].id, {
+            domain_key,
+            domain_label
+        });
+
         return NextResponse.json({ success: true, domain: result[0] });
     } catch (error: any) {
         console.error('Error creating journey domain:', error);
@@ -105,16 +127,30 @@ export async function POST(request: NextRequest) {
 // PATCH - Update a domain
 export async function PATCH(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const body = await request.json();
-        const { id, domain_label, description, statuses, color, icon, is_active, display_order } = body;
+        const { id, organization_id, domain_label, description, statuses, color, icon, is_active, display_order } = body;
 
         if (!id) {
             return NextResponse.json({ error: 'Domain id required' }, { status: 400 });
+        }
+
+        if (!organization_id) {
+            return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
+        }
+
+        try {
+            await requireOrgAccess(organization_id);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
 
         const result = await sql`
@@ -129,12 +165,15 @@ export async function PATCH(request: NextRequest) {
                 display_order = COALESCE(${display_order}, display_order),
                 updated_at = NOW()
             WHERE id = ${id}
+            AND organization_id = ${organization_id}
             RETURNING *
         `;
 
         if (result.length === 0) {
             return NextResponse.json({ error: 'Domain not found' }, { status: 404 });
         }
+
+        await logAuditEvent(userId, organization_id, 'update', 'journey_domain', id);
 
         return NextResponse.json({ success: true, domain: result[0] });
     } catch (error) {
@@ -146,23 +185,46 @@ export async function PATCH(request: NextRequest) {
 // DELETE - Soft delete a domain (set is_active = false)
 export async function DELETE(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
+        const organizationId = searchParams.get('organization_id');
 
         if (!id) {
             return NextResponse.json({ error: 'Domain id required' }, { status: 400 });
         }
 
-        await sql`
+        if (!organizationId) {
+            return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
+        }
+
+        try {
+            await requireOrgAccess(organizationId);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
+        }
+
+        const result = await sql`
             UPDATE journey_domains
             SET is_active = false, updated_at = NOW()
             WHERE id = ${id}
+            AND organization_id = ${organizationId}
+            RETURNING id
         `;
+
+        if (result.length === 0) {
+            return NextResponse.json({ error: 'Domain not found' }, { status: 404 });
+        }
+
+        await logAuditEvent(userId, organizationId, 'delete', 'journey_domain', id);
 
         return NextResponse.json({ success: true });
     } catch (error) {

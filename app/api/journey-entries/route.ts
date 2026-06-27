@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.DATABASE_URL!);
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
+import { sql, logAuditEvent } from '@/lib/db';
 
 // GET - Fetch journey entries
 export async function GET(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { searchParams } = new URL(request.url);
@@ -23,6 +24,12 @@ export async function GET(request: NextRequest) {
 
         if (!organizationId) {
             return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
+        }
+
+        try {
+            await requireOrgAccess(organizationId);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
 
         // Build query based on filters
@@ -124,9 +131,13 @@ export async function GET(request: NextRequest) {
 // POST - Create a new entry
 export async function POST(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const body = await request.json();
@@ -146,16 +157,16 @@ export async function POST(request: NextRequest) {
         } = body;
 
         if (!organization_id || !participant_id || !domain_id || !status_key || !entry_date) {
-            return NextResponse.json({ 
-                error: 'organization_id, participant_id, domain_id, status_key, and entry_date required' 
+            return NextResponse.json({
+                error: 'organization_id, participant_id, domain_id, status_key, and entry_date required'
             }, { status: 400 });
         }
 
-        // Get user ID from session
-        const userResult = await sql`
-            SELECT id FROM users WHERE email = ${session.user.email}
-        `;
-        const userId = userResult[0]?.id;
+        try {
+            await requireOrgAccess(organization_id);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
+        }
 
         const result = await sql`
             INSERT INTO journey_entries (
@@ -202,6 +213,12 @@ export async function POST(request: NextRequest) {
             WHERE je.id = ${result[0].id}
         `;
 
+        await logAuditEvent(userId, organization_id, 'create', 'journey_entry', result[0].id, {
+            participant_id,
+            domain_id,
+            status_key
+        });
+
         return NextResponse.json({ success: true, entry: fullEntry[0] });
     } catch (error) {
         console.error('Error creating journey entry:', error);
@@ -212,25 +229,40 @@ export async function POST(request: NextRequest) {
 // PATCH - Update an entry
 export async function PATCH(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const body = await request.json();
-        const { 
-            id, 
-            status_key, 
-            status_label, 
-            entry_date, 
-            notes, 
+        const {
+            id,
+            organization_id,
+            status_key,
+            status_label,
+            entry_date,
+            notes,
             contributing_factors,
             is_milestone,
-            milestone_type 
+            milestone_type
         } = body;
 
         if (!id) {
             return NextResponse.json({ error: 'Entry id required' }, { status: 400 });
+        }
+
+        if (!organization_id) {
+            return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
+        }
+
+        try {
+            await requireOrgAccess(organization_id);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
 
         const result = await sql`
@@ -245,12 +277,17 @@ export async function PATCH(request: NextRequest) {
                 milestone_type = COALESCE(${milestone_type}, milestone_type),
                 updated_at = NOW()
             WHERE id = ${id}
+            AND organization_id = ${organization_id}
             RETURNING *
         `;
 
         if (result.length === 0) {
             return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
         }
+
+        await logAuditEvent(userId, organization_id, 'update', 'journey_entry', id, {
+            status_key
+        });
 
         return NextResponse.json({ success: true, entry: result[0] });
     } catch (error) {
@@ -262,19 +299,45 @@ export async function PATCH(request: NextRequest) {
 // DELETE - Remove an entry
 export async function DELETE(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
+        const organizationId = searchParams.get('organization_id');
 
         if (!id) {
             return NextResponse.json({ error: 'Entry id required' }, { status: 400 });
         }
 
-        await sql`DELETE FROM journey_entries WHERE id = ${id}`;
+        if (!organizationId) {
+            return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
+        }
+
+        try {
+            await requireOrgAccess(organizationId);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
+        }
+
+        const deleted = await sql`
+            DELETE FROM journey_entries
+            WHERE id = ${id}
+            AND organization_id = ${organizationId}
+            RETURNING id
+        `;
+
+        if (deleted.length === 0) {
+            return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
+        }
+
+        await logAuditEvent(userId, organizationId, 'delete', 'journey_entry', id);
 
         return NextResponse.json({ success: true });
     } catch (error) {

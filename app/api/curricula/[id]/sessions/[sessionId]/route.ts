@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession, getInternalUserId } from '@/lib/auth';
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
 import { sql, logAuditEvent, validateUUID } from '@/lib/db';
 
 const ATTENDANCE_STATUSES = ['present', 'absent', 'excused', 'late'];
@@ -56,6 +56,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     try {
         const ctx = await getCtx();
         if ('error' in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
+        try {
+            await requireOrgAccess(ctx.organizationId);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
+        }
         if (!validateUUID(params.id) || !validateUUID(params.sessionId)) {
             return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
         }
@@ -65,6 +70,27 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
         const body = await request.json();
         const { session_date, start_time, duration_minutes, location_id, notes, attendance } = body;
+
+        // Every attendee in the update must belong to this org.
+        if (Array.isArray(attendance)) {
+            const candidateIds = attendance
+                .map((a: any) => a?.participant_id)
+                .filter((pid: any) => validateUUID(pid));
+            if (candidateIds.length > 0) {
+                const validRows = await sql`
+                    SELECT id FROM participants
+                    WHERE id = ANY(${candidateIds}::uuid[]) AND organization_id = ${ctx.organizationId}
+                `;
+                const validSet = new Set(validRows.map((r: any) => r.id));
+                const missing = candidateIds.filter((pid: string) => !validSet.has(pid));
+                if (missing.length > 0) {
+                    return NextResponse.json(
+                        { error: 'One or more participants do not belong to this organization' },
+                        { status: 403 }
+                    );
+                }
+            }
+        }
 
         let validLocationId: string | null | undefined = undefined;
         if (location_id !== undefined) {

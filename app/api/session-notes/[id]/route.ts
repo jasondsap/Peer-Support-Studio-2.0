@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, getInternalUserId } from '@/lib/auth';
-import { sql, softDelete } from '@/lib/db';
+import { sql, softDelete, logAuditEvent } from '@/lib/db';
 
 // GET - Fetch a single session note by ID
 export async function GET(
@@ -94,8 +94,8 @@ export async function DELETE(
 
         // Verify ownership before deleting
         const existingNote = await sql`
-            SELECT id FROM session_notes 
-            WHERE id = ${noteId}::uuid 
+            SELECT id, organization_id FROM session_notes
+            WHERE id = ${noteId}::uuid
             AND user_id = ${userId}::uuid
         `;
 
@@ -108,10 +108,19 @@ export async function DELETE(
 
         // Soft delete
         await sql`
-            UPDATE session_notes 
+            UPDATE session_notes
             SET is_archived = true, updated_at = NOW()
             WHERE id = ${noteId}::uuid
         `;
+
+        await logAuditEvent(
+            userId,
+            existingNote[0].organization_id || null,
+            'delete',
+            'session_note',
+            noteId,
+            { action: 'soft_delete' }
+        );
 
         return NextResponse.json({ success: true });
     } catch (error) {
@@ -153,8 +162,8 @@ export async function PATCH(
 
         // Verify ownership
         const existingNote = await sql`
-            SELECT id FROM session_notes 
-            WHERE id = ${noteId}::uuid 
+            SELECT id, organization_id FROM session_notes
+            WHERE id = ${noteId}::uuid
             AND user_id = ${userId}::uuid
         `;
 
@@ -198,9 +207,18 @@ export async function PATCH(
             RETURNING *
         `;
 
-        return NextResponse.json({ 
-            success: true, 
-            note: updatedNotes[0] 
+        await logAuditEvent(
+            userId,
+            existingNote[0].organization_id || null,
+            'update',
+            'session_note',
+            noteId,
+            { updated_fields: Object.keys(updateData) }
+        );
+
+        return NextResponse.json({
+            success: true,
+            note: updatedNotes[0]
         });
     } catch (error) {
         console.error('Error updating session note:', error);

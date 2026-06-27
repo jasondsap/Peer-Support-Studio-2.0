@@ -1,13 +1,16 @@
 /**
  * Shared questionnaire definitions for BARC-10 and MIRC-28.
  *
+ * THIS FILE IS THE SINGLE SOURCE OF TRUTH for MIRC-28 (and BARC-10) item text,
+ * ordering, and reverse-scoring flags. Any code that needs the item bank or
+ * scoring must import from here rather than redefining its own copy.
+ *
  * Used by:
  *   - app/assessment/[token]/* (public participant-facing form)
  *   - lib/assessment-invite/sender.ts (label resolution for email/SMS copy)
+ *   - app/api/recovery-capital/comprehensive/route.ts (MIRC-28 item bank)
  *
- * Source of truth for question text + scoring still lives in the staff-facing
- * pages (app/assessments/barc10/page.tsx, app/assessments/mirc28/page.tsx).
- * If you edit a question there, update it here too.
+ * If you edit a question, edit it HERE — do not fork a private copy elsewhere.
  */
 
 export type AssessmentType = 'barc10' | 'mirc28';
@@ -61,7 +64,9 @@ export function scoreBarc10(answers: Record<string, number>) {
     const domains: Record<Barc10Domain, number> = { human: 0, social: 0, physical: 0, cultural: 0 };
     let total = 0;
     for (const q of BARC10_QUESTIONS) {
-        const v = answers[`q${q.id}`] || 0;
+        const v = answers[`q${q.id}`];
+        // Unanswered items are excluded, never coerced to a default score.
+        if (typeof v !== 'number') continue;
         total += v;
         domains[q.domain] += v;
     }
@@ -143,7 +148,10 @@ export function scoreMirc28(answers: Record<string, number>) {
         const max = qs.length * 4;
         let raw = 0;
         for (const q of qs) {
-            const v = answers[`q${q.id}`] || 0;
+            const v = answers[`q${q.id}`];
+            // Unanswered items are excluded. (Coercing to 0 would, for a
+            // reverse-scored item, score it as 5 - 0 = 5, i.e. a maximum.)
+            if (typeof v !== 'number') continue;
             raw += q.reverse ? (5 - v) : v;
         }
         domains[key] = { raw, max, percentage: max > 0 ? Math.round((raw / max) * 100) : 0 };

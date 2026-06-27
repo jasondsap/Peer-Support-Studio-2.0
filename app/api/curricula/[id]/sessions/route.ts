@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession, getInternalUserId } from '@/lib/auth';
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
 import { sql, logAuditEvent, validateUUID } from '@/lib/db';
 
 const ATTENDANCE_STATUSES = ['present', 'absent', 'excused', 'late'];
@@ -60,6 +60,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     try {
         const ctx = await getCtx();
         if ('error' in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
+        try {
+            await requireOrgAccess(ctx.organizationId);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
+        }
         if (!validateUUID(params.id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
         if (!(await ownsCurriculum(params.id, ctx.organizationId))) {
             return NextResponse.json({ error: 'Curriculum not found' }, { status: 404 });
@@ -92,6 +97,29 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             if (locRows.length) validLocationId = location_id;
         }
 
+        // Every attendee must be a participant in this org before we record
+        // attendance against them (prevents cross-org participant injection).
+        const attendees: Array<{ participant_id: string; status?: string }> = Array.isArray(body.attendees)
+            ? body.attendees
+            : [];
+        const candidateIds = attendees
+            .map((a) => a.participant_id)
+            .filter((pid) => validateUUID(pid));
+        if (candidateIds.length > 0) {
+            const validRows = await sql`
+                SELECT id FROM participants
+                WHERE id = ANY(${candidateIds}::uuid[]) AND organization_id = ${ctx.organizationId}
+            `;
+            const validSet = new Set(validRows.map((r: any) => r.id));
+            const missing = candidateIds.filter((pid) => !validSet.has(pid));
+            if (missing.length > 0) {
+                return NextResponse.json(
+                    { error: 'One or more participants do not belong to this organization' },
+                    { status: 403 }
+                );
+            }
+        }
+
         const sessionRows = await sql`
             INSERT INTO curriculum_sessions
                 (curriculum_id, module_id, organization_id, facilitator_id, location_id, session_date, start_time, duration_minutes, notes)
@@ -107,10 +135,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         `;
         const session = sessionRows[0];
 
-        // Attendance + auto-completion.
-        const attendees: Array<{ participant_id: string; status?: string }> = Array.isArray(body.attendees)
-            ? body.attendees
-            : [];
+        // Attendance + auto-completion. (attendees validated above)
         let presentCount = 0;
         let completionsCreated = 0;
 

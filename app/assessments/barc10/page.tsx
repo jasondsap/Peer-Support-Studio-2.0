@@ -178,7 +178,9 @@ export default function Barc10AssessmentPage() {
         const domains: Record<string, number> = { human: 0, social: 0, physical: 0, cultural: 0 };
         let total = 0;
         BARC10_QUESTIONS.forEach(q => {
-            const val = ans[`q${q.id}`] || 0;
+            const val = ans[`q${q.id}`];
+            // Unanswered items are excluded, never coerced to a default score.
+            if (val === undefined) return;
             total += val;
             domains[q.domain] += val;
         });

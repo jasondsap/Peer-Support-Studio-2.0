@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { neon } from '@neondatabase/serverless';
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
+import { sql } from '@/lib/db';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
-const sql = neon(process.env.DATABASE_URL!);
-
 // GET - Generate insights for a participant's journey
 export async function GET(request: NextRequest) {
     try {
-        // TODO: Add proper auth check based on your auth setup
-        // const session = await getServerSession(authOptions);
-        // if (!session?.user) {
-        //     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        // }
+        const session = await getSession();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
 
         const { searchParams } = new URL(request.url);
         const organizationId = searchParams.get('organization_id');
@@ -21,6 +23,12 @@ export async function GET(request: NextRequest) {
 
         if (!organizationId || !participantId) {
             return NextResponse.json({ error: 'organization_id and participant_id required' }, { status: 400 });
+        }
+
+        try {
+            await requireOrgAccess(organizationId);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
 
         // Fetch all domains with their statuses

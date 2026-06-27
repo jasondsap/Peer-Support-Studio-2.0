@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.DATABASE_URL!);
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
+import { sql } from '@/lib/db';
 
 // GET - Fetch current status for a participant across all domains
 export async function GET(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { searchParams } = new URL(request.url);
@@ -20,6 +21,9 @@ export async function GET(request: NextRequest) {
         if (!organizationId || !participantId) {
             return NextResponse.json({ error: 'organization_id and participant_id required' }, { status: 400 });
         }
+
+        try { await requireOrgAccess(organizationId); }
+        catch { return NextResponse.json({ error: 'Organization access denied' }, { status: 403 }); }
 
         // Get all active domains for the org
         const domains = await sql`

@@ -187,7 +187,9 @@ export default function RecoveryCapitalPage() {
         const domainScores = { social: 0, physical: 0, human: 0, cultural: 0 };
         let totalScore = 0;
         BARC10_QUESTIONS.forEach(q => {
-            const answerValue = answers[`q${q.id}`] || 3;
+            const answerValue = answers[`q${q.id}`];
+            // Unanswered items are excluded, never coerced to a midpoint default.
+            if (answerValue === undefined) return;
             totalScore += answerValue;
             domainScores[q.domain as keyof typeof domainScores] += answerValue;
         });
@@ -705,8 +707,8 @@ export default function RecoveryCapitalPage() {
                                         </div>
                                         <div className="text-right flex items-center gap-4">
                                             <div>
-                                                <p className="font-bold text-purple-600">{assessment.total_score}/{assessment.assessment_type === 'barc10' ? 60 : 140}</p>
-                                                <p className="text-sm text-gray-500">{Math.round((assessment.total_score / (assessment.assessment_type === 'barc10' ? 60 : 140)) * 100)}%</p>
+                                                <p className="font-bold text-purple-600">{assessment.total_score}/{assessment.assessment_type === 'barc10' ? 60 : 112}</p>
+                                                <p className="text-sm text-gray-500">{Math.round((assessment.total_score / (assessment.assessment_type === 'barc10' ? 60 : 112)) * 100)}%</p>
                                             </div>
                                             <ChevronRight className="w-5 h-5 text-gray-400" />
                                         </div>

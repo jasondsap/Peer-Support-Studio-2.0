@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession, getInternalUserId } from '@/lib/auth';
-import { sql } from '@/lib/db';
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
+import { sql, logAuditEvent } from '@/lib/db';
 import { generateUniqueKioskCode } from '@/lib/kiosk';
 
 // GET - Fetch participants for the current user's organization
@@ -36,6 +36,16 @@ export async function GET(request: NextRequest) {
         let participants;
 
         if (organizationId) {
+            // Verify org access before touching PHI
+            try {
+                await requireOrgAccess(organizationId);
+            } catch {
+                return NextResponse.json(
+                    { error: 'Organization access denied' },
+                    { status: 403 }
+                );
+            }
+
             // Build dynamic query with parameterized values
             const conditions: string[] = [];
             const values: unknown[] = [];
@@ -213,6 +223,16 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Verify org access before creating PHI
+        try {
+            await requireOrgAccess(organization_id);
+        } catch {
+            return NextResponse.json(
+                { error: 'Organization access denied' },
+                { status: 403 }
+            );
+        }
+
         // Assign a kiosk check-in code unique within the org.
         const kioskCode = await generateUniqueKioskCode(organization_id);
 
@@ -251,6 +271,15 @@ export async function POST(request: NextRequest) {
             )
             RETURNING *
         `;
+
+        await logAuditEvent(
+            userId,
+            organization_id,
+            'create',
+            'participant',
+            result[0].id,
+            { first_name, last_name }
+        );
 
         return NextResponse.json({ success: true, participant: result[0] });
     } catch (error) {

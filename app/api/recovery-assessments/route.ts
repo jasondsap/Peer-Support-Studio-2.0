@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
+import { query, logAuditEvent } from '@/lib/db';
 
 // GET /api/recovery-assessments - List assessments
 export async function GET(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { searchParams } = new URL(req.url);
@@ -18,6 +22,13 @@ export async function GET(req: NextRequest) {
 
         if (!organizationId) {
             return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
+        }
+
+        // Verify org access before touching PHI
+        try {
+            await requireOrgAccess(organizationId);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
 
         let sql = `
@@ -65,9 +76,14 @@ export async function GET(req: NextRequest) {
 // POST /api/recovery-assessments - Create a new assessment
 export async function POST(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const body = await req.json();
@@ -87,17 +103,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
         }
 
-        // Get user ID from session
-        const userResult = await query(
-            'SELECT id FROM users WHERE cognito_sub = $1',
-            [(session.user as any).sub || session.user.id]
-        ) as { id: string }[];
-
-        if (userResult.length === 0) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        // Verify org access before creating PHI
+        try {
+            await requireOrgAccess(organization_id);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
-
-        const userId = userResult[0].id;
 
         const result = await query(
             `INSERT INTO recovery_assessments (
@@ -120,10 +131,13 @@ export async function POST(req: NextRequest) {
         ) as { id: string }[];
 
         // Log audit event
-        await query(
-            `INSERT INTO audit_log (user_id, organization_id, action, resource_type, resource_id, details)
-             VALUES ($1, $2, 'create', 'recovery_assessment', $3, $4)`,
-            [userId, organization_id, result[0].id, JSON.stringify({ assessment_type, participant_id })]
+        await logAuditEvent(
+            userId,
+            organization_id,
+            'create',
+            'recovery_assessment',
+            result[0].id,
+            { assessment_type, participant_id }
         );
 
         return NextResponse.json({ 
@@ -143,9 +157,14 @@ export async function POST(req: NextRequest) {
 // DELETE /api/recovery-assessments - Delete an assessment
 export async function DELETE(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { searchParams } = new URL(req.url);
@@ -156,6 +175,13 @@ export async function DELETE(req: NextRequest) {
             return NextResponse.json({ error: 'id and organization_id required' }, { status: 400 });
         }
 
+        // Verify org access before deleting PHI
+        try {
+            await requireOrgAccess(organizationId);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
+        }
+
         const result = await query(
             'DELETE FROM recovery_assessments WHERE id = $1 AND organization_id = $2 RETURNING id',
             [id, organizationId]
@@ -164,6 +190,16 @@ export async function DELETE(req: NextRequest) {
         if (result.length === 0) {
             return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
         }
+
+        // Log audit event
+        await logAuditEvent(
+            userId,
+            organizationId,
+            'delete',
+            'recovery_assessment',
+            id,
+            { action: 'delete' }
+        );
 
         return NextResponse.json({ success: true, deleted_id: id });
     } catch (error) {

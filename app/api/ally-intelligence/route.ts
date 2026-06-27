@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { formatDateOnly } from '@/lib/dateUtils';
-import { neon } from '@neondatabase/serverless';
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
+import { sql, logAuditEvent } from '@/lib/db';
 import OpenAI from 'openai';
 
-const sql = neon(process.env.DATABASE_URL!);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ============================================================================
@@ -54,10 +54,26 @@ Keep responses concise (under 200 words) unless the user asks for detail.`;
 
 export async function POST(req: NextRequest) {
     try {
+        const session = await getSession();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
         const { messages, organizationId } = await req.json();
 
         if (!organizationId) {
             return NextResponse.json({ error: 'Organization ID required' }, { status: 400 });
+        }
+
+        // Confirm the caller actually belongs to the org they're querying PHI for
+        try {
+            await requireOrgAccess(organizationId);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
 
         if (!process.env.OPENAI_API_KEY) {
@@ -65,6 +81,10 @@ export async function POST(req: NextRequest) {
         }
 
         const lastMessage = messages[messages.length - 1]?.content || '';
+
+        await logAuditEvent(userId, organizationId, 'read', 'ally_intelligence', null, {
+            query: String(lastMessage).slice(0, 500)
+        });
 
         // Step 1: Analyze the question to determine what data to fetch
         const queryPlan = await analyzeQuestion(lastMessage, organizationId);

@@ -2,18 +2,20 @@
 // API for creating, managing, and looking up assessment invitations
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.DATABASE_URL!);
+import { getSession, getInternalUserId, requireOrgAccess } from '@/lib/auth';
+import { sql, logAuditEvent } from '@/lib/db';
 
 // GET - List invitations for an organization
 export async function GET(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { searchParams } = new URL(request.url);
@@ -23,6 +25,13 @@ export async function GET(request: NextRequest) {
 
         if (!organizationId) {
             return NextResponse.json({ error: 'organization_id required' }, { status: 400 });
+        }
+
+        // Verify org access before touching PHI
+        try {
+            await requireOrgAccess(organizationId);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
 
         let query = `
@@ -73,9 +82,14 @@ export async function GET(request: NextRequest) {
 // POST - Create a new invitation
 export async function POST(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const body = await request.json();
@@ -95,17 +109,12 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get internal user ID from Cognito sub
-        const cognitoSub = (session.user as any).sub || session.user.id;
-        const userResult = await sql`
-            SELECT id FROM users WHERE cognito_sub = ${cognitoSub}
-        `;
-
-        if (!userResult || userResult.length === 0) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        // Verify org access before creating PHI
+        try {
+            await requireOrgAccess(organization_id);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
         }
-
-        const userId = userResult[0].id;
 
         // Generate expiration date
         const expiresAt = expires_days 
@@ -145,6 +154,16 @@ export async function POST(request: NextRequest) {
             WHERE id = ${participant_id}
         `;
 
+        // Log audit event
+        await logAuditEvent(
+            userId,
+            organization_id,
+            'create',
+            'assessment_invitation',
+            invitation.id,
+            { participant_id, assessment_type }
+        );
+
         return NextResponse.json({
             success: true,
             invitation: {
@@ -163,9 +182,14 @@ export async function POST(request: NextRequest) {
 // PATCH - Update invitation (cancel, resend, etc.)
 export async function PATCH(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        const session = await getSession();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userId = await getInternalUserId(session.user.id, session.user.email);
+        if (!userId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const body = await request.json();
@@ -178,6 +202,23 @@ export async function PATCH(request: NextRequest) {
             );
         }
 
+        // Load invitation to resolve its org, then verify access before mutating PHI
+        const existing = await sql`
+            SELECT organization_id FROM assessment_invitations WHERE id = ${invitation_id}
+        `;
+
+        if (!existing || existing.length === 0) {
+            return NextResponse.json({ error: 'Invitation not found' }, { status: 404 });
+        }
+
+        const organizationId = existing[0].organization_id;
+
+        try {
+            await requireOrgAccess(organizationId);
+        } catch {
+            return NextResponse.json({ error: 'Organization access denied' }, { status: 403 });
+        }
+
         let result;
 
         switch (action) {
@@ -185,7 +226,7 @@ export async function PATCH(request: NextRequest) {
                 result = await sql`
                     UPDATE assessment_invitations
                     SET status = 'cancelled', updated_at = NOW()
-                    WHERE id = ${invitation_id}
+                    WHERE id = ${invitation_id} AND organization_id = ${organizationId}
                     RETURNING *
                 `;
                 break;
@@ -193,11 +234,11 @@ export async function PATCH(request: NextRequest) {
             case 'resend':
                 result = await sql`
                     UPDATE assessment_invitations
-                    SET 
+                    SET
                         sent_via = ${sent_via || 'link'},
                         sent_at = NOW(),
                         updated_at = NOW()
-                    WHERE id = ${invitation_id}
+                    WHERE id = ${invitation_id} AND organization_id = ${organizationId}
                     RETURNING *
                 `;
                 break;
@@ -205,10 +246,10 @@ export async function PATCH(request: NextRequest) {
             case 'extend':
                 result = await sql`
                     UPDATE assessment_invitations
-                    SET 
+                    SET
                         expires_at = NOW() + INTERVAL '30 days',
                         updated_at = NOW()
-                    WHERE id = ${invitation_id}
+                    WHERE id = ${invitation_id} AND organization_id = ${organizationId}
                     RETURNING *
                 `;
                 break;
@@ -216,6 +257,16 @@ export async function PATCH(request: NextRequest) {
             default:
                 return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
         }
+
+        // Log audit event
+        await logAuditEvent(
+            userId,
+            organizationId,
+            'update',
+            'assessment_invitation',
+            invitation_id,
+            { action }
+        );
 
         return NextResponse.json({
             success: true,
